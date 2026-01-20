@@ -19,7 +19,9 @@ import {
   Unlock,
   Database,
   Download,
-  Info
+  Info,
+  ArrowUpDown,
+  ListFilter
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { 
@@ -40,8 +42,9 @@ import {
 // ----------------------------------------------------------------------
 // 상수 및 설정
 // ----------------------------------------------------------------------
-const APP_VERSION = "v1.1.0"; // 빌드 버전 표시
+const APP_VERSION = "v1.2.0"; // 기능 업데이트 버전
 const BUILD_DATE = "2024.05.21";
+const ADMIN_PASSWORD = "adminlcg1"; // 관리자 비밀번호
 
 // Firebase 초기화 (Hybrid Mode)
 let db = null;
@@ -81,6 +84,7 @@ export default function App() {
   const [products, setProducts] = useState([]);
   const [activeCategory, setActiveCategory] = useState('ALL');
   const [searchTerm, setSearchTerm] = useState('');
+  const [sortOption, setSortOption] = useState('newest'); // 'newest' | 'name'
   
   // 상태 관리
   const [selectedProduct, setSelectedProduct] = useState(null); 
@@ -124,7 +128,7 @@ export default function App() {
           id: doc.id,
           ...doc.data()
         }));
-        loadedProducts.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+        // 정렬은 렌더링 시점에 sortOption에 따라 수행
         setProducts(loadedProducts);
         setIsLoading(false);
       }, (error) => {
@@ -153,6 +157,22 @@ export default function App() {
     setTimeout(() => setToast(null), 3000);
   };
 
+  // 관리자 모드 토글 (비밀번호 확인)
+  const toggleAdminMode = () => {
+    if (isAdmin) {
+      setIsAdmin(false);
+      showToast("뷰어 모드로 전환되었습니다.", "info");
+    } else {
+      const password = window.prompt("관리자 비밀번호를 입력하세요:");
+      if (password === ADMIN_PASSWORD) {
+        setIsAdmin(true);
+        showToast("관리자 모드로 접속했습니다.");
+      } else if (password !== null) {
+        showToast("비밀번호가 올바르지 않습니다.", "error");
+      }
+    }
+  };
+
   // 데이터 내보내기 (JSON 다운로드)
   const handleExportData = () => {
     const dataStr = JSON.stringify(products, null, 2);
@@ -167,18 +187,31 @@ export default function App() {
     showToast("데이터베이스가 JSON 파일로 다운로드되었습니다.");
   };
 
-  // 필터링
-  const filteredProducts = products.filter(product => {
-    const matchesCategory = 
-      activeCategory === 'ALL' ? true :
-      activeCategory === 'NEW' ? product.isNew :
-      product.category === activeCategory;
-    
-    const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          product.specs.toLowerCase().includes(searchTerm.toLowerCase());
+  // 필터링 및 정렬
+  const getProcessedProducts = () => {
+    let filtered = products.filter(product => {
+      const matchesCategory = 
+        activeCategory === 'ALL' ? true :
+        activeCategory === 'NEW' ? product.isNew :
+        product.category === activeCategory;
+      
+      const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                            product.specs.toLowerCase().includes(searchTerm.toLowerCase());
 
-    return matchesCategory && matchesSearch;
-  });
+      return matchesCategory && matchesSearch;
+    });
+
+    // 정렬 로직
+    if (sortOption === 'newest') {
+      filtered.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    } else if (sortOption === 'name') {
+      filtered.sort((a, b) => a.name.localeCompare(b.name));
+    }
+
+    return filtered;
+  };
+
+  const processedProducts = getProcessedProducts();
 
   // 저장/수정
   const handleSaveProduct = async (productData) => {
@@ -268,7 +301,7 @@ export default function App() {
         <div className="p-4 border-t border-slate-200 bg-slate-50 space-y-3">
            {/* 관리자 모드 토글 */}
            <button 
-             onClick={() => setIsAdmin(!isAdmin)}
+             onClick={toggleAdminMode}
              className={`w-full flex items-center justify-center px-3 py-2 rounded-lg text-xs font-bold transition-colors ${
                isAdmin ? 'bg-slate-800 text-white' : 'bg-white border border-slate-300 text-slate-500 hover:bg-slate-100'
              }`}
@@ -313,6 +346,24 @@ export default function App() {
           </div>
 
           <div className="flex items-center space-x-4">
+             {/* 정렬 옵션 추가 */}
+             <div className="flex items-center bg-slate-100 rounded-lg p-1">
+                <button 
+                  onClick={() => setSortOption('newest')}
+                  className={`p-1.5 rounded-md transition-all ${sortOption === 'newest' ? 'bg-white shadow text-slate-900' : 'text-slate-400 hover:text-slate-600'}`}
+                  title="Newest"
+                >
+                  <ListFilter className="w-4 h-4" />
+                </button>
+                <button 
+                  onClick={() => setSortOption('name')}
+                  className={`p-1.5 rounded-md transition-all ${sortOption === 'name' ? 'bg-white shadow text-slate-900' : 'text-slate-400 hover:text-slate-600'}`}
+                  title="Name (A-Z)"
+                >
+                  <ArrowUpDown className="w-4 h-4" />
+                </button>
+             </div>
+
             {isAdmin && (
               <button 
                 onClick={() => {
@@ -342,12 +393,12 @@ export default function App() {
                   <h2 className="text-2xl font-bold text-slate-900">
                     {CATEGORIES.find(c => c.id === activeCategory)?.label}
                   </h2>
-                  <p className="text-slate-500 text-sm mt-1">Total {filteredProducts.length} items</p>
+                  <p className="text-slate-500 text-sm mt-1">Total {processedProducts.length} items</p>
                 </div>
               </div>
               
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 pb-20">
-                {filteredProducts.map(product => (
+                {processedProducts.map(product => (
                   <ProductCard 
                     key={product.id} 
                     product={product} 
@@ -372,7 +423,7 @@ export default function App() {
                 )}
               </div>
 
-              {filteredProducts.length === 0 && !isLoading && (
+              {processedProducts.length === 0 && !isLoading && (
                  <div className="flex flex-col items-center justify-center py-20 text-slate-400">
                     <Cloud className="w-12 h-12 mb-4 opacity-20" />
                     <p>등록된 데이터가 없습니다.</p>
@@ -507,10 +558,21 @@ function ProductCard({ product, onClick }) {
         <p className="text-xs text-slate-500 line-clamp-2 mb-4 flex-1">{product.specs}</p>
         
         <div className="flex items-center justify-between border-t border-slate-100 pt-3 mt-auto">
+          {/* 컬러 스와치: 실제 색상 적용 */}
           <div className="flex -space-x-1">
-            {product.colors && product.colors.slice(0, 3).map((color, i) => (
-              <div key={i} className="w-4 h-4 rounded-full border border-white ring-1 ring-slate-100 bg-slate-400" title={color} />
+            {product.colors && product.colors.slice(0, 5).map((color, i) => (
+              <div 
+                key={i} 
+                className="w-4 h-4 rounded-full border border-white ring-1 ring-slate-100 shadow-sm"
+                style={{ backgroundColor: color }} // 실제 컬러 적용
+                title={color} 
+              />
             ))}
+            {product.colors && product.colors.length > 5 && (
+               <div className="w-4 h-4 rounded-full border border-white ring-1 ring-slate-100 bg-slate-100 flex items-center justify-center text-[8px] text-slate-500">
+                  +
+               </div>
+            )}
           </div>
           <span className="text-xs text-blue-600 font-semibold group-hover:translate-x-1 transition-transform flex items-center">
             View Details
@@ -608,9 +670,13 @@ function ProductDetailModal({ product, onClose, onEdit, isAdmin }) {
               </h3>
               <div className="flex flex-wrap gap-2">
                 {product.colors && product.colors.map((color, idx) => (
-                  <span key={idx} className="px-3 py-1.5 border border-slate-200 rounded-lg text-sm text-slate-600 hover:border-slate-400 transition-colors cursor-default">
-                    {color}
-                  </span>
+                  <div key={idx} className="flex items-center space-x-2 border border-slate-200 rounded-lg px-2 py-1">
+                     <div 
+                       className="w-4 h-4 rounded-full border border-slate-200 shadow-sm"
+                       style={{ backgroundColor: color }}
+                     />
+                     <span className="text-sm text-slate-600">{color}</span>
+                  </div>
                 ))}
               </div>
             </div>
@@ -825,7 +891,8 @@ function ProductFormModal({ categories, existingData, onClose, onSave, onDelete,
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">컬러 옵션 (쉼표 구분)</label>
-              <input type="text" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-slate-900 outline-none" value={formData.colorsString} onChange={e => setFormData({...formData, colorsString: e.target.value})} />
+              <div className="text-[10px] text-slate-400 mb-1">색상 이름(Red, Blue) 또는 Hex 코드(#FF0000)를 입력하세요.</div>
+              <input type="text" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-slate-900 outline-none" placeholder="Black, #FF5733, Navy..." value={formData.colorsString} onChange={e => setFormData({...formData, colorsString: e.target.value})} />
             </div>
           </div>
 
