@@ -11,40 +11,46 @@ import {
   Upload,
   Trash2,
   Edit2,
-  Star
+  Star,
+  RefreshCw,
+  Cloud
 } from 'lucide-react';
+import { initializeApp } from 'firebase/app';
+import { 
+  getAuth, 
+  signInWithCustomToken, 
+  signInAnonymously, 
+  onAuthStateChanged 
+} from 'firebase/auth';
+import { 
+  getFirestore, 
+  collection, 
+  doc, 
+  setDoc, 
+  deleteDoc, 
+  onSnapshot 
+} from 'firebase/firestore';
 
-// 초기 샘플 데이터 구조 변경 (image -> images 배열)
+// ----------------------------------------------------------------------
+// Firebase 설정 및 초기화
+// ----------------------------------------------------------------------
+const firebaseConfig = JSON.parse(__firebase_config);
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+
+// 초기 샘플 데이터 (DB가 비었을 때 보여줄 용도)
 const INITIAL_DATA = [
   {
-    id: 1,
-    name: 'KYLE (카일)',
+    id: 'sample-1',
+    name: 'KYLE (카일) - Sample',
     category: 'EXECUTIVE',
-    images: [], // 첫번째 요소가 대표 이미지
+    images: [], 
     specs: '천연 가죽, 알루미늄 다이캐스팅 베이스',
     features: ['싱크로나이즈드 틸팅', '멀티 리미티드 틸팅', '좌판 깊이 조절'],
     colors: ['Black', 'Dark Brown', 'Camel'],
     isNew: true,
-  },
-  {
-    id: 2,
-    name: 'LIBRA (리브라)',
-    category: 'TASK',
-    images: [],
-    specs: '메쉬 등판, 패브릭 좌판',
-    features: ['오토 텐션 틸팅', '요추 지지대', '4D 암레스트'],
-    colors: ['Grey', 'Blue', 'Green', 'Black'],
-    isNew: false,
-  },
-  {
-    id: 3,
-    name: 'FLO (플로)',
-    category: 'CONFERENCE',
-    images: [],
-    specs: '일체형 쉘, 심플한 구조',
-    features: ['스태킹 가능', '글라이드/캐스터 선택'],
-    colors: ['White', 'Red', 'Mustard', 'Navy'],
-    isNew: false,
   },
 ];
 
@@ -54,14 +60,61 @@ const CATEGORIES = [
 ];
 
 export default function App() {
-  const [products, setProducts] = useState(INITIAL_DATA);
+  const [user, setUser] = useState(null);
+  const [products, setProducts] = useState([]);
   const [activeCategory, setActiveCategory] = useState('ALL');
   const [searchTerm, setSearchTerm] = useState('');
   
   // 모달 상태 관리
-  const [selectedProduct, setSelectedProduct] = useState(null); // 상세 보기용
-  const [isFormOpen, setIsFormOpen] = useState(false); // 등록/수정 폼 열림 여부
-  const [editingProduct, setEditingProduct] = useState(null); // 수정 모드일 때 데이터 담음
+  const [selectedProduct, setSelectedProduct] = useState(null); 
+  const [isFormOpen, setIsFormOpen] = useState(false); 
+  const [editingProduct, setEditingProduct] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // 1. 인증 초기화
+  useEffect(() => {
+    const initAuth = async () => {
+      try {
+        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+          await signInWithCustomToken(auth, __initial_auth_token);
+        } else {
+          await signInAnonymously(auth);
+        }
+      } catch (error) {
+        console.error("Auth Error:", error);
+      }
+    };
+    initAuth();
+    const unsubscribe = onAuthStateChanged(auth, setUser);
+    return () => unsubscribe();
+  }, []);
+
+  // 2. 데이터 실시간 동기화 (Firestore)
+  useEffect(() => {
+    if (!user) return;
+
+    // Rule 1: Strict Path 사용 (public/data/products)
+    const q = collection(db, 'artifacts', appId, 'public', 'data', 'products');
+    
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const loadedProducts = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      
+      // DB가 비어있으면 로딩 상태만 해제, 데이터가 있으면 로드
+      // 정렬은 클라이언트에서 수행 (Rule 2)
+      loadedProducts.sort((a, b) => b.createdAt - a.createdAt); // 최신순
+      
+      setProducts(loadedProducts);
+      setIsLoading(false);
+    }, (error) => {
+      console.error("Data Fetch Error:", error);
+      setIsLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, [user]);
 
   // 필터링 로직
   const filteredProducts = products.filter(product => {
@@ -76,39 +129,58 @@ export default function App() {
     return matchesCategory && matchesSearch;
   });
 
-  // 제품 추가/수정 핸들러
-  const handleSaveProduct = (productData) => {
-    if (editingProduct) {
-      // 수정 모드
-      setProducts(products.map(p => p.id === productData.id ? productData : p));
-      // 상세 보고 있던 창도 업데이트
-      if (selectedProduct && selectedProduct.id === productData.id) {
-        setSelectedProduct(productData);
+  // 제품 저장 핸들러 (Firestore)
+  const handleSaveProduct = async (productData) => {
+    if (!user) return;
+
+    try {
+      // ID가 없으면 생성
+      const docId = productData.id ? String(productData.id) : String(Date.now());
+      const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'products', docId);
+      
+      const payload = {
+        ...productData,
+        id: docId,
+        createdAt: productData.createdAt || Date.now(),
+        updatedAt: Date.now()
+      };
+
+      await setDoc(docRef, payload, { merge: true });
+      
+      // 현재 보고 있는 상세 모달이 있다면 내용 갱신을 위해 업데이트
+      if (selectedProduct && selectedProduct.id === docId) {
+        setSelectedProduct(payload);
       }
-    } else {
-      // 신규 추가 모드
-      setProducts([productData, ...products]);
-    }
-    setIsFormOpen(false);
-    setEditingProduct(null);
-  };
 
-  // 제품 삭제 핸들러
-  const handleDeleteProduct = (productId) => {
-    if (window.confirm('정말 이 제품 데이터를 삭제하시겠습니까?')) {
-      setProducts(products.filter(p => p.id !== productId));
-      setSelectedProduct(null);
       setIsFormOpen(false);
+      setEditingProduct(null);
+    } catch (error) {
+      console.error("Save Error:", error);
+      alert("저장 중 오류가 발생했습니다.");
     }
   };
 
-  // 수정 버튼 클릭 시
+  // 제품 삭제 핸들러 (Firestore)
+  const handleDeleteProduct = async (productId) => {
+    if (!user) return;
+    if (window.confirm('정말 이 제품 데이터를 영구적으로 삭제하시겠습니까?')) {
+      try {
+        const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'products', String(productId));
+        await deleteDoc(docRef);
+        setSelectedProduct(null);
+        setIsFormOpen(false);
+      } catch (error) {
+        console.error("Delete Error:", error);
+        alert("삭제 중 오류가 발생했습니다.");
+      }
+    }
+  };
+
   const openEditModal = (product) => {
     setEditingProduct(product);
     setIsFormOpen(true);
   };
 
-  // 등록 버튼 클릭 시
   const openAddModal = () => {
     setEditingProduct(null);
     setIsFormOpen(true);
@@ -125,7 +197,10 @@ export default function App() {
         </div>
 
         <nav className="flex-1 overflow-y-auto py-6 px-4 space-y-1 custom-scrollbar">
-          <div className="text-xs font-semibold text-slate-400 mb-2 px-2">BROWSE</div>
+          <div className="text-xs font-semibold text-slate-400 mb-2 px-2 flex justify-between items-center">
+             <span>BROWSE</span>
+             <Cloud className="w-3 h-3 text-green-500" title="Cloud Synced" />
+          </div>
           {CATEGORIES.map(category => (
             <button
               key={category}
@@ -140,6 +215,12 @@ export default function App() {
             </button>
           ))}
         </nav>
+        
+        <div className="p-4 border-t border-slate-200 bg-slate-50">
+           <div className="text-[10px] text-slate-400 text-center">
+             {user ? "Cloud Database Connected" : "Connecting..."}
+           </div>
+        </div>
       </aside>
 
       {/* 메인 영역 */}
@@ -172,34 +253,50 @@ export default function App() {
         </header>
 
         {/* 콘텐츠 영역 */}
-        <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
-          <div className="mb-6 flex items-end justify-between">
-            <div>
-              <h2 className="text-2xl font-bold text-slate-900">{activeCategory} Collections</h2>
-              <p className="text-slate-500 text-sm mt-1">총 {filteredProducts.length}개의 제품이 표시되었습니다.</p>
-            </div>
-          </div>
+        <div className="flex-1 overflow-y-auto p-8 custom-scrollbar relative">
           
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 pb-20">
-            {filteredProducts.map(product => (
-              <ProductCard 
-                key={product.id} 
-                product={product} 
-                onClick={() => setSelectedProduct(product)} 
-              />
-            ))}
-            
-            {/* 추가 카드 (Placeholder) */}
-            <button 
-              onClick={openAddModal}
-              className="border-2 border-dashed border-slate-200 rounded-2xl flex flex-col items-center justify-center min-h-[300px] text-slate-400 hover:border-slate-400 hover:text-slate-600 transition-all group bg-white/50"
-            >
-              <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center mb-3 group-hover:bg-slate-200 transition-colors">
-                <Plus className="w-6 h-6" />
+          {isLoading ? (
+            <div className="absolute inset-0 flex items-center justify-center">
+              <RefreshCw className="w-8 h-8 text-slate-400 animate-spin" />
+            </div>
+          ) : (
+            <>
+              <div className="mb-6 flex items-end justify-between">
+                <div>
+                  <h2 className="text-2xl font-bold text-slate-900">{activeCategory} Collections</h2>
+                  <p className="text-slate-500 text-sm mt-1">총 {filteredProducts.length}개의 제품이 표시되었습니다.</p>
+                </div>
               </div>
-              <span className="font-medium">Add New Product</span>
-            </button>
-          </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 pb-20">
+                {filteredProducts.map(product => (
+                  <ProductCard 
+                    key={product.id} 
+                    product={product} 
+                    onClick={() => setSelectedProduct(product)} 
+                  />
+                ))}
+                
+                {/* 추가 카드 (Placeholder) */}
+                <button 
+                  onClick={openAddModal}
+                  className="border-2 border-dashed border-slate-200 rounded-2xl flex flex-col items-center justify-center min-h-[300px] text-slate-400 hover:border-slate-400 hover:text-slate-600 transition-all group bg-white/50"
+                >
+                  <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center mb-3 group-hover:bg-slate-200 transition-colors">
+                    <Plus className="w-6 h-6" />
+                  </div>
+                  <span className="font-medium">Add New Product</span>
+                </button>
+              </div>
+
+              {filteredProducts.length === 0 && !isLoading && (
+                 <div className="flex flex-col items-center justify-center py-20 text-slate-400">
+                    <Cloud className="w-12 h-12 mb-4 opacity-20" />
+                    <p>등록된 데이터가 없습니다.</p>
+                 </div>
+              )}
+            </>
+          )}
         </div>
       </main>
 
@@ -233,13 +330,12 @@ export default function App() {
 // 컴포넌트: ProductCard (리스트 아이템)
 // ----------------------------------------------------------------------
 function ProductCard({ product, onClick }) {
-  // 대표 이미지 (배열의 첫번째)
   const mainImage = product.images && product.images.length > 0 ? product.images[0] : null;
 
   return (
     <div 
       onClick={onClick}
-      className="bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 cursor-pointer group border border-slate-100 flex flex-col h-full"
+      className="bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 cursor-pointer group border border-slate-100 flex flex-col h-full animate-in fade-in duration-500"
     >
       <div className="relative h-64 overflow-hidden bg-slate-50 p-6 flex items-center justify-center">
         {product.isNew && (
@@ -264,7 +360,7 @@ function ProductCard({ product, onClick }) {
       <div className="p-5 flex-1 flex flex-col">
         <div className="flex justify-between items-start mb-2">
           <span className="text-xs font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded uppercase tracking-wide">{product.category}</span>
-          {product.images.length > 1 && (
+          {product.images && product.images.length > 1 && (
              <span className="text-[10px] bg-slate-200 text-slate-600 px-1.5 rounded">+{product.images.length - 1} images</span>
           )}
         </div>
@@ -273,7 +369,7 @@ function ProductCard({ product, onClick }) {
         
         <div className="flex items-center justify-between border-t border-slate-100 pt-3 mt-auto">
           <div className="flex -space-x-1">
-            {product.colors.slice(0, 3).map((color, i) => (
+            {product.colors && product.colors.slice(0, 3).map((color, i) => (
               <div key={i} className="w-4 h-4 rounded-full border border-white ring-1 ring-slate-100 bg-slate-400" title={color} />
             ))}
           </div>
@@ -287,7 +383,7 @@ function ProductCard({ product, onClick }) {
 }
 
 // ----------------------------------------------------------------------
-// 컴포넌트: ProductDetailModal (상세 보기 + 수정 진입)
+// 컴포넌트: ProductDetailModal
 // ----------------------------------------------------------------------
 function ProductDetailModal({ product, onClose, onEdit }) {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
@@ -309,7 +405,6 @@ function ProductDetailModal({ product, onClose, onEdit }) {
 
         {/* Left: Image Gallery */}
         <div className="w-full md:w-1/2 bg-slate-50 p-8 flex flex-col border-r border-slate-100">
-          {/* Main Image View */}
           <div className="flex-1 w-full bg-white rounded-2xl flex items-center justify-center text-slate-400 shadow-sm overflow-hidden p-4 mb-4 relative">
              {currentImage ? (
                 <img src={currentImage} alt="Main View" className="w-full h-full object-contain" />
@@ -318,7 +413,6 @@ function ProductDetailModal({ product, onClose, onEdit }) {
              )}
           </div>
           
-          {/* Thumbnails */}
           {images.length > 0 && (
             <div className="h-20 flex space-x-2 overflow-x-auto custom-scrollbar pb-2">
               {images.map((img, idx) => (
@@ -363,7 +457,7 @@ function ProductDetailModal({ product, onClose, onEdit }) {
                 <Tag className="w-4 h-4 mr-2" /> Key Features
               </h3>
               <ul className="grid grid-cols-1 gap-2">
-                {product.features.map((feature, idx) => (
+                {product.features && product.features.map((feature, idx) => (
                   <li key={idx} className="flex items-center text-sm text-slate-600">
                     <Check className="w-4 h-4 text-green-500 mr-2 flex-shrink-0" />
                     {feature}
@@ -377,7 +471,7 @@ function ProductDetailModal({ product, onClose, onEdit }) {
                 <Palette className="w-4 h-4 mr-2" /> Color Options
               </h3>
               <div className="flex flex-wrap gap-2">
-                {product.colors.map((color, idx) => (
+                {product.colors && product.colors.map((color, idx) => (
                   <span key={idx} className="px-3 py-1.5 border border-slate-200 rounded-lg text-sm text-slate-600 hover:border-slate-400 transition-colors cursor-default">
                     {color}
                   </span>
@@ -405,7 +499,7 @@ function ProductDetailModal({ product, onClose, onEdit }) {
 }
 
 // ----------------------------------------------------------------------
-// 컴포넌트: ProductFormModal (등록 및 수정 겸용, 멀티 이미지 지원)
+// 컴포넌트: ProductFormModal
 // ----------------------------------------------------------------------
 function ProductFormModal({ categories, existingData, onClose, onSave, onDelete }) {
   const isEditMode = !!existingData;
@@ -413,7 +507,7 @@ function ProductFormModal({ categories, existingData, onClose, onSave, onDelete 
 
   // Form State
   const [formData, setFormData] = useState({
-    id: isEditMode ? existingData.id : Date.now(),
+    id: isEditMode ? existingData.id : null,
     name: '',
     category: categories[0],
     specs: '',
@@ -422,6 +516,8 @@ function ProductFormModal({ categories, existingData, onClose, onSave, onDelete 
     isNew: false,
     images: [],
   });
+  
+  const [isProcessingImage, setIsProcessingImage] = useState(false);
 
   useEffect(() => {
     if (existingData) {
@@ -430,27 +526,70 @@ function ProductFormModal({ categories, existingData, onClose, onSave, onDelete 
         name: existingData.name,
         category: existingData.category,
         specs: existingData.specs,
-        featuresString: existingData.features.join(', '),
-        colorsString: existingData.colors.join(', '),
+        featuresString: existingData.features ? existingData.features.join(', ') : '',
+        colorsString: existingData.colors ? existingData.colors.join(', ') : '',
         isNew: existingData.isNew,
         images: existingData.images || [],
       });
     }
   }, [existingData]);
 
-  // 이미지 추가 핸들러 (멀티 업로드 지원)
-  const handleImageUpload = (e) => {
+  // 이미지 리사이징 및 Base64 변환 (Firestore 용량 제한 대응)
+  const processImage = (file) => {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          const MAX_WIDTH = 800; // 최대 너비 제한
+          let width = img.width;
+          let height = img.height;
+
+          if (width > MAX_WIDTH) {
+            height *= MAX_WIDTH / width;
+            width = MAX_WIDTH;
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+          
+          // JPEG 포맷으로 압축 (품질 0.7)
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+          resolve(dataUrl);
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handleImageUpload = async (e) => {
     const files = Array.from(e.target.files);
     if (files.length > 0) {
-      const newImageUrls = files.map(file => URL.createObjectURL(file));
+      setIsProcessingImage(true);
+      const newImageUrls = [];
+      
+      for (const file of files) {
+        // 간단한 리사이징 로직 적용
+        try {
+          const resizedImage = await processImage(file);
+          newImageUrls.push(resizedImage);
+        } catch (error) {
+          console.error("Image processing failed", error);
+        }
+      }
+
       setFormData(prev => ({
         ...prev,
         images: [...prev.images, ...newImageUrls]
       }));
+      setIsProcessingImage(false);
     }
   };
 
-  // 이미지 삭제
   const removeImage = (indexToRemove) => {
     setFormData(prev => ({
       ...prev,
@@ -458,7 +597,6 @@ function ProductFormModal({ categories, existingData, onClose, onSave, onDelete 
     }));
   };
 
-  // 대표 이미지 설정 (배열 맨 앞으로 이동)
   const setMainImage = (indexToMain) => {
     setFormData(prev => {
       const newImages = [...prev.images];
@@ -487,23 +625,20 @@ function ProductFormModal({ categories, existingData, onClose, onSave, onDelete 
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-white w-full max-w-3xl rounded-2xl overflow-hidden shadow-2xl flex flex-col max-h-[95vh] animate-in fade-in slide-in-from-bottom-4 duration-200">
         
-        {/* Header */}
         <div className="px-8 py-5 border-b border-slate-100 flex justify-between items-center bg-slate-50">
           <div>
             <h2 className="text-xl font-bold text-slate-800">
-              {isEditMode ? '제품 데이터 수정' : '신제품 등록'}
+              {isEditMode ? '제품 데이터 수정 (Cloud)' : '신제품 등록 (Cloud)'}
             </h2>
-            <p className="text-xs text-slate-500 mt-1">필요한 정보를 입력하고 이미지를 관리하세요.</p>
+            <p className="text-xs text-slate-500 mt-1">저장된 데이터는 모든 팀원에게 실시간으로 공유됩니다.</p>
           </div>
           <button onClick={onClose} className="p-2 hover:bg-slate-200 rounded-full transition-colors">
             <X className="w-5 h-5 text-slate-500" />
           </button>
         </div>
         
-        {/* Scrollable Form Area */}
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-8 space-y-6">
           
-          {/* Image Management Section */}
           <div className="bg-slate-50 p-6 rounded-xl border border-slate-200">
             <div className="flex justify-between items-center mb-4">
               <label className="text-sm font-bold text-slate-900 flex items-center">
@@ -512,9 +647,10 @@ function ProductFormModal({ categories, existingData, onClose, onSave, onDelete 
               <button 
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
+                disabled={isProcessingImage}
                 className="text-xs flex items-center bg-white border border-slate-300 px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors font-medium text-slate-700"
               >
-                <Plus className="w-3 h-3 mr-1" /> 이미지 추가
+                {isProcessingImage ? '처리 중...' : <><Plus className="w-3 h-3 mr-1" /> 이미지 추가</>}
               </button>
               <input 
                 type="file" 
@@ -526,20 +662,15 @@ function ProductFormModal({ categories, existingData, onClose, onSave, onDelete 
               />
             </div>
 
-            {/* Image List */}
             <div className="grid grid-cols-4 gap-4">
                {formData.images.map((img, idx) => (
                  <div key={idx} className="relative group aspect-square bg-white rounded-lg border border-slate-200 overflow-hidden shadow-sm">
                    <img src={img} alt={`img-${idx}`} className="w-full h-full object-cover" />
-                   
-                   {/* Badge for Main Image */}
                    {idx === 0 && (
                      <div className="absolute top-2 left-2 bg-slate-900 text-white text-[10px] px-2 py-0.5 rounded font-bold shadow-md z-10">
                        대표
                      </div>
                    )}
-
-                   {/* Hover Actions */}
                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center space-y-2">
                       {idx !== 0 && (
                         <button 
@@ -560,17 +691,17 @@ function ProductFormModal({ categories, existingData, onClose, onSave, onDelete 
                    </div>
                  </div>
                ))}
-
-               {/* Add Button Placeholder (Always visible if list is short) */}
                <div 
-                 onClick={() => fileInputRef.current?.click()}
+                 onClick={() => !isProcessingImage && fileInputRef.current?.click()}
                  className="aspect-square border-2 border-dashed border-slate-300 rounded-lg flex flex-col items-center justify-center text-slate-400 cursor-pointer hover:border-slate-500 hover:text-slate-600 transition-colors bg-white"
                >
                  <Upload className="w-6 h-6 mb-1" />
-                 <span className="text-[10px] font-medium">Add Image</span>
+                 <span className="text-[10px] font-medium">{isProcessingImage ? '압축 중...' : 'Add Image'}</span>
                </div>
             </div>
-            <p className="text-[11px] text-slate-400 mt-3 text-right">* 첫 번째 이미지가 리스트에 대표 이미지로 노출됩니다. 드래그 앤 드롭 미지원 (버튼 사용).</p>
+            <p className="text-[11px] text-slate-400 mt-3 text-right">
+              * 자동 리사이징(최대 800px)이 적용되어 저장됩니다.
+            </p>
           </div>
 
           <div className="grid grid-cols-2 gap-6">
@@ -645,7 +776,6 @@ function ProductFormModal({ categories, existingData, onClose, onSave, onDelete 
           </div>
         </form>
 
-        {/* Footer Actions */}
         <div className="px-8 py-5 border-t border-slate-100 bg-slate-50 flex justify-between items-center">
           <div>
             {isEditMode && (
@@ -668,9 +798,10 @@ function ProductFormModal({ categories, existingData, onClose, onSave, onDelete 
             </button>
             <button 
               onClick={handleSubmit}
-              className="px-5 py-2.5 bg-slate-900 text-white rounded-lg text-sm font-medium hover:bg-slate-800 transition-colors shadow-lg shadow-slate-200"
+              disabled={isProcessingImage}
+              className="px-5 py-2.5 bg-slate-900 text-white rounded-lg text-sm font-medium hover:bg-slate-800 transition-colors shadow-lg shadow-slate-200 disabled:opacity-50"
             >
-              {isEditMode ? '변경사항 저장' : '제품 등록하기'}
+              {isProcessingImage ? '이미지 처리 중...' : (isEditMode ? '변경사항 저장' : '제품 등록하기')}
             </button>
           </div>
         </div>
