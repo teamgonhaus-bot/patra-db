@@ -3,9 +3,9 @@ import React, { useState, useRef, useEffect } from 'react';
 import { 
   Plus, Search, X, Check, Tag, Palette, Settings, Image as ImageIcon,
   Upload, Trash2, Edit2, RefreshCw, Cloud, CloudOff, Lock, Unlock,
-  Database, Download, Info, ArrowUpDown, ListFilter, Menu, History,
+  Database, Info, ArrowUpDown, ListFilter, Menu, History,
   Copy, ChevronRight, Activity, ShieldAlert, FileJson, Calendar,
-  MoreVertical, SortAsc, SortDesc
+  ArrowLeft, ArrowRight, ArrowUp, ArrowDown, Layers, Scissors, Star
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { 
@@ -32,8 +32,8 @@ const YOUR_FIREBASE_CONFIG = {
 // ----------------------------------------------------------------------
 // 상수 및 설정
 // ----------------------------------------------------------------------
-const APP_VERSION = "v1.5.0"; // Mobile Optimization & Sort Features
-const BUILD_DATE = "2024.05.24";
+const APP_VERSION = "v1.7.0"; // Detail Specs & Dual Color System
+const BUILD_DATE = "2024.05.26";
 const ADMIN_PASSWORD = "adminlcg1"; 
 
 // Firebase 초기화 로직
@@ -63,12 +63,14 @@ try {
 }
 
 const CATEGORIES = [
-  { id: 'ALL', label: 'MAJOR PRODUCTS' },
-  { id: 'NEW', label: 'NEW ARRIVALS' },
+  { id: 'ALL', label: 'MAIN PRODUCTS', isSpecial: true },
+  { id: 'NEW', label: 'NEW ARRIVALS', isSpecial: true },
+  { id: 'MY_PICK', label: 'MY PICK', isSpecial: true }, // 즐겨찾기 추가
   { id: 'EXECUTIVE', label: 'EXECUTIVE' },
   { id: 'TASK', label: 'TASK' },
   { id: 'CONFERENCE', label: 'CONFERENCE' },
   { id: 'GUEST', label: 'GUEST' },
+  { id: 'STOOL', label: 'STOOL' },
   { id: 'LOUNGE', label: 'LOUNGE' },
   { id: 'HOME', label: 'HOME' },
   { id: 'TABLE', label: 'TABLE' },
@@ -81,22 +83,22 @@ export default function App() {
   const [activeCategory, setActiveCategory] = useState('ALL');
   const [searchTerm, setSearchTerm] = useState('');
   
-  // 정렬 옵션: 'launchDate'(출시일), 'createdAt'(등록일), 'name'(이름)
-  const [sortOption, setSortOption] = useState('launchDate'); 
-  const [sortDirection, setSortDirection] = useState('desc'); // 'desc' | 'asc'
+  const [sortOption, setSortOption] = useState('manual'); 
+  const [sortDirection, setSortDirection] = useState('desc'); 
   
-  // UI 상태
   const [selectedProduct, setSelectedProduct] = useState(null); 
   const [isFormOpen, setIsFormOpen] = useState(false); 
   const [editingProduct, setEditingProduct] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   
-  // 관리자 & 대시보드
   const [isAdmin, setIsAdmin] = useState(false);
   const [showAdminDashboard, setShowAdminDashboard] = useState(false);
   const [activityLogs, setActivityLogs] = useState([]);
   const [toast, setToast] = useState(null);
+  
+  // 로컬 즐겨찾기 상태
+  const [favorites, setFavorites] = useState([]);
 
   // 1. 인증 초기화
   useEffect(() => {
@@ -119,6 +121,10 @@ export default function App() {
       }
     };
     initApp();
+    
+    // 즐겨찾기 로드
+    const savedFavs = localStorage.getItem('patra_favorites');
+    if (savedFavs) setFavorites(JSON.parse(savedFavs));
   }, []);
 
   // 2. 실시간 데이터 동기화
@@ -176,6 +182,21 @@ export default function App() {
     }
   };
 
+  const toggleFavorite = (e, productId) => {
+    e.stopPropagation();
+    let newFavs;
+    if (favorites.includes(productId)) {
+      newFavs = favorites.filter(id => id !== productId);
+      showToast("MY PICK에서 제거되었습니다.", "info");
+    } else {
+      newFavs = [...favorites, productId];
+      showToast("MY PICK에 추가되었습니다.");
+    }
+    setFavorites(newFavs);
+    localStorage.setItem('patra_favorites', JSON.stringify(newFavs));
+  };
+
+  // 로그 기록
   const logActivity = async (action, productName, details = "") => {
     if (!isFirebaseAvailable || !db) return;
     try {
@@ -220,15 +241,29 @@ export default function App() {
     showToast("전체 데이터 백업이 완료되었습니다.");
   };
 
-  // 필터링 및 정렬 로직 (핵심)
+  // 필터링 및 정렬 로직
   const getProcessedProducts = () => {
     let filtered = products.filter(product => {
-      const matchesCategory = 
-        activeCategory === 'ALL' ? true :
-        activeCategory === 'NEW' ? product.isNew :
-        product.category === activeCategory;
-      const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                            product.specs.toLowerCase().includes(searchTerm.toLowerCase());
+      // 카테고리 필터
+      let matchesCategory = true;
+      if (activeCategory === 'MY_PICK') {
+        matchesCategory = favorites.includes(product.id);
+      } else if (activeCategory === 'NEW') {
+        matchesCategory = product.isNew;
+      } else if (activeCategory !== 'ALL') {
+        matchesCategory = product.category === activeCategory;
+      }
+
+      // 검색 필터 (이름, 스펙, 옵션, 재질, 컬러 등)
+      const searchLower = searchTerm.toLowerCase();
+      const matchesSearch = 
+        product.name.toLowerCase().includes(searchLower) || 
+        product.specs.toLowerCase().includes(searchLower) ||
+        (product.options && product.options.some(opt => opt.toLowerCase().includes(searchLower))) ||
+        (product.materials && product.materials.some(mat => mat.toLowerCase().includes(searchLower))) ||
+        (product.bodyColors && product.bodyColors.some(c => c.toLowerCase().includes(searchLower))) ||
+        (product.upholsteryColors && product.upholsteryColors.some(c => c.toLowerCase().includes(searchLower)));
+
       return matchesCategory && matchesSearch;
     });
 
@@ -237,11 +272,14 @@ export default function App() {
       if (sortOption === 'name') {
         comparison = a.name.localeCompare(b.name);
       } else if (sortOption === 'launchDate') {
-        // launchDate가 없으면 createdAt 사용
         const dateA = a.launchDate || a.createdAt || 0;
         const dateB = b.launchDate || b.createdAt || 0;
         comparison = new Date(dateA) - new Date(dateB);
-      } else { // createdAt (등록순)
+      } else if (sortOption === 'manual') {
+        const orderA = a.orderIndex !== undefined ? a.orderIndex : (a.createdAt || 0);
+        const orderB = b.orderIndex !== undefined ? b.orderIndex : (b.createdAt || 0);
+        comparison = orderA - orderB;
+      } else { 
         const dateA = a.createdAt || 0;
         const dateB = b.createdAt || 0;
         comparison = dateA - dateB;
@@ -253,6 +291,41 @@ export default function App() {
   };
   const processedProducts = getProcessedProducts();
 
+  // 제품 순서 변경
+  const handleMoveProduct = async (index, direction) => {
+    if (!processedProducts || processedProducts.length <= 1) return;
+    
+    const targetIndex = direction === 'left' ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= processedProducts.length) return;
+
+    const currentItem = processedProducts[index];
+    const swapItem = processedProducts[targetIndex];
+
+    const currentOrder = currentItem.orderIndex !== undefined ? currentItem.orderIndex : currentItem.createdAt;
+    const swapOrder = swapItem.orderIndex !== undefined ? swapItem.orderIndex : swapItem.createdAt;
+
+    const newCurrentOrder = swapOrder;
+    const newSwapOrder = currentOrder;
+
+    if (isFirebaseAvailable && db) {
+      try {
+        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'products', currentItem.id), { orderIndex: newCurrentOrder }, { merge: true });
+        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'products', swapItem.id), { orderIndex: newSwapOrder }, { merge: true });
+      } catch (e) {
+        showToast("순서 변경 실패", "error");
+      }
+    } else {
+      const newProducts = [...products];
+      const p1 = newProducts.find(p => p.id === currentItem.id);
+      const p2 = newProducts.find(p => p.id === swapItem.id);
+      if (p1 && p2) {
+        p1.orderIndex = newCurrentOrder;
+        p2.orderIndex = newSwapOrder;
+        saveToLocalStorage(newProducts);
+      }
+    }
+  };
+
   // 저장 로직
   const handleSaveProduct = async (productData) => {
     const docId = productData.id ? String(productData.id) : String(Date.now());
@@ -262,8 +335,8 @@ export default function App() {
       ...productData,
       id: docId,
       updatedAt: Date.now(),
-      // createdAt은 기존 데이터 유지, 없으면 현재 시간
-      createdAt: isEdit ? (products.find(p => String(p.id) === docId)?.createdAt || Date.now()) : Date.now()
+      createdAt: isEdit ? (products.find(p => String(p.id) === docId)?.createdAt || Date.now()) : Date.now(),
+      orderIndex: isEdit ? (products.find(p => String(p.id) === docId)?.orderIndex || Date.now()) : Date.now()
     };
 
     if (isFirebaseAvailable && db) {
@@ -347,21 +420,28 @@ export default function App() {
                 <CloudOff className="w-3 h-3 text-red-400" title="Local" />
              }
           </div>
-          {CATEGORIES.map(cat => (
-            <button
-              key={cat.id}
-              onClick={() => {
-                setActiveCategory(cat.id);
-                setIsMobileMenuOpen(false);
-              }}
-              className={`w-full text-left px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 flex items-center justify-between group
-                ${activeCategory === cat.id 
-                  ? 'bg-slate-900 text-white shadow-md' 
-                  : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'}`}
-            >
-              {cat.label}
-              {cat.id === 'NEW' && <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>}
-            </button>
+          {CATEGORIES.map((cat, index) => (
+            <React.Fragment key={cat.id}>
+              <button
+                onClick={() => {
+                  setActiveCategory(cat.id);
+                  setIsMobileMenuOpen(false);
+                }}
+                className={`w-full text-left px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 flex items-center justify-between group
+                  ${activeCategory === cat.id 
+                    ? 'bg-indigo-50 text-indigo-900 shadow-sm' 
+                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'}
+                  ${cat.isSpecial ? 'text-indigo-700 font-extrabold' : ''}
+                `}
+              >
+                {cat.id === 'MY_PICK' && <Star className="w-3 h-3 mr-2 text-yellow-500 fill-yellow-500" />}
+                {cat.label}
+                {cat.id === 'NEW' && <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse ml-auto"></span>}
+              </button>
+              {(cat.id === 'NEW' || cat.id === 'MY_PICK') && (
+                <div className="my-3 mx-2 border-b border-slate-200"></div>
+              )}
+            </React.Fragment>
           ))}
         </nav>
         
@@ -397,7 +477,6 @@ export default function App() {
 
       {/* 메인 영역 */}
       <main className="flex-1 flex flex-col h-screen overflow-hidden relative">
-        {/* Sticky Header: 모바일에서 상단 고정 */}
         <header className="h-16 bg-white/95 backdrop-blur border-b border-slate-200 flex items-center justify-between px-4 md:px-8 shadow-sm z-30 flex-shrink-0 sticky top-0">
           <div className="flex items-center space-x-3 w-full md:w-auto flex-1 mr-2">
             <button 
@@ -411,7 +490,7 @@ export default function App() {
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-4 h-4" />
               <input 
                 type="text" 
-                placeholder="검색..." 
+                placeholder="검색 (제품명, 옵션, 컬러, 마감...)" 
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full pl-9 pr-4 py-2 bg-slate-100 border-transparent focus:bg-white focus:border-slate-300 rounded-full text-sm transition-all outline-none focus:ring-2 focus:ring-slate-100"
@@ -420,13 +499,13 @@ export default function App() {
           </div>
 
           <div className="flex items-center space-x-2">
-             {/* 정렬 컨트롤 (Mobile Responsive) */}
              <div className="flex items-center bg-slate-100 rounded-lg p-1">
                 <select 
                   value={sortOption}
                   onChange={(e) => setSortOption(e.target.value)}
                   className="bg-transparent text-xs font-medium text-slate-700 outline-none px-2 py-1 max-w-[80px] md:max-w-none"
                 >
+                  <option value="manual">사용자지정</option>
                   <option value="launchDate">출시일순</option>
                   <option value="createdAt">등록순</option>
                   <option value="name">이름순</option>
@@ -436,7 +515,7 @@ export default function App() {
                   className="p-1.5 rounded-md hover:bg-white hover:shadow transition-all text-slate-500"
                   title={sortDirection === 'asc' ? "오름차순" : "내림차순"}
                 >
-                  {sortDirection === 'asc' ? <SortAsc className="w-3 h-3" /> : <SortDesc className="w-3 h-3" />}
+                  {sortDirection === 'asc' ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />}
                 </button>
              </div>
 
@@ -458,11 +537,10 @@ export default function App() {
         <div className="flex-1 overflow-y-auto p-4 md:p-8 custom-scrollbar relative">
           {isLoading && products.length === 0 ? (
             <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-6">
-               {[1,2,3,4,5,6].map(n => (
+               {[1,2,3,4].map(n => (
                  <div key={n} className="bg-white rounded-2xl p-4 h-[250px] md:h-[350px] animate-pulse border border-slate-100">
                     <div className="bg-slate-200 h-32 md:h-48 rounded-lg mb-4"></div>
                     <div className="bg-slate-200 h-4 md:h-6 w-3/4 rounded mb-2"></div>
-                    <div className="bg-slate-200 h-3 md:h-4 w-1/2 rounded"></div>
                  </div>
                ))}
             </div>
@@ -480,19 +558,27 @@ export default function App() {
                 </div>
               </div>
               
-              {/* 모바일 2단 그리드 적용 (grid-cols-2) */}
               <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-6 pb-20">
-                {processedProducts.map(product => (
-                  <ProductCard key={product.id} product={product} onClick={() => setSelectedProduct(product)} />
+                {processedProducts.map((product, idx) => (
+                  <ProductCard 
+                    key={product.id} 
+                    product={product} 
+                    onClick={() => setSelectedProduct(product)} 
+                    isAdmin={isAdmin}
+                    showMoveControls={isAdmin && sortOption === 'manual'}
+                    onMove={(dir) => handleMoveProduct(idx, dir)}
+                    isFavorite={favorites.includes(product.id)}
+                    onToggleFavorite={(e) => toggleFavorite(e, product.id)}
+                  />
                 ))}
                 
-                {isAdmin && (
+                {isAdmin && activeCategory !== 'MY_PICK' && (
                   <button 
                     onClick={() => {
                       setEditingProduct(null);
                       setIsFormOpen(true);
                     }}
-                    className="border-2 border-dashed border-slate-200 rounded-2xl flex flex-col items-center justify-center min-h-[250px] md:min-h-[300px] text-slate-400 hover:border-slate-400 hover:text-slate-600 transition-all group bg-white/50"
+                    className="border-2 border-dashed border-slate-200 rounded-2xl flex flex-col items-center justify-center min-h-[300px] text-slate-400 hover:border-slate-400 hover:text-slate-600 transition-all group bg-white/50"
                   >
                     <div className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-slate-100 flex items-center justify-center mb-3 group-hover:bg-slate-200 transition-colors">
                       <Plus className="w-5 h-5 md:w-6 md:h-6" />
@@ -591,12 +677,14 @@ export default function App() {
           }}
           isAdmin={isAdmin}
           showToast={showToast}
+          isFavorite={favorites.includes(selectedProduct.id)}
+          onToggleFavorite={(e) => toggleFavorite(e, selectedProduct.id)}
         />
       )}
 
       {isFormOpen && (
         <ProductFormModal 
-          categories={CATEGORIES.filter(c => c.id !== 'ALL' && c.id !== 'NEW')}
+          categories={CATEGORIES.filter(c => !c.isSpecial)}
           existingData={editingProduct}
           onClose={() => {
             setIsFormOpen(false);
@@ -615,39 +703,86 @@ export default function App() {
 // Components
 // ----------------------------------------------------------------------
 
-function ProductCard({ product, onClick }) {
+function ProductCard({ product, onClick, showMoveControls, onMove, isFavorite, onToggleFavorite }) {
   const mainImage = product.images && product.images.length > 0 ? product.images[0] : null;
+  const handleMove = (e, dir) => {
+    e.stopPropagation();
+    onMove(dir);
+  };
+
+  // 마감재 뱃지
+  const materialBadge = product.materials && product.materials.length > 0 ? product.materials[0] : null;
+
   return (
-    <div onClick={onClick} className="bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 cursor-pointer group border border-slate-100 flex flex-col h-full animate-in fade-in duration-500">
+    <div onClick={onClick} className="bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 cursor-pointer group border border-slate-100 flex flex-col h-full animate-in fade-in duration-500 relative">
       <div className="relative h-40 md:h-64 overflow-hidden bg-slate-50 p-4 md:p-6 flex items-center justify-center">
-        {product.isNew && <span className="absolute top-3 left-3 bg-black text-white text-[10px] font-bold px-2 py-1 rounded-sm z-10">NEW</span>}
+        {/* 배지 영역 */}
+        <div className="absolute top-3 left-3 flex flex-col space-y-1 z-10">
+           {product.isNew && <span className="bg-black text-white text-[10px] font-bold px-2 py-1 rounded-sm self-start">NEW</span>}
+           {materialBadge && <span className="bg-white/80 backdrop-blur border border-slate-200 text-slate-600 text-[9px] font-bold px-2 py-0.5 rounded-sm self-start uppercase tracking-wide">{materialBadge}</span>}
+        </div>
+        
+        {/* 즐겨찾기 버튼 */}
+        <button 
+          onClick={onToggleFavorite}
+          className="absolute top-3 right-3 z-20 text-slate-300 hover:text-yellow-400 transition-colors"
+        >
+          <Star className={`w-5 h-5 ${isFavorite ? 'text-yellow-400 fill-yellow-400' : ''}`} />
+        </button>
+
         <div className="w-full h-full rounded-lg flex items-center justify-center text-slate-400 overflow-hidden relative">
             {mainImage ? <img src={mainImage} alt={product.name} loading="lazy" className="w-full h-full object-contain mix-blend-multiply transition-transform duration-500 group-hover:scale-105" /> : <div className="text-center opacity-50"><ImageIcon className="w-6 h-6 md:w-8 md:h-8 mx-auto mb-2" /><span className="text-[10px] md:text-xs">{product.name}</span></div>}
         </div>
+        
+        {showMoveControls && (
+          <div className="absolute bottom-2 left-0 right-0 flex justify-center space-x-2 z-20">
+             <button onClick={(e) => handleMove(e, 'left')} className="p-1 bg-white/90 rounded-full shadow hover:bg-white text-slate-700"><ArrowLeft className="w-4 h-4" /></button>
+             <button onClick={(e) => handleMove(e, 'right')} className="p-1 bg-white/90 rounded-full shadow hover:bg-white text-slate-700"><ArrowRight className="w-4 h-4" /></button>
+          </div>
+        )}
       </div>
       <div className="p-3 md:p-5 flex-1 flex flex-col">
         <div className="flex justify-between items-start mb-1 md:mb-2"><span className="text-[10px] md:text-xs font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded uppercase tracking-wide truncate max-w-[80px] md:max-w-none">{product.category}</span></div>
         <h3 className="text-sm md:text-lg font-bold text-slate-900 mb-1 line-clamp-1">{product.name}</h3>
-        <p className="text-[10px] md:text-xs text-slate-500 line-clamp-2 mb-2 md:mb-4 flex-1">{product.specs}</p>
-        <div className="flex items-center justify-between border-t border-slate-100 pt-2 md:pt-3 mt-auto">
-          <div className="flex -space-x-1">
-            {product.colors && product.colors.slice(0, 3).map((color, i) => (<div key={i} className="w-3 h-3 md:w-4 md:h-4 rounded-full border border-white ring-1 ring-slate-100 shadow-sm" style={{ backgroundColor: color }} title={color} />))}
-            {product.colors && product.colors.length > 3 && (<div className="w-3 h-3 md:w-4 md:h-4 rounded-full border border-white ring-1 ring-slate-100 bg-slate-100 flex items-center justify-center text-[8px] text-slate-500">+</div>)}
+        
+        {/* 옵션 요약 */}
+        <p className="text-[10px] md:text-xs text-slate-500 line-clamp-1 mb-2">
+          {product.options && product.options.length > 0 ? product.options.join(' · ') : product.specs}
+        </p>
+        
+        {/* 이원화된 컬러 뷰 (Compact) */}
+        <div className="mt-auto space-y-1.5 pt-2 border-t border-slate-100">
+          {/* Body Colors (Circle) */}
+          <div className="flex items-center space-x-1.5 overflow-hidden">
+             <span className="text-[9px] text-slate-400 w-6 uppercase">Body</span>
+             <div className="flex -space-x-1">
+                {product.bodyColors && product.bodyColors.slice(0, 5).map((color, i) => (
+                  <div key={i} className="w-3 h-3 rounded-full border border-white ring-1 ring-slate-100 shadow-sm" style={{ backgroundColor: color }} title={color} />
+                ))}
+             </div>
           </div>
-          <span className="text-[10px] md:text-xs text-blue-600 font-semibold group-hover:translate-x-1 transition-transform flex items-center">View <ChevronRight className="w-3 h-3 ml-0.5" /></span>
+          {/* Upholstery Colors (Square) */}
+          <div className="flex items-center space-x-1.5 overflow-hidden">
+             <span className="text-[9px] text-slate-400 w-6 uppercase">Seat</span>
+             <div className="flex -space-x-1">
+                {product.upholsteryColors && product.upholsteryColors.slice(0, 5).map((color, i) => (
+                  <div key={i} className="w-3 h-3 rounded-sm border border-white ring-1 ring-slate-100 shadow-sm" style={{ backgroundColor: color }} title={color} />
+                ))}
+             </div>
+          </div>
         </div>
       </div>
     </div>
   );
 }
 
-function ProductDetailModal({ product, onClose, onEdit, isAdmin, showToast }) {
+function ProductDetailModal({ product, onClose, onEdit, isAdmin, showToast, isFavorite, onToggleFavorite }) {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   if (!product) return null;
   const images = product.images || [];
   const currentImage = images.length > 0 ? images[currentImageIndex] : null;
   const copyToClipboard = () => {
-    const text = `[${product.name}]\n- Category: ${product.category}\n- Specs: ${product.specs}\n- Features: ${product.features?.join(', ')}`;
+    const text = `[${product.name}]\n- Category: ${product.category}\n- Specs: ${product.specs}\n- Options: ${product.options?.join(', ')}`;
     navigator.clipboard.writeText(text);
     showToast("클립보드 복사 완료");
   };
@@ -658,21 +793,74 @@ function ProductDetailModal({ product, onClose, onEdit, isAdmin, showToast }) {
         <div className="w-full md:w-1/2 bg-slate-50 p-6 md:p-8 flex flex-col border-r border-slate-100">
           <div className="flex-1 w-full bg-white rounded-2xl flex items-center justify-center text-slate-400 shadow-sm overflow-hidden p-4 mb-4 relative">
              {currentImage ? <img src={currentImage} alt="Main View" className="w-full h-full object-contain" /> : <ImageIcon className="w-16 h-16 opacity-30" />}
+             
+             <button 
+                onClick={onToggleFavorite}
+                className="absolute top-4 left-4 p-2 bg-white/80 rounded-full shadow-sm hover:bg-white transition-colors"
+             >
+                <Star className={`w-6 h-6 ${isFavorite ? 'text-yellow-400 fill-yellow-400' : 'text-slate-300'}`} />
+             </button>
           </div>
           {images.length > 0 && (<div className="h-16 md:h-20 flex space-x-2 overflow-x-auto custom-scrollbar pb-2">{images.map((img, idx) => (<button key={idx} onClick={() => setCurrentImageIndex(idx)} className={`flex-shrink-0 w-16 h-16 md:w-20 md:h-20 rounded-lg overflow-hidden border-2 transition-all ${currentImageIndex === idx ? 'border-slate-900 ring-2 ring-slate-200' : 'border-slate-200 opacity-60 hover:opacity-100'}`}><img src={img} alt={`Thumbnail ${idx}`} className="w-full h-full object-cover" /></button>))}</div>)}
         </div>
         <div className="w-full md:w-1/2 p-6 md:p-10 overflow-y-auto bg-white">
           <div className="mb-6 md:mb-8 flex justify-between items-start">
-            <div><span className="inline-block px-3 py-1 bg-slate-900 text-white text-xs font-bold rounded-full mb-3 uppercase tracking-wider">{product.category}</span><h2 className="text-3xl md:text-4xl font-bold text-slate-900 mb-2">{product.name}</h2>{product.isNew && <span className="text-red-500 text-sm font-semibold tracking-wide">● NEW ARRIVAL</span>}</div>
+            <div>
+              <div className="flex space-x-2 mb-2">
+                <span className="inline-block px-3 py-1 bg-slate-900 text-white text-xs font-bold rounded-full uppercase tracking-wider">{product.category}</span>
+                {product.materials && product.materials.map(m => (
+                  <span key={m} className="inline-block px-3 py-1 border border-slate-200 text-slate-600 text-xs font-bold rounded-full uppercase tracking-wider">{m}</span>
+                ))}
+              </div>
+              <h2 className="text-3xl md:text-4xl font-bold text-slate-900 mb-2">{product.name}</h2>
+              {product.isNew && <span className="text-red-500 text-sm font-semibold tracking-wide">● NEW ARRIVAL</span>}
+            </div>
           </div>
           <div className="space-y-6 md:space-y-8">
-            <div className="flex items-center text-xs text-slate-400 space-x-4">
-               {product.launchDate && <div className="flex items-center"><Calendar className="w-3 h-3 mr-1" /> 출시: {product.launchDate}</div>}
-               <div className="flex items-center"><History className="w-3 h-3 mr-1" /> 등록: {new Date(product.createdAt).toLocaleDateString()}</div>
-            </div>
             <div className="relative group"><h3 className="flex items-center text-sm font-bold text-slate-900 uppercase tracking-wide mb-3"><Settings className="w-4 h-4 mr-2" /> Specifications<button onClick={copyToClipboard} className="ml-2 text-slate-400 hover:text-slate-600 opacity-0 group-hover:opacity-100 transition-opacity"><Copy className="w-3 h-3" /></button></h3><p className="text-slate-600 leading-relaxed bg-slate-50 p-4 rounded-xl text-sm border border-slate-100">{product.specs}</p></div>
-            <div><h3 className="flex items-center text-sm font-bold text-slate-900 uppercase tracking-wide mb-3"><Tag className="w-4 h-4 mr-2" /> Key Features</h3><ul className="grid grid-cols-1 gap-2">{product.features && product.features.map((feature, idx) => (<li key={idx} className="flex items-center text-sm text-slate-600"><Check className="w-4 h-4 text-green-500 mr-2 flex-shrink-0" />{feature}</li>))}</ul></div>
-            <div><h3 className="flex items-center text-sm font-bold text-slate-900 uppercase tracking-wide mb-3"><Palette className="w-4 h-4 mr-2" /> Color Options</h3><div className="flex flex-wrap gap-2">{product.colors && product.colors.map((color, idx) => (<div key={idx} className="flex items-center space-x-2 border border-slate-200 rounded-lg px-2 py-1"><div className="w-4 h-4 rounded-full border border-slate-200 shadow-sm" style={{ backgroundColor: color }} /><span className="text-sm text-slate-600">{color}</span></div>))}</div></div>
+            
+            {/* 옵션 & 기능 표시 */}
+            <div>
+              <h3 className="flex items-center text-sm font-bold text-slate-900 uppercase tracking-wide mb-3"><Tag className="w-4 h-4 mr-2" /> Options & Features</h3>
+              <div className="flex flex-wrap gap-2">
+                {product.options && product.options.map((opt, idx) => (
+                  <span key={idx} className="flex items-center px-3 py-1.5 bg-blue-50 text-blue-700 rounded-lg text-sm font-medium">
+                    <Layers className="w-3 h-3 mr-1.5" /> {opt}
+                  </span>
+                ))}
+                {product.features && product.features.map((feature, idx) => (
+                  <span key={idx} className="flex items-center px-3 py-1.5 bg-slate-100 text-slate-600 rounded-lg text-sm">
+                    <Check className="w-3 h-3 mr-1.5 text-green-500" /> {feature}
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            {/* 듀얼 컬러 표시 */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+               <div>
+                  <h3 className="flex items-center text-sm font-bold text-slate-900 uppercase tracking-wide mb-3">Body Color</h3>
+                  <div className="flex flex-wrap gap-2">
+                    {product.bodyColors && product.bodyColors.map((color, idx) => (
+                      <div key={idx} className="flex items-center space-x-2 border border-slate-200 rounded-lg px-2 py-1 pr-3">
+                        <div className="w-4 h-4 rounded-full border border-slate-200 shadow-sm" style={{ backgroundColor: color }} />
+                        <span className="text-xs text-slate-600">{color}</span>
+                      </div>
+                    ))}
+                  </div>
+               </div>
+               <div>
+                  <h3 className="flex items-center text-sm font-bold text-slate-900 uppercase tracking-wide mb-3">Upholstery Color</h3>
+                  <div className="flex flex-wrap gap-2">
+                    {product.upholsteryColors && product.upholsteryColors.map((color, idx) => (
+                      <div key={idx} className="flex items-center space-x-2 border border-slate-200 rounded-lg px-2 py-1 pr-3">
+                        <div className="w-4 h-4 rounded-sm border border-slate-200 shadow-sm" style={{ backgroundColor: color }} />
+                        <span className="text-xs text-slate-600">{color}</span>
+                      </div>
+                    ))}
+                  </div>
+               </div>
+            </div>
           </div>
           <div className="mt-12 pt-6 border-t border-slate-100 flex justify-end space-x-3">{isAdmin && (<button onClick={onEdit} className="flex items-center px-5 py-2.5 text-sm font-medium text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors"><Edit2 className="w-4 h-4 mr-2" />Edit Data</button>)}<button className="px-5 py-2.5 bg-slate-900 text-white text-sm font-medium rounded-lg hover:bg-slate-800 transition-colors shadow-lg shadow-slate-200">Download Spec Sheet</button></div>
         </div>
@@ -684,7 +872,12 @@ function ProductDetailModal({ product, onClose, onEdit, isAdmin, showToast }) {
 function ProductFormModal({ categories, existingData, onClose, onSave, onDelete, isFirebaseAvailable }) {
   const isEditMode = !!existingData;
   const fileInputRef = useRef(null);
-  const [formData, setFormData] = useState({ id: isEditMode ? existingData.id : null, name: '', category: categories[0]?.id || 'EXECUTIVE', specs: '', featuresString: '', colorsString: '', isNew: false, launchDate: new Date().toISOString().split('T')[0], images: [] });
+  const [formData, setFormData] = useState({ 
+    id: null, name: '', category: 'EXECUTIVE', specs: '', 
+    featuresString: '', optionsString: '', materialsString: '',
+    bodyColorsString: '', upholsteryColorsString: '',
+    isNew: false, launchDate: new Date().toISOString().split('T')[0], images: [] 
+  });
   const [isProcessingImage, setIsProcessingImage] = useState(false);
 
   useEffect(() => {
@@ -695,7 +888,10 @@ function ProductFormModal({ categories, existingData, onClose, onSave, onDelete,
         category: existingData.category, 
         specs: existingData.specs, 
         featuresString: existingData.features ? existingData.features.join(', ') : '', 
-        colorsString: existingData.colors ? existingData.colors.join(', ') : '', 
+        optionsString: existingData.options ? existingData.options.join(', ') : '',
+        materialsString: existingData.materials ? existingData.materials.join(', ') : '',
+        bodyColorsString: existingData.bodyColors ? existingData.bodyColors.join(', ') : '',
+        upholsteryColorsString: existingData.upholsteryColors ? existingData.upholsteryColors.join(', ') : '',
         isNew: existingData.isNew, 
         launchDate: existingData.launchDate || new Date().toISOString().split('T')[0],
         images: existingData.images || [] 
@@ -744,7 +940,10 @@ function ProductFormModal({ categories, existingData, onClose, onSave, onDelete,
       category: formData.category, 
       specs: formData.specs, 
       features: formData.featuresString.split(',').map(s => s.trim()).filter(s => s), 
-      colors: formData.colorsString.split(',').map(s => s.trim()).filter(s => s), 
+      options: formData.optionsString.split(',').map(s => s.trim()).filter(s => s),
+      materials: formData.materialsString.split(',').map(s => s.trim()).filter(s => s),
+      bodyColors: formData.bodyColorsString.split(',').map(s => s.trim()).filter(s => s),
+      upholsteryColors: formData.upholsteryColorsString.split(',').map(s => s.trim()).filter(s => s),
       isNew: formData.isNew, 
       launchDate: formData.launchDate,
       images: formData.images 
@@ -770,8 +969,28 @@ function ProductFormModal({ categories, existingData, onClose, onSave, onDelete,
              <div><label className="block text-sm font-medium text-slate-700 mb-1">출시일 (정렬 기준)</label><input type="date" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-slate-900 outline-none" value={formData.launchDate} onChange={e => setFormData({...formData, launchDate: e.target.value})} /></div>
              <div className="flex items-end pb-2"><div className="flex items-center space-x-2"><input type="checkbox" id="isNew" checked={formData.isNew} onChange={e => setFormData({...formData, isNew: e.target.checked})} className="w-4 h-4 text-slate-900 rounded border-gray-300 focus:ring-slate-900" /><label htmlFor="isNew" className="text-sm text-slate-700 font-medium select-none cursor-pointer">신제품(NEW) 배지 표시</label></div></div>
           </div>
-          <div><label className="block text-sm font-medium text-slate-700 mb-1">상세 사양</label><textarea required rows={3} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-slate-900 outline-none resize-none" value={formData.specs} onChange={e => setFormData({...formData, specs: e.target.value})} /></div>
-          <div className="grid grid-cols-2 gap-6"><div><label className="block text-sm font-medium text-slate-700 mb-1">주요 기능 (쉼표 구분)</label><input type="text" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-slate-900 outline-none" value={formData.featuresString} onChange={e => setFormData({...formData, featuresString: e.target.value})} /></div><div><label className="block text-sm font-medium text-slate-700 mb-1">컬러 옵션</label><input type="text" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-slate-900 outline-none" value={formData.colorsString} onChange={e => setFormData({...formData, colorsString: e.target.value})} /></div></div>
+          
+          {/* 상세 스펙 및 옵션 */}
+          <div><label className="block text-sm font-medium text-slate-700 mb-1">상세 사양 (Main Specs)</label><textarea required rows={2} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-slate-900 outline-none resize-none" value={formData.specs} onChange={e => setFormData({...formData, specs: e.target.value})} /></div>
+          
+          <div className="grid grid-cols-2 gap-6">
+             <div><label className="block text-sm font-medium text-slate-700 mb-1">추가 옵션 (쉼표 구분)</label><input type="text" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-slate-900 outline-none" placeholder="Headrest, Lumbar..." value={formData.optionsString} onChange={e => setFormData({...formData, optionsString: e.target.value})} /></div>
+             <div><label className="block text-sm font-medium text-slate-700 mb-1">마감재 (쉼표 구분)</label><input type="text" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-slate-900 outline-none" placeholder="Mesh, Fabric, Leather..." value={formData.materialsString} onChange={e => setFormData({...formData, materialsString: e.target.value})} /></div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-6"><div><label className="block text-sm font-medium text-slate-700 mb-1">주요 기능 (쉼표 구분)</label><input type="text" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-slate-900 outline-none" value={formData.featuresString} onChange={e => setFormData({...formData, featuresString: e.target.value})} /></div></div>
+
+          {/* 컬러 입력 분리 */}
+          <div className="grid grid-cols-2 gap-6 bg-slate-50 p-4 rounded-xl border border-slate-100">
+             <div>
+               <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Body Colors</label>
+               <input type="text" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-slate-900 outline-none" placeholder="Black, White..." value={formData.bodyColorsString} onChange={e => setFormData({...formData, bodyColorsString: e.target.value})} />
+             </div>
+             <div>
+               <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Upholstery Colors</label>
+               <input type="text" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-slate-900 outline-none" placeholder="Red, Blue, #FF5733..." value={formData.upholsteryColorsString} onChange={e => setFormData({...formData, upholsteryColorsString: e.target.value})} />
+             </div>
+          </div>
         </form>
         <div className="px-8 py-5 border-t border-slate-100 bg-slate-50 flex justify-between items-center"><div>{isEditMode && <button type="button" onClick={() => onDelete(formData.id, formData.name)} className="text-red-500 hover:text-red-700 text-sm font-medium flex items-center px-2 py-1"><Trash2 className="w-4 h-4 mr-1" /> 제품 삭제</button>}</div><div className="flex space-x-3"><button type="button" onClick={onClose} className="px-5 py-2.5 border border-slate-300 rounded-lg text-sm font-medium text-slate-700 hover:bg-white transition-colors">취소</button><button onClick={handleSubmit} disabled={isProcessingImage} className="px-5 py-2.5 bg-slate-900 text-white rounded-lg text-sm font-medium hover:bg-slate-800 transition-colors shadow-lg shadow-slate-200 disabled:opacity-50">{isProcessingImage ? '이미지 처리 중...' : (isEditMode ? '변경사항 저장' : '제품 등록하기')}</button></div></div>
       </div>
