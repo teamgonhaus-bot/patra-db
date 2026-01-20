@@ -6,7 +6,7 @@ import {
   Database, Info, ArrowUpDown, ListFilter, Menu, History,
   Copy, ChevronRight, Activity, ShieldAlert, FileJson, Calendar,
   ArrowLeft, ArrowRight, ArrowUp, ArrowDown, Layers, Star,
-  Trophy, Award, Heart
+  Trophy, Heart, User, Link as LinkIcon, Paperclip, BarChart3, PieChart
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { 
@@ -33,11 +33,11 @@ const YOUR_FIREBASE_CONFIG = {
 // ----------------------------------------------------------------------
 // 상수 및 설정
 // ----------------------------------------------------------------------
-const APP_VERSION = "v1.8.0"; // Navigation Re-structure & Awards
-const BUILD_DATE = "2024.05.27";
+const APP_VERSION = "v1.9.0"; // Dashboard & Extended Info
+const BUILD_DATE = "2024.05.28";
 const ADMIN_PASSWORD = "adminlcg1"; 
 
-// Firebase 초기화 로직
+// Firebase 초기화
 let db = null;
 let auth = null;
 let isFirebaseAvailable = false;
@@ -65,9 +65,8 @@ try {
 
 // 카테고리 정의
 const CATEGORIES = [
-  { id: 'ALL', label: 'TOTAL VIEW', isSpecial: true }, // TOTAL로 변경
+  { id: 'ALL', label: 'TOTAL VIEW', isSpecial: true },
   { id: 'NEW', label: 'NEW ARRIVALS', isSpecial: true },
-  // MY_PICK은 별도 렌더링을 위해 리스트에서 제외하거나 별도 처리
   { id: 'EXECUTIVE', label: 'EXECUTIVE' },
   { id: 'TASK', label: 'TASK' },
   { id: 'CONFERENCE', label: 'CONFERENCE' },
@@ -82,7 +81,7 @@ const CATEGORIES = [
 export default function App() {
   const [user, setUser] = useState(null);
   const [products, setProducts] = useState([]);
-  const [activeCategory, setActiveCategory] = useState('ALL');
+  const [activeCategory, setActiveCategory] = useState('DASHBOARD'); // 초기값 대시보드
   const [searchTerm, setSearchTerm] = useState('');
   
   const [sortOption, setSortOption] = useState('manual'); 
@@ -183,7 +182,7 @@ export default function App() {
   };
 
   const toggleFavorite = (e, productId) => {
-    e.stopPropagation();
+    if(e) e.stopPropagation();
     let newFavs;
     if (favorites.includes(productId)) {
       newFavs = favorites.filter(id => id !== productId);
@@ -243,7 +242,9 @@ export default function App() {
   const getProcessedProducts = () => {
     let filtered = products.filter(product => {
       let matchesCategory = true;
-      if (activeCategory === 'MY_PICK') {
+      if (activeCategory === 'DASHBOARD') {
+        matchesCategory = false; // 대시보드에서는 리스트 안보임 (별도 렌더링)
+      } else if (activeCategory === 'MY_PICK') {
         matchesCategory = favorites.includes(product.id);
       } else if (activeCategory === 'NEW') {
         matchesCategory = product.isNew;
@@ -255,6 +256,7 @@ export default function App() {
       const matchesSearch = 
         product.name.toLowerCase().includes(searchLower) || 
         product.specs.toLowerCase().includes(searchLower) ||
+        (product.designer && product.designer.toLowerCase().includes(searchLower)) ||
         (product.options && product.options.some(opt => opt.toLowerCase().includes(searchLower))) ||
         (product.materials && product.materials.some(mat => mat.toLowerCase().includes(searchLower))) ||
         (product.bodyColors && product.bodyColors.some(c => c.toLowerCase().includes(searchLower))) ||
@@ -300,6 +302,7 @@ export default function App() {
     const currentOrder = currentItem.orderIndex !== undefined ? currentItem.orderIndex : currentItem.createdAt;
     const swapOrder = swapItem.orderIndex !== undefined ? swapItem.orderIndex : swapItem.createdAt;
 
+    // 단순 스왑
     const newCurrentOrder = swapOrder;
     const newSwapOrder = currentOrder;
 
@@ -395,12 +398,12 @@ export default function App() {
         fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-slate-200 flex flex-col shadow-xl transition-transform duration-300 md:relative md:translate-x-0 md:shadow-sm
         ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}
       `}>
-        <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+        <div className="p-6 border-b border-slate-100 flex items-center justify-between cursor-pointer" onClick={() => { setActiveCategory('DASHBOARD'); setIsMobileMenuOpen(false); }}>
           <div className="flex items-center space-x-3">
             <div className="w-8 h-8 bg-black rounded-lg flex items-center justify-center text-white font-bold">P</div>
             <h1 className="text-xl font-bold tracking-tight text-slate-900">PATRA <span className="text-xs font-normal text-slate-500 block">DB</span></h1>
           </div>
-          <button onClick={() => setIsMobileMenuOpen(false)} className="md:hidden text-slate-400 hover:text-slate-600">
+          <button onClick={(e) => { e.stopPropagation(); setIsMobileMenuOpen(false); }} className="md:hidden text-slate-400 hover:text-slate-600">
             <X className="w-6 h-6" />
           </button>
         </div>
@@ -414,7 +417,6 @@ export default function App() {
              }
           </div>
           
-          {/* Main Category Loop */}
           {CATEGORIES.map((cat, index) => (
             <React.Fragment key={cat.id}>
               <button
@@ -437,24 +439,6 @@ export default function App() {
               )}
             </React.Fragment>
           ))}
-
-          {/* My Pick - 별도 표기 */}
-          <div className="mt-6 pt-4 border-t border-slate-100">
-            <button
-              onClick={() => {
-                setActiveCategory('MY_PICK');
-                setIsMobileMenuOpen(false);
-              }}
-              className={`w-full text-left px-3 py-2 rounded-lg text-xs font-bold transition-all duration-200 flex items-center space-x-2 group
-                ${activeCategory === 'MY_PICK' 
-                  ? 'bg-yellow-50 text-yellow-700' 
-                  : 'text-slate-400 hover:bg-slate-50 hover:text-slate-600'}
-              `}
-            >
-              <Heart className={`w-3 h-3 ${activeCategory === 'MY_PICK' ? 'fill-yellow-500 text-yellow-500' : ''}`} />
-              <span>MY PICK ({favorites.length})</span>
-            </button>
-          </div>
         </nav>
         
         <div className="p-4 border-t border-slate-200 bg-slate-50 space-y-3">
@@ -488,7 +472,7 @@ export default function App() {
       </aside>
 
       {/* 메인 영역 */}
-      <main className="flex-1 flex flex-col h-screen overflow-hidden relative">
+      <main className="flex-1 flex flex-col h-screen overflow-hidden relative bg-slate-50/50">
         <header className="h-16 bg-white/95 backdrop-blur border-b border-slate-200 flex items-center justify-between px-4 md:px-8 shadow-sm z-30 flex-shrink-0 sticky top-0">
           <div className="flex items-center space-x-3 w-full md:w-auto flex-1 mr-2">
             <button 
@@ -502,15 +486,30 @@ export default function App() {
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-4 h-4" />
               <input 
                 type="text" 
-                placeholder="검색 (제품명, 어워드, 컬러...)" 
+                placeholder="검색..." 
                 value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                onChange={(e) => {
+                  setSearchTerm(e.target.value);
+                  if (activeCategory === 'DASHBOARD' && e.target.value) {
+                    setActiveCategory('ALL'); // 검색 시작하면 전체보기로 전환
+                  }
+                }}
                 className="w-full pl-9 pr-4 py-2 bg-slate-100 border-transparent focus:bg-white focus:border-slate-300 rounded-full text-sm transition-all outline-none focus:ring-2 focus:ring-slate-100"
               />
             </div>
           </div>
 
           <div className="flex items-center space-x-2">
+             {/* My Pick 버튼 추가 */}
+             <button 
+                onClick={() => setActiveCategory('MY_PICK')}
+                className={`p-2 rounded-full transition-all flex items-center space-x-1 ${activeCategory === 'MY_PICK' ? 'bg-yellow-100 text-yellow-600' : 'hover:bg-slate-100 text-slate-500'}`}
+                title="My Pick"
+             >
+                <Heart className={`w-5 h-5 ${activeCategory === 'MY_PICK' ? 'fill-yellow-500 text-yellow-500' : ''}`} />
+                {favorites.length > 0 && <span className="text-xs font-bold">{favorites.length}</span>}
+             </button>
+
              <div className="flex items-center bg-slate-100 rounded-lg p-1">
                 <select 
                   value={sortOption}
@@ -547,71 +546,80 @@ export default function App() {
         </header>
 
         <div className="flex-1 overflow-y-auto p-4 md:p-8 custom-scrollbar relative">
-          {isLoading && products.length === 0 ? (
-            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-6">
-               {[1,2,3,4].map(n => (
-                 <div key={n} className="bg-white rounded-2xl p-4 h-[250px] md:h-[350px] animate-pulse border border-slate-100">
-                    <div className="bg-slate-200 h-32 md:h-48 rounded-lg mb-4"></div>
-                    <div className="bg-slate-200 h-4 md:h-6 w-3/4 rounded mb-2"></div>
-                 </div>
-               ))}
-            </div>
+          
+          {/* Dashboard View */}
+          {activeCategory === 'DASHBOARD' && !searchTerm ? (
+            <DashboardView products={products} favorites={favorites} setActiveCategory={setActiveCategory} />
           ) : (
+            // List View
             <>
-              <div className="mb-4 md:mb-6 flex items-end justify-between">
-                <div>
-                  <h2 className="text-lg md:text-2xl font-bold text-slate-900">
-                    {activeCategory === 'MY_PICK' ? 'MY PICK' : CATEGORIES.find(c => c.id === activeCategory)?.label}
-                  </h2>
-                  <p className="text-slate-500 text-xs md:text-sm mt-1">
-                    {processedProducts.length} items 
-                    {!isFirebaseAvailable && <span className="ml-2 text-red-400 font-bold">(Local)</span>}
-                  </p>
+              {isLoading && products.length === 0 ? (
+                <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-6">
+                   {[1,2,3,4].map(n => (
+                     <div key={n} className="bg-white rounded-2xl p-4 h-[250px] md:h-[350px] animate-pulse border border-slate-100">
+                        <div className="bg-slate-200 h-32 md:h-48 rounded-lg mb-4"></div>
+                        <div className="bg-slate-200 h-4 md:h-6 w-3/4 rounded mb-2"></div>
+                     </div>
+                   ))}
                 </div>
-              </div>
-              
-              <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-6 pb-20">
-                {processedProducts.map((product, idx) => (
-                  <ProductCard 
-                    key={product.id} 
-                    product={product} 
-                    onClick={() => setSelectedProduct(product)} 
-                    isAdmin={isAdmin}
-                    showMoveControls={isAdmin && sortOption === 'manual'}
-                    onMove={(dir) => handleMoveProduct(idx, dir)}
-                    isFavorite={favorites.includes(product.id)}
-                    onToggleFavorite={(e) => toggleFavorite(e, product.id)}
-                  />
-                ))}
-                
-                {isAdmin && activeCategory !== 'MY_PICK' && (
-                  <button 
-                    onClick={() => {
-                      setEditingProduct(null);
-                      setIsFormOpen(true);
-                    }}
-                    className="border-2 border-dashed border-slate-200 rounded-2xl flex flex-col items-center justify-center min-h-[300px] text-slate-400 hover:border-slate-400 hover:text-slate-600 transition-all group bg-white/50"
-                  >
-                    <div className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-slate-100 flex items-center justify-center mb-3 group-hover:bg-slate-200 transition-colors">
-                      <Plus className="w-5 h-5 md:w-6 md:h-6" />
+              ) : (
+                <>
+                  <div className="mb-4 md:mb-6 flex items-end justify-between">
+                    <div>
+                      <h2 className="text-lg md:text-2xl font-bold text-slate-900">
+                        {activeCategory === 'MY_PICK' ? 'MY PICK' : CATEGORIES.find(c => c.id === activeCategory)?.label || activeCategory}
+                      </h2>
+                      <p className="text-slate-500 text-xs md:text-sm mt-1">
+                        {processedProducts.length} items 
+                        {!isFirebaseAvailable && <span className="ml-2 text-red-400 font-bold">(Local)</span>}
+                      </p>
                     </div>
-                    <span className="text-xs md:text-sm font-medium">Add New</span>
-                  </button>
-                )}
-              </div>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-6 pb-20">
+                    {processedProducts.map((product, idx) => (
+                      <ProductCard 
+                        key={product.id} 
+                        product={product} 
+                        onClick={() => setSelectedProduct(product)} 
+                        isAdmin={isAdmin}
+                        showMoveControls={isAdmin && sortOption === 'manual'}
+                        onMove={(dir) => handleMoveProduct(idx, dir)}
+                        isFavorite={favorites.includes(product.id)}
+                        onToggleFavorite={(e) => toggleFavorite(e, product.id)}
+                      />
+                    ))}
+                    
+                    {isAdmin && activeCategory !== 'MY_PICK' && activeCategory !== 'NEW' && (
+                      <button 
+                        onClick={() => {
+                          setEditingProduct(null);
+                          setIsFormOpen(true);
+                        }}
+                        className="border-2 border-dashed border-slate-200 rounded-2xl flex flex-col items-center justify-center min-h-[250px] md:min-h-[300px] text-slate-400 hover:border-slate-400 hover:text-slate-600 transition-all group bg-white/50"
+                      >
+                        <div className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-slate-100 flex items-center justify-center mb-3 group-hover:bg-slate-200 transition-colors">
+                          <Plus className="w-5 h-5 md:w-6 md:h-6" />
+                        </div>
+                        <span className="text-xs md:text-sm font-medium">Add New</span>
+                      </button>
+                    )}
+                  </div>
 
-              {processedProducts.length === 0 && (
-                 <div className="flex flex-col items-center justify-center py-20 text-slate-400">
-                    <Cloud className="w-12 h-12 mb-4 opacity-20" />
-                    <p>등록된 데이터가 없습니다.</p>
-                 </div>
+                  {processedProducts.length === 0 && (
+                     <div className="flex flex-col items-center justify-center py-20 text-slate-400">
+                        <Cloud className="w-12 h-12 mb-4 opacity-20" />
+                        <p>등록된 데이터가 없습니다.</p>
+                     </div>
+                  )}
+                </>
               )}
             </>
           )}
         </div>
       </main>
 
-      {/* Admin Dashboard */}
+      {/* Admin Dashboard Overlay (Settings) */}
       {showAdminDashboard && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-4xl rounded-2xl overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200 max-h-[85vh] flex flex-col">
@@ -697,7 +705,7 @@ export default function App() {
       {isFormOpen && (
         <ProductFormModal 
           categories={CATEGORIES.filter(c => !c.isSpecial)}
-          initialCategory={activeCategory} // 현재 선택된 카테고리 전달
+          initialCategory={activeCategory} 
           existingData={editingProduct}
           onClose={() => {
             setIsFormOpen(false);
@@ -713,7 +721,104 @@ export default function App() {
 }
 
 // ----------------------------------------------------------------------
-// Components
+// New Component: DashboardView
+// ----------------------------------------------------------------------
+function DashboardView({ products, favorites, setActiveCategory }) {
+  // 데이터 집계
+  const totalCount = products.length;
+  const newCount = products.filter(p => p.isNew).length;
+  const pickCount = favorites.length;
+  
+  // 카테고리별 분포 계산
+  const categoryCounts = {};
+  const standardCategories = CATEGORIES.filter(c => !c.isSpecial);
+  standardCategories.forEach(c => {
+    categoryCounts[c.id] = products.filter(p => p.category === c.id).length;
+  });
+  
+  const maxCount = Math.max(...Object.values(categoryCounts), 1);
+
+  return (
+    <div className="max-w-5xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      <div className="mb-4">
+        <h2 className="text-3xl font-bold text-slate-900">Dashboard</h2>
+        <p className="text-slate-500">Overview of PATRA Design Database</p>
+      </div>
+
+      {/* Summary Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div 
+          onClick={() => setActiveCategory('ALL')}
+          className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow cursor-pointer flex items-center justify-between group"
+        >
+          <div>
+            <p className="text-sm font-bold text-slate-400 uppercase mb-1">Total Products</p>
+            <h3 className="text-4xl font-bold text-slate-900">{totalCount}</h3>
+          </div>
+          <div className="w-12 h-12 bg-slate-50 rounded-full flex items-center justify-center text-slate-400 group-hover:bg-slate-100 group-hover:text-slate-600 transition-colors">
+            <Layers className="w-6 h-6" />
+          </div>
+        </div>
+
+        <div 
+          onClick={() => setActiveCategory('NEW')}
+          className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow cursor-pointer flex items-center justify-between group"
+        >
+          <div>
+            <p className="text-sm font-bold text-red-400 uppercase mb-1">New Arrivals</p>
+            <h3 className="text-4xl font-bold text-slate-900">{newCount}</h3>
+          </div>
+          <div className="w-12 h-12 bg-red-50 rounded-full flex items-center justify-center text-red-400 group-hover:bg-red-100 group-hover:text-red-500 transition-colors">
+            <Activity className="w-6 h-6" />
+          </div>
+        </div>
+
+        <div 
+          onClick={() => setActiveCategory('MY_PICK')}
+          className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow cursor-pointer flex items-center justify-between group"
+        >
+          <div>
+            <p className="text-sm font-bold text-yellow-500 uppercase mb-1">My Pick</p>
+            <h3 className="text-4xl font-bold text-slate-900">{pickCount}</h3>
+          </div>
+          <div className="w-12 h-12 bg-yellow-50 rounded-full flex items-center justify-center text-yellow-400 group-hover:bg-yellow-100 group-hover:text-yellow-500 transition-colors">
+            <Heart className="w-6 h-6 fill-current" />
+          </div>
+        </div>
+      </div>
+
+      {/* Graph Section */}
+      <div className="bg-white p-8 rounded-2xl border border-slate-100 shadow-sm">
+        <h3 className="text-lg font-bold text-slate-900 mb-6 flex items-center">
+          <BarChart3 className="w-5 h-5 mr-2 text-slate-400" /> Products by Category
+        </h3>
+        <div className="space-y-4">
+          {standardCategories.map(cat => {
+            const count = categoryCounts[cat.id] || 0;
+            const percentage = (count / maxCount) * 100;
+            return (
+              <div key={cat.id} className="group">
+                <div className="flex justify-between text-xs font-bold text-slate-500 mb-1">
+                  <span>{cat.label}</span>
+                  <span>{count}</span>
+                </div>
+                <div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden">
+                  <div 
+                    className="h-full bg-slate-800 rounded-full transition-all duration-1000 ease-out group-hover:bg-indigo-600"
+                    style={{ width: `${percentage}%` }}
+                  ></div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ----------------------------------------------------------------------
+// Sub Components (Updated)
 // ----------------------------------------------------------------------
 
 function ProductCard({ product, onClick, showMoveControls, onMove, isFavorite, onToggleFavorite }) {
@@ -724,24 +829,20 @@ function ProductCard({ product, onClick, showMoveControls, onMove, isFavorite, o
   };
 
   const materialBadge = product.materials && product.materials.length > 0 ? product.materials[0] : null;
-  // 첫 번째 어워드만 배지로 표시
   const awardBadge = product.awards && product.awards.length > 0 ? product.awards[0] : null;
 
   return (
     <div onClick={onClick} className="bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 cursor-pointer group border border-slate-100 flex flex-col h-full animate-in fade-in duration-500 relative">
       <div className="relative h-40 md:h-64 overflow-hidden bg-slate-50 p-4 md:p-6 flex items-center justify-center">
-        {/* 배지 영역 */}
+        {/* Badges */}
         <div className="absolute top-3 left-3 flex flex-col space-y-1 z-10 items-start">
            {product.isNew && <span className="bg-black text-white text-[10px] font-bold px-2 py-1 rounded-sm">NEW</span>}
            {awardBadge && <span className="bg-yellow-500 text-white text-[9px] font-bold px-2 py-0.5 rounded-sm flex items-center shadow-sm"><Trophy className="w-2.5 h-2.5 mr-1" /> {awardBadge}</span>}
            {materialBadge && !awardBadge && <span className="bg-white/80 backdrop-blur border border-slate-200 text-slate-600 text-[9px] font-bold px-2 py-0.5 rounded-sm uppercase tracking-wide">{materialBadge}</span>}
         </div>
         
-        {/* 즐겨찾기 버튼 */}
-        <button 
-          onClick={onToggleFavorite}
-          className="absolute top-3 right-3 z-20 text-slate-300 hover:text-yellow-400 transition-colors"
-        >
+        {/* Favorite */}
+        <button onClick={onToggleFavorite} className="absolute top-3 right-3 z-20 text-slate-300 hover:text-yellow-400 transition-colors">
           <Star className={`w-5 h-5 ${isFavorite ? 'text-yellow-400 fill-yellow-400' : ''}`} />
         </button>
 
@@ -749,6 +850,12 @@ function ProductCard({ product, onClick, showMoveControls, onMove, isFavorite, o
             {mainImage ? <img src={mainImage} alt={product.name} loading="lazy" className="w-full h-full object-contain mix-blend-multiply transition-transform duration-500 group-hover:scale-105" /> : <div className="text-center opacity-50"><ImageIcon className="w-6 h-6 md:w-8 md:h-8 mx-auto mb-2" /><span className="text-[10px] md:text-xs">{product.name}</span></div>}
         </div>
         
+        {/* Link / File Indicators (Tiny) */}
+        <div className="absolute bottom-2 right-3 flex space-x-1 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
+           {product.productLink && <div className="p-1 bg-white rounded-full shadow"><LinkIcon className="w-3 h-3 text-slate-400" /></div>}
+           {product.attachments && product.attachments.length > 0 && <div className="p-1 bg-white rounded-full shadow"><Paperclip className="w-3 h-3 text-slate-400" /></div>}
+        </div>
+
         {showMoveControls && (
           <div className="absolute bottom-2 left-0 right-0 flex justify-center space-x-2 z-20">
              <button onClick={(e) => handleMove(e, 'left')} className="p-1 bg-white/90 rounded-full shadow hover:bg-white text-slate-700"><ArrowLeft className="w-4 h-4" /></button>
@@ -757,18 +864,18 @@ function ProductCard({ product, onClick, showMoveControls, onMove, isFavorite, o
         )}
       </div>
       <div className="p-3 md:p-5 flex-1 flex flex-col">
-        <div className="flex justify-between items-start mb-1 md:mb-2"><span className="text-[10px] md:text-xs font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded uppercase tracking-wide truncate max-w-[80px] md:max-w-none">{product.category}</span></div>
+        <div className="flex justify-between items-start mb-1 md:mb-2">
+          <span className="text-[10px] md:text-xs font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded uppercase tracking-wide truncate max-w-[80px] md:max-w-none">{product.category}</span>
+        </div>
         <h3 className="text-sm md:text-lg font-bold text-slate-900 mb-1 line-clamp-1">{product.name}</h3>
+        {product.designer && <p className="text-[10px] text-slate-400 mb-1">by {product.designer}</p>}
         
-        {/* 옵션 요약 */}
         <p className="text-[10px] md:text-xs text-slate-500 line-clamp-1 mb-2">
           {product.options && product.options.length > 0 ? product.options.join(' · ') : product.specs}
         </p>
         
-        {/* 이원화된 컬러 뷰 (Compact) */}
         <div className="mt-auto space-y-1.5 pt-2 border-t border-slate-100">
           <div className="flex items-center space-x-1.5 overflow-hidden">
-             <span className="text-[9px] text-slate-400 w-6 uppercase">Body</span>
              <div className="flex -space-x-1">
                 {product.bodyColors && product.bodyColors.slice(0, 5).map((color, i) => (
                   <div key={i} className="w-3 h-3 rounded-full border border-white ring-1 ring-slate-100 shadow-sm" style={{ backgroundColor: color }} title={color} />
@@ -776,7 +883,6 @@ function ProductCard({ product, onClick, showMoveControls, onMove, isFavorite, o
              </div>
           </div>
           <div className="flex items-center space-x-1.5 overflow-hidden">
-             <span className="text-[9px] text-slate-400 w-6 uppercase">Seat</span>
              <div className="flex -space-x-1">
                 {product.upholsteryColors && product.upholsteryColors.slice(0, 5).map((color, i) => (
                   <div key={i} className="w-3 h-3 rounded-sm border border-white ring-1 ring-slate-100 shadow-sm" style={{ backgroundColor: color }} title={color} />
@@ -795,87 +901,65 @@ function ProductDetailModal({ product, onClose, onEdit, isAdmin, showToast, isFa
   const images = product.images || [];
   const currentImage = images.length > 0 ? images[currentImageIndex] : null;
   const copyToClipboard = () => {
-    const text = `[${product.name}]\n- Category: ${product.category}\n- Specs: ${product.specs}\n- Options: ${product.options?.join(', ')}`;
+    const text = `[${product.name}]\n- Category: ${product.category}\n- Specs: ${product.specs}`;
     navigator.clipboard.writeText(text);
     showToast("클립보드 복사 완료");
   };
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-white w-full max-w-5xl max-h-[90vh] rounded-3xl overflow-hidden shadow-2xl flex flex-col md:flex-row relative animate-in fade-in zoom-in duration-200">
+      <div className="bg-white w-full max-w-5xl max-h-[95vh] rounded-3xl overflow-hidden shadow-2xl flex flex-col md:flex-row relative animate-in fade-in zoom-in duration-200">
         <button onClick={onClose} className="absolute top-4 right-4 p-2 bg-white/80 hover:bg-slate-100 rounded-full z-10 transition-colors"><X className="w-5 h-5 text-slate-600" /></button>
         <div className="w-full md:w-1/2 bg-slate-50 p-6 md:p-8 flex flex-col border-r border-slate-100">
           <div className="flex-1 w-full bg-white rounded-2xl flex items-center justify-center text-slate-400 shadow-sm overflow-hidden p-4 mb-4 relative">
              {currentImage ? <img src={currentImage} alt="Main View" className="w-full h-full object-contain" /> : <ImageIcon className="w-16 h-16 opacity-30" />}
-             
-             <button 
-                onClick={onToggleFavorite}
-                className="absolute top-4 left-4 p-2 bg-white/80 rounded-full shadow-sm hover:bg-white transition-colors"
-             >
-                <Star className={`w-6 h-6 ${isFavorite ? 'text-yellow-400 fill-yellow-400' : 'text-slate-300'}`} />
-             </button>
+             <button onClick={onToggleFavorite} className="absolute top-4 left-4 p-2 bg-white/80 rounded-full shadow-sm hover:bg-white transition-colors"><Star className={`w-6 h-6 ${isFavorite ? 'text-yellow-400 fill-yellow-400' : 'text-slate-300'}`} /></button>
           </div>
           {images.length > 0 && (<div className="h-16 md:h-20 flex space-x-2 overflow-x-auto custom-scrollbar pb-2">{images.map((img, idx) => (<button key={idx} onClick={() => setCurrentImageIndex(idx)} className={`flex-shrink-0 w-16 h-16 md:w-20 md:h-20 rounded-lg overflow-hidden border-2 transition-all ${currentImageIndex === idx ? 'border-slate-900 ring-2 ring-slate-200' : 'border-slate-200 opacity-60 hover:opacity-100'}`}><img src={img} alt={`Thumbnail ${idx}`} className="w-full h-full object-cover" /></button>))}</div>)}
         </div>
         <div className="w-full md:w-1/2 p-6 md:p-10 overflow-y-auto bg-white">
-          <div className="mb-6 md:mb-8 flex justify-between items-start">
-            <div>
-              <div className="flex flex-wrap gap-2 mb-2">
-                <span className="inline-block px-3 py-1 bg-slate-900 text-white text-xs font-bold rounded-full uppercase tracking-wider">{product.category}</span>
-                {product.awards && product.awards.map(award => (
-                  <span key={award} className="inline-flex items-center px-3 py-1 bg-yellow-500 text-white text-xs font-bold rounded-full uppercase tracking-wider shadow-sm">
-                    <Trophy className="w-3 h-3 mr-1" /> {award}
-                  </span>
-                ))}
-              </div>
-              <h2 className="text-3xl md:text-4xl font-bold text-slate-900 mb-2">{product.name}</h2>
-              {product.isNew && <span className="text-red-500 text-sm font-semibold tracking-wide">● NEW ARRIVAL</span>}
+          <div className="mb-6 md:mb-8">
+            <div className="flex flex-wrap gap-2 mb-2">
+              <span className="inline-block px-3 py-1 bg-slate-900 text-white text-xs font-bold rounded-full uppercase tracking-wider">{product.category}</span>
+              {product.awards && product.awards.map(award => (<span key={award} className="inline-flex items-center px-3 py-1 bg-yellow-500 text-white text-xs font-bold rounded-full uppercase tracking-wider shadow-sm"><Trophy className="w-3 h-3 mr-1" /> {award}</span>))}
             </div>
+            <h2 className="text-3xl md:text-4xl font-bold text-slate-900 mb-1">{product.name}</h2>
+            {product.designer && <p className="text-sm text-slate-500 font-medium mb-1">Designed by {product.designer}</p>}
+            {product.isNew && <span className="text-red-500 text-sm font-semibold tracking-wide">● NEW ARRIVAL</span>}
           </div>
-          <div className="space-y-6 md:space-y-8">
+          
+          <div className="space-y-6">
+            {/* Specs */}
             <div className="relative group"><h3 className="flex items-center text-sm font-bold text-slate-900 uppercase tracking-wide mb-3"><Settings className="w-4 h-4 mr-2" /> Specifications<button onClick={copyToClipboard} className="ml-2 text-slate-400 hover:text-slate-600 opacity-0 group-hover:opacity-100 transition-opacity"><Copy className="w-3 h-3" /></button></h3><p className="text-slate-600 leading-relaxed bg-slate-50 p-4 rounded-xl text-sm border border-slate-100">{product.specs}</p></div>
             
-            <div>
-              <h3 className="flex items-center text-sm font-bold text-slate-900 uppercase tracking-wide mb-3"><Tag className="w-4 h-4 mr-2" /> Options & Features</h3>
-              <div className="flex flex-wrap gap-2">
-                {product.options && product.options.map((opt, idx) => (
-                  <span key={idx} className="flex items-center px-3 py-1.5 bg-blue-50 text-blue-700 rounded-lg text-sm font-medium">
-                    <Layers className="w-3 h-3 mr-1.5" /> {opt}
-                  </span>
-                ))}
-                {product.features && product.features.map((feature, idx) => (
-                  <span key={idx} className="flex items-center px-3 py-1.5 bg-slate-100 text-slate-600 rounded-lg text-sm">
-                    <Check className="w-3 h-3 mr-1.5 text-green-500" /> {feature}
-                  </span>
-                ))}
-              </div>
+            {/* Features */}
+            <div><h3 className="flex items-center text-sm font-bold text-slate-900 uppercase tracking-wide mb-3"><Tag className="w-4 h-4 mr-2" /> Options & Features</h3><div className="flex flex-wrap gap-2">{product.options && product.options.map((opt, idx) => (<span key={idx} className="flex items-center px-3 py-1.5 bg-blue-50 text-blue-700 rounded-lg text-sm font-medium"><Layers className="w-3 h-3 mr-1.5" /> {opt}</span>))}{product.features && product.features.map((feature, idx) => (<span key={idx} className="flex items-center px-3 py-1.5 bg-slate-100 text-slate-600 rounded-lg text-sm"><Check className="w-3 h-3 mr-1.5 text-green-500" /> {feature}</span>))}</div></div>
+
+            {/* Colors */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+               <div><h3 className="flex items-center text-sm font-bold text-slate-900 uppercase tracking-wide mb-3">Body Color</h3><div className="flex flex-wrap gap-2">{product.bodyColors && product.bodyColors.map((color, idx) => (<div key={idx} className="flex items-center space-x-2 border border-slate-200 rounded-lg px-2 py-1 pr-3"><div className="w-4 h-4 rounded-full border border-slate-200 shadow-sm" style={{ backgroundColor: color }} /><span className="text-xs text-slate-600">{color}</span></div>))}</div></div>
+               <div><h3 className="flex items-center text-sm font-bold text-slate-900 uppercase tracking-wide mb-3">Upholstery Color</h3><div className="flex flex-wrap gap-2">{product.upholsteryColors && product.upholsteryColors.map((color, idx) => (<div key={idx} className="flex items-center space-x-2 border border-slate-200 rounded-lg px-2 py-1 pr-3"><div className="w-4 h-4 rounded-sm border border-slate-200 shadow-sm" style={{ backgroundColor: color }} /><span className="text-xs text-slate-600">{color}</span></div>))}</div></div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-               <div>
-                  <h3 className="flex items-center text-sm font-bold text-slate-900 uppercase tracking-wide mb-3">Body Color</h3>
-                  <div className="flex flex-wrap gap-2">
-                    {product.bodyColors && product.bodyColors.map((color, idx) => (
-                      <div key={idx} className="flex items-center space-x-2 border border-slate-200 rounded-lg px-2 py-1 pr-3">
-                        <div className="w-4 h-4 rounded-full border border-slate-200 shadow-sm" style={{ backgroundColor: color }} />
-                        <span className="text-xs text-slate-600">{color}</span>
-                      </div>
-                    ))}
-                  </div>
-               </div>
-               <div>
-                  <h3 className="flex items-center text-sm font-bold text-slate-900 uppercase tracking-wide mb-3">Upholstery Color</h3>
-                  <div className="flex flex-wrap gap-2">
-                    {product.upholsteryColors && product.upholsteryColors.map((color, idx) => (
-                      <div key={idx} className="flex items-center space-x-2 border border-slate-200 rounded-lg px-2 py-1 pr-3">
-                        <div className="w-4 h-4 rounded-sm border border-slate-200 shadow-sm" style={{ backgroundColor: color }} />
-                        <span className="text-xs text-slate-600">{color}</span>
-                      </div>
-                    ))}
-                  </div>
-               </div>
+            {/* Links & Attachments */}
+            <div className="pt-4 border-t border-slate-100 space-y-3">
+               {product.productLink && (
+                 <a href={product.productLink} target="_blank" rel="noopener noreferrer" className="flex items-center text-sm text-blue-600 hover:underline">
+                   <LinkIcon className="w-4 h-4 mr-2" /> Product Webpage
+                 </a>
+               )}
+               {product.attachments && product.attachments.length > 0 && (
+                 <div className="space-y-1">
+                   <h3 className="text-xs font-bold text-slate-400 uppercase mb-1">Downloads</h3>
+                   {product.attachments.map((file, idx) => (
+                     <a key={idx} href={file.url} target="_blank" rel="noopener noreferrer" className="flex items-center text-sm text-slate-600 hover:text-slate-900 p-2 bg-slate-50 rounded-lg border border-slate-100 hover:border-slate-300 transition-colors">
+                       <Paperclip className="w-4 h-4 mr-2 text-slate-400" /> {file.name}
+                     </a>
+                   ))}
+                 </div>
+               )}
             </div>
           </div>
-          <div className="mt-12 pt-6 border-t border-slate-100 flex justify-end space-x-3">{isAdmin && (<button onClick={onEdit} className="flex items-center px-5 py-2.5 text-sm font-medium text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors"><Edit2 className="w-4 h-4 mr-2" />Edit Data</button>)}<button className="px-5 py-2.5 bg-slate-900 text-white text-sm font-medium rounded-lg hover:bg-slate-800 transition-colors shadow-lg shadow-slate-200">Download Spec Sheet</button></div>
+          <div className="mt-8 pt-6 border-t border-slate-100 flex justify-end space-x-3">{isAdmin && (<button onClick={onEdit} className="flex items-center px-5 py-2.5 text-sm font-medium text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors"><Edit2 className="w-4 h-4 mr-2" />Edit Data</button>)}</div>
         </div>
       </div>
     </div>
@@ -886,16 +970,14 @@ function ProductFormModal({ categories, existingData, onClose, onSave, onDelete,
   const isEditMode = !!existingData;
   const fileInputRef = useRef(null);
   
-  // 현재 카테고리 자동 선택 로직: ALL/NEW/MY_PICK이 아니면 해당 카테고리, 아니면 기본값(EXECUTIVE)
-  const defaultCategory = (initialCategory && initialCategory !== 'ALL' && initialCategory !== 'NEW' && initialCategory !== 'MY_PICK') 
-    ? initialCategory 
-    : 'EXECUTIVE';
+  const defaultCategory = (initialCategory && initialCategory !== 'ALL' && initialCategory !== 'NEW' && initialCategory !== 'MY_PICK' && initialCategory !== 'DASHBOARD') ? initialCategory : 'EXECUTIVE';
 
   const [formData, setFormData] = useState({ 
-    id: null, name: '', category: defaultCategory, specs: '', 
+    id: null, name: '', category: defaultCategory, specs: '', designer: '',
     featuresString: '', optionsString: '', materialsString: '',
     bodyColorsString: '', upholsteryColorsString: '', awardsString: '',
-    isNew: false, launchDate: new Date().toISOString().split('T')[0], images: [] 
+    productLink: '',
+    isNew: false, launchDate: new Date().toISOString().split('T')[0], images: [], attachments: []
   });
   const [isProcessingImage, setIsProcessingImage] = useState(false);
 
@@ -906,15 +988,18 @@ function ProductFormModal({ categories, existingData, onClose, onSave, onDelete,
         name: existingData.name, 
         category: existingData.category, 
         specs: existingData.specs, 
+        designer: existingData.designer || '',
         featuresString: existingData.features ? existingData.features.join(', ') : '', 
         optionsString: existingData.options ? existingData.options.join(', ') : '',
         materialsString: existingData.materials ? existingData.materials.join(', ') : '',
         bodyColorsString: existingData.bodyColors ? existingData.bodyColors.join(', ') : '',
         upholsteryColorsString: existingData.upholsteryColors ? existingData.upholsteryColors.join(', ') : '',
         awardsString: existingData.awards ? existingData.awards.join(', ') : '',
+        productLink: existingData.productLink || '',
         isNew: existingData.isNew, 
         launchDate: existingData.launchDate || new Date().toISOString().split('T')[0],
-        images: existingData.images || [] 
+        images: existingData.images || [],
+        attachments: existingData.attachments || []
       });
     }
   }, [existingData]);
@@ -949,25 +1034,50 @@ function ProductFormModal({ categories, existingData, onClose, onSave, onDelete,
     }
   };
 
+  const handleAttachmentUpload = (e) => {
+    // 300KB 제한 (DB 용량 보호)
+    const files = Array.from(e.target.files);
+    files.forEach(file => {
+      if (file.size > 300 * 1024) {
+        alert(`${file.name} is too large (>300KB). Please use external link instead.`);
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setFormData(prev => ({
+          ...prev,
+          attachments: [...prev.attachments, { name: file.name, url: e.target.result }]
+        }));
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handleAddLinkAttachment = () => {
+    const url = prompt("Enter file URL (Google Drive, Dropbox, etc):");
+    const name = prompt("Enter file display name:");
+    if (url && name) {
+      setFormData(prev => ({ ...prev, attachments: [...prev.attachments, { name, url }] }));
+    }
+  };
+
   const removeImage = (idx) => setFormData(prev => ({ ...prev, images: prev.images.filter((_, i) => i !== idx) }));
   const setMainImage = (idx) => setFormData(prev => { const newImgs = [...prev.images]; const [moved] = newImgs.splice(idx, 1); newImgs.unshift(moved); return { ...prev, images: newImgs }; });
-  
+  const removeAttachment = (idx) => setFormData(prev => ({ ...prev, attachments: prev.attachments.filter((_, i) => i !== idx) }));
+
   const handleSubmit = (e) => {
     e.preventDefault();
     onSave({ 
-      id: formData.id, 
-      name: formData.name, 
-      category: formData.category, 
-      specs: formData.specs, 
-      features: formData.featuresString.split(',').map(s => s.trim()).filter(s => s), 
-      options: formData.optionsString.split(',').map(s => s.trim()).filter(s => s),
-      materials: formData.materialsString.split(',').map(s => s.trim()).filter(s => s),
-      bodyColors: formData.bodyColorsString.split(',').map(s => s.trim()).filter(s => s),
-      upholsteryColors: formData.upholsteryColorsString.split(',').map(s => s.trim()).filter(s => s),
-      awards: formData.awardsString.split(',').map(s => s.trim()).filter(s => s),
-      isNew: formData.isNew, 
-      launchDate: formData.launchDate,
-      images: formData.images 
+      id: formData.id, name: formData.name, category: formData.category, specs: formData.specs, designer: formData.designer,
+      featuresString: formData.featuresString.split(',').map(s => s.trim()).filter(s => s), 
+      optionsString: formData.optionsString.split(',').map(s => s.trim()).filter(s => s),
+      materialsString: formData.materialsString.split(',').map(s => s.trim()).filter(s => s),
+      bodyColorsString: formData.bodyColorsString.split(',').map(s => s.trim()).filter(s => s),
+      upholsteryColorsString: formData.upholsteryColorsString.split(',').map(s => s.trim()).filter(s => s),
+      awardsString: formData.awardsString.split(',').map(s => s.trim()).filter(s => s),
+      productLink: formData.productLink,
+      isNew: formData.isNew, launchDate: formData.launchDate,
+      images: formData.images, attachments: formData.attachments
     });
   };
 
@@ -987,32 +1097,25 @@ function ProductFormModal({ categories, existingData, onClose, onSave, onDelete,
             <div><label className="block text-sm font-medium text-slate-700 mb-1">카테고리</label><select className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-slate-900 outline-none" value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})}>{categories.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}</select></div>
           </div>
           <div className="grid grid-cols-2 gap-6">
-             <div><label className="block text-sm font-medium text-slate-700 mb-1">출시일 (정렬 기준)</label><input type="date" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-slate-900 outline-none" value={formData.launchDate} onChange={e => setFormData({...formData, launchDate: e.target.value})} /></div>
-             <div className="flex items-end pb-2"><div className="flex items-center space-x-2"><input type="checkbox" id="isNew" checked={formData.isNew} onChange={e => setFormData({...formData, isNew: e.target.checked})} className="w-4 h-4 text-slate-900 rounded border-gray-300 focus:ring-slate-900" /><label htmlFor="isNew" className="text-sm text-slate-700 font-medium select-none cursor-pointer">신제품(NEW) 배지 표시</label></div></div>
+             <div><label className="block text-sm font-medium text-slate-700 mb-1">출시일</label><input type="date" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-slate-900 outline-none" value={formData.launchDate} onChange={e => setFormData({...formData, launchDate: e.target.value})} /></div>
+             <div><label className="block text-sm font-medium text-slate-700 mb-1">디자이너</label><input type="text" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-slate-900 outline-none" value={formData.designer} onChange={e => setFormData({...formData, designer: e.target.value})} /></div>
           </div>
+          <div><label className="block text-sm font-medium text-slate-700 mb-1">상세 사양</label><textarea required rows={2} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-slate-900 outline-none resize-none" value={formData.specs} onChange={e => setFormData({...formData, specs: e.target.value})} /></div>
+          <div className="grid grid-cols-2 gap-6"><div><label className="block text-sm font-medium text-slate-700 mb-1">마감재 (쉼표 구분)</label><input type="text" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-slate-900 outline-none" value={formData.materialsString} onChange={e => setFormData({...formData, materialsString: e.target.value})} /></div><div><label className="block text-sm font-medium text-slate-700 mb-1">수상 내역 (Award)</label><input type="text" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-slate-900 outline-none" value={formData.awardsString} onChange={e => setFormData({...formData, awardsString: e.target.value})} /></div></div>
           
-          <div><label className="block text-sm font-medium text-slate-700 mb-1">상세 사양 (Main Specs)</label><textarea required rows={2} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-slate-900 outline-none resize-none" value={formData.specs} onChange={e => setFormData({...formData, specs: e.target.value})} /></div>
-          
-          <div className="grid grid-cols-2 gap-6">
-             <div><label className="block text-sm font-medium text-slate-700 mb-1">추가 옵션 (쉼표 구분)</label><input type="text" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-slate-900 outline-none" placeholder="Headrest, Lumbar..." value={formData.optionsString} onChange={e => setFormData({...formData, optionsString: e.target.value})} /></div>
-             <div><label className="block text-sm font-medium text-slate-700 mb-1">마감재 (쉼표 구분)</label><input type="text" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-slate-900 outline-none" placeholder="Mesh, Fabric, Leather..." value={formData.materialsString} onChange={e => setFormData({...formData, materialsString: e.target.value})} /></div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-6">
-            <div><label className="block text-sm font-medium text-slate-700 mb-1">주요 기능 (쉼표 구분)</label><input type="text" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-slate-900 outline-none" value={formData.featuresString} onChange={e => setFormData({...formData, featuresString: e.target.value})} /></div>
-            <div><label className="block text-sm font-medium text-slate-700 mb-1">수상 내역 (Award)</label><input type="text" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-slate-900 outline-none" placeholder="Red Dot 2024, iF Design..." value={formData.awardsString} onChange={e => setFormData({...formData, awardsString: e.target.value})} /></div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-6 bg-slate-50 p-4 rounded-xl border border-slate-100">
+          <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 space-y-4">
              <div>
-               <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Body Colors</label>
-               <input type="text" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-slate-900 outline-none" placeholder="Black, White..." value={formData.bodyColorsString} onChange={e => setFormData({...formData, bodyColorsString: e.target.value})} />
+               <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Product Link (Web)</label>
+               <div className="flex"><div className="bg-slate-200 px-3 py-2 rounded-l-lg text-slate-500"><LinkIcon className="w-4 h-4"/></div><input type="text" className="w-full border border-slate-300 rounded-r-lg px-3 py-2 text-sm focus:ring-2 focus:ring-slate-900 outline-none" placeholder="https://..." value={formData.productLink} onChange={e => setFormData({...formData, productLink: e.target.value})} /></div>
              </div>
              <div>
-               <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Upholstery Colors</label>
-               <input type="text" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-slate-900 outline-none" placeholder="Red, Blue, #FF5733..." value={formData.upholsteryColorsString} onChange={e => setFormData({...formData, upholsteryColorsString: e.target.value})} />
+               <div className="flex justify-between items-center mb-2"><label className="block text-xs font-bold text-slate-500 uppercase">Attachments (PDF/Doc)</label><div className="space-x-2"><button type="button" onClick={() => document.getElementById('file-upload').click()} className="text-[10px] bg-white border px-2 py-1 rounded">File Upload</button><button type="button" onClick={handleAddLinkAttachment} className="text-[10px] bg-white border px-2 py-1 rounded">Add Link</button></div><input id="file-upload" type="file" onChange={handleAttachmentUpload} className="hidden" multiple accept=".pdf,.doc,.docx" /></div>
+               <div className="space-y-1">{formData.attachments.map((file, idx) => (<div key={idx} className="flex justify-between items-center text-sm bg-white p-2 rounded border border-slate-200"><span className="truncate w-3/4">{file.name}</span><button type="button" onClick={() => removeAttachment(idx)} className="text-red-500"><X className="w-4 h-4" /></button></div>))}</div>
              </div>
           </div>
+
+          <div className="grid grid-cols-2 gap-6"><div><label className="block text-sm font-medium text-slate-700 mb-1">Body Colors</label><input type="text" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-slate-900 outline-none" value={formData.bodyColorsString} onChange={e => setFormData({...formData, bodyColorsString: e.target.value})} /></div><div><label className="block text-sm font-medium text-slate-700 mb-1">Upholstery Colors</label><input type="text" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-slate-900 outline-none" value={formData.upholsteryColorsString} onChange={e => setFormData({...formData, upholsteryColorsString: e.target.value})} /></div></div>
+          <div className="flex items-center space-x-2 pt-2"><input type="checkbox" id="isNew" checked={formData.isNew} onChange={e => setFormData({...formData, isNew: e.target.checked})} className="w-4 h-4 text-slate-900 rounded border-gray-300" /><label htmlFor="isNew" className="text-sm text-slate-700 font-medium">신제품(NEW) 배지 표시</label></div>
         </form>
         <div className="px-8 py-5 border-t border-slate-100 bg-slate-50 flex justify-between items-center"><div>{isEditMode && <button type="button" onClick={() => onDelete(formData.id, formData.name)} className="text-red-500 hover:text-red-700 text-sm font-medium flex items-center px-2 py-1"><Trash2 className="w-4 h-4 mr-1" /> 제품 삭제</button>}</div><div className="flex space-x-3"><button type="button" onClick={onClose} className="px-5 py-2.5 border border-slate-300 rounded-lg text-sm font-medium text-slate-700 hover:bg-white transition-colors">취소</button><button onClick={handleSubmit} disabled={isProcessingImage} className="px-5 py-2.5 bg-slate-900 text-white rounded-lg text-sm font-medium hover:bg-slate-800 transition-colors shadow-lg shadow-slate-200 disabled:opacity-50">{isProcessingImage ? '이미지 처리 중...' : (isEditMode ? '변경사항 저장' : '제품 등록하기')}</button></div></div>
       </div>
