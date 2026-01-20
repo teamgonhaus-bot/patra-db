@@ -6,7 +6,7 @@ import {
   Database, Info, ArrowUpDown, ListFilter, Menu, History,
   Copy, ChevronRight, Activity, ShieldAlert, FileJson, Calendar,
   ArrowLeft, ArrowRight, ArrowUp, ArrowDown, Layers, Star,
-  Trophy, Heart, User, Link as LinkIcon, Paperclip, BarChart3, PieChart
+  Trophy, Heart, Link as LinkIcon, Paperclip, PieChart, Clock
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { 
@@ -33,8 +33,8 @@ const YOUR_FIREBASE_CONFIG = {
 // ----------------------------------------------------------------------
 // 상수 및 설정
 // ----------------------------------------------------------------------
-const APP_VERSION = "v1.9.0"; // Dashboard & Extended Info
-const BUILD_DATE = "2024.05.28";
+const APP_VERSION = "v2.0.0"; // Major: PieChart, BugFix, Recent Updates
+const BUILD_DATE = "2024.05.29";
 const ADMIN_PASSWORD = "adminlcg1"; 
 
 // Firebase 초기화
@@ -63,25 +63,25 @@ try {
   console.warn("Firebase Init Failed. Falling back to Local Storage.", e);
 }
 
-// 카테고리 정의
+// 카테고리 정의 (색상 코드 추가 for Chart)
 const CATEGORIES = [
-  { id: 'ALL', label: 'TOTAL VIEW', isSpecial: true },
-  { id: 'NEW', label: 'NEW ARRIVALS', isSpecial: true },
-  { id: 'EXECUTIVE', label: 'EXECUTIVE' },
-  { id: 'TASK', label: 'TASK' },
-  { id: 'CONFERENCE', label: 'CONFERENCE' },
-  { id: 'GUEST', label: 'GUEST' },
-  { id: 'STOOL', label: 'STOOL' },
-  { id: 'LOUNGE', label: 'LOUNGE' },
-  { id: 'HOME', label: 'HOME' },
-  { id: 'TABLE', label: 'TABLE' },
-  { id: 'ETC', label: 'ETC' }
+  { id: 'ALL', label: 'TOTAL VIEW', isSpecial: true, color: '#1e293b' },
+  { id: 'NEW', label: 'NEW ARRIVALS', isSpecial: true, color: '#ef4444' },
+  { id: 'EXECUTIVE', label: 'EXECUTIVE', color: '#3b82f6' }, // Blue
+  { id: 'TASK', label: 'TASK', color: '#06b6d4' }, // Cyan
+  { id: 'CONFERENCE', label: 'CONFERENCE', color: '#8b5cf6' }, // Violet
+  { id: 'GUEST', label: 'GUEST', color: '#ec4899' }, // Pink
+  { id: 'STOOL', label: 'STOOL', color: '#10b981' }, // Emerald
+  { id: 'LOUNGE', label: 'LOUNGE', color: '#f59e0b' }, // Amber
+  { id: 'HOME', label: 'HOME', color: '#f97316' }, // Orange
+  { id: 'TABLE', label: 'TABLE', color: '#64748b' }, // Slate
+  { id: 'ETC', label: 'ETC', color: '#94a3b8' } // Gray
 ];
 
 export default function App() {
   const [user, setUser] = useState(null);
   const [products, setProducts] = useState([]);
-  const [activeCategory, setActiveCategory] = useState('DASHBOARD'); // 초기값 대시보드
+  const [activeCategory, setActiveCategory] = useState('DASHBOARD');
   const [searchTerm, setSearchTerm] = useState('');
   
   const [sortOption, setSortOption] = useState('manual'); 
@@ -243,7 +243,7 @@ export default function App() {
     let filtered = products.filter(product => {
       let matchesCategory = true;
       if (activeCategory === 'DASHBOARD') {
-        matchesCategory = false; // 대시보드에서는 리스트 안보임 (별도 렌더링)
+        matchesCategory = false; 
       } else if (activeCategory === 'MY_PICK') {
         matchesCategory = favorites.includes(product.id);
       } else if (activeCategory === 'NEW') {
@@ -302,7 +302,6 @@ export default function App() {
     const currentOrder = currentItem.orderIndex !== undefined ? currentItem.orderIndex : currentItem.createdAt;
     const swapOrder = swapItem.orderIndex !== undefined ? swapItem.orderIndex : swapItem.createdAt;
 
-    // 단순 스왑
     const newCurrentOrder = swapOrder;
     const newSwapOrder = currentOrder;
 
@@ -439,6 +438,24 @@ export default function App() {
               )}
             </React.Fragment>
           ))}
+
+          {/* My Pick */}
+          <div className="mt-6 pt-4 border-t border-slate-100">
+            <button
+              onClick={() => {
+                setActiveCategory('MY_PICK');
+                setIsMobileMenuOpen(false);
+              }}
+              className={`w-full text-left px-3 py-2 rounded-lg text-xs font-bold transition-all duration-200 flex items-center space-x-2 group
+                ${activeCategory === 'MY_PICK' 
+                  ? 'bg-yellow-50 text-yellow-700' 
+                  : 'text-slate-400 hover:bg-slate-50 hover:text-slate-600'}
+              `}
+            >
+              <Heart className={`w-3 h-3 ${activeCategory === 'MY_PICK' ? 'fill-yellow-500 text-yellow-500' : ''}`} />
+              <span>MY PICK ({favorites.length})</span>
+            </button>
+          </div>
         </nav>
         
         <div className="p-4 border-t border-slate-200 bg-slate-50 space-y-3">
@@ -491,7 +508,7 @@ export default function App() {
                 onChange={(e) => {
                   setSearchTerm(e.target.value);
                   if (activeCategory === 'DASHBOARD' && e.target.value) {
-                    setActiveCategory('ALL'); // 검색 시작하면 전체보기로 전환
+                    setActiveCategory('ALL');
                   }
                 }}
                 className="w-full pl-9 pr-4 py-2 bg-slate-100 border-transparent focus:bg-white focus:border-slate-300 rounded-full text-sm transition-all outline-none focus:ring-2 focus:ring-slate-100"
@@ -500,7 +517,6 @@ export default function App() {
           </div>
 
           <div className="flex items-center space-x-2">
-             {/* My Pick 버튼 추가 */}
              <button 
                 onClick={() => setActiveCategory('MY_PICK')}
                 className={`p-2 rounded-full transition-all flex items-center space-x-1 ${activeCategory === 'MY_PICK' ? 'bg-yellow-100 text-yellow-600' : 'hover:bg-slate-100 text-slate-500'}`}
@@ -547,9 +563,14 @@ export default function App() {
 
         <div className="flex-1 overflow-y-auto p-4 md:p-8 custom-scrollbar relative">
           
-          {/* Dashboard View */}
+          {/* Dashboard View (Pie Chart 적용) */}
           {activeCategory === 'DASHBOARD' && !searchTerm ? (
-            <DashboardView products={products} favorites={favorites} setActiveCategory={setActiveCategory} />
+            <DashboardView 
+              products={products} 
+              favorites={favorites} 
+              setActiveCategory={setActiveCategory} 
+              setSelectedProduct={setSelectedProduct} // 상세보기 연결
+            />
           ) : (
             // List View
             <>
@@ -619,7 +640,7 @@ export default function App() {
         </div>
       </main>
 
-      {/* Admin Dashboard Overlay (Settings) */}
+      {/* Admin Dashboard */}
       {showAdminDashboard && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-4xl rounded-2xl overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200 max-h-[85vh] flex flex-col">
@@ -721,25 +742,47 @@ export default function App() {
 }
 
 // ----------------------------------------------------------------------
-// New Component: DashboardView
+// New Component: DashboardView (Updated with Donut Chart & Recent Updates)
 // ----------------------------------------------------------------------
-function DashboardView({ products, favorites, setActiveCategory }) {
-  // 데이터 집계
+function DashboardView({ products, favorites, setActiveCategory, setSelectedProduct }) {
   const totalCount = products.length;
   const newCount = products.filter(p => p.isNew).length;
   const pickCount = favorites.length;
   
-  // 카테고리별 분포 계산
-  const categoryCounts = {};
+  // 카테고리별 분포 계산 (표준 카테고리만)
+  const categoryCounts = [];
+  let totalStandardProducts = 0;
   const standardCategories = CATEGORIES.filter(c => !c.isSpecial);
-  standardCategories.forEach(c => {
-    categoryCounts[c.id] = products.filter(p => p.category === c.id).length;
-  });
   
-  const maxCount = Math.max(...Object.values(categoryCounts), 1);
+  standardCategories.forEach(c => {
+    const count = products.filter(p => p.category === c.id).length;
+    if (count > 0) {
+      categoryCounts.push({ ...c, count });
+      totalStandardProducts += count;
+    }
+  });
+
+  // Pie Chart (Conic Gradient) Style 생성
+  let currentAngle = 0;
+  const gradientParts = categoryCounts.map(item => {
+    const start = currentAngle;
+    const percentage = (item.count / totalStandardProducts) * 100;
+    currentAngle += percentage;
+    return `${item.color} ${start}% ${currentAngle}%`;
+  });
+  const chartStyle = {
+    background: totalStandardProducts > 0 
+      ? `conic-gradient(${gradientParts.join(', ')})`
+      : '#f1f5f9'
+  };
+
+  // 최근 업데이트 (최신 5개)
+  const recentUpdates = [...products]
+    .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
+    .slice(0, 5);
 
   return (
-    <div className="max-w-5xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+    <div className="max-w-5xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20">
       <div className="mb-4">
         <h2 className="text-3xl font-bold text-slate-900">Dashboard</h2>
         <p className="text-slate-500">Overview of PATRA Design Database</p>
@@ -747,70 +790,77 @@ function DashboardView({ products, favorites, setActiveCategory }) {
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div 
-          onClick={() => setActiveCategory('ALL')}
-          className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow cursor-pointer flex items-center justify-between group"
-        >
-          <div>
-            <p className="text-sm font-bold text-slate-400 uppercase mb-1">Total Products</p>
-            <h3 className="text-4xl font-bold text-slate-900">{totalCount}</h3>
-          </div>
-          <div className="w-12 h-12 bg-slate-50 rounded-full flex items-center justify-center text-slate-400 group-hover:bg-slate-100 group-hover:text-slate-600 transition-colors">
-            <Layers className="w-6 h-6" />
-          </div>
+        <div onClick={() => setActiveCategory('ALL')} className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow cursor-pointer flex items-center justify-between group">
+          <div><p className="text-sm font-bold text-slate-400 uppercase mb-1">Total Products</p><h3 className="text-4xl font-bold text-slate-900">{totalCount}</h3></div>
+          <div className="w-12 h-12 bg-slate-50 rounded-full flex items-center justify-center text-slate-400 group-hover:bg-slate-100 group-hover:text-slate-600 transition-colors"><Layers className="w-6 h-6" /></div>
         </div>
-
-        <div 
-          onClick={() => setActiveCategory('NEW')}
-          className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow cursor-pointer flex items-center justify-between group"
-        >
-          <div>
-            <p className="text-sm font-bold text-red-400 uppercase mb-1">New Arrivals</p>
-            <h3 className="text-4xl font-bold text-slate-900">{newCount}</h3>
-          </div>
-          <div className="w-12 h-12 bg-red-50 rounded-full flex items-center justify-center text-red-400 group-hover:bg-red-100 group-hover:text-red-500 transition-colors">
-            <Activity className="w-6 h-6" />
-          </div>
+        <div onClick={() => setActiveCategory('NEW')} className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow cursor-pointer flex items-center justify-between group">
+          <div><p className="text-sm font-bold text-red-400 uppercase mb-1">New Arrivals</p><h3 className="text-4xl font-bold text-slate-900">{newCount}</h3></div>
+          <div className="w-12 h-12 bg-red-50 rounded-full flex items-center justify-center text-red-400 group-hover:bg-red-100 group-hover:text-red-500 transition-colors"><Activity className="w-6 h-6" /></div>
         </div>
-
-        <div 
-          onClick={() => setActiveCategory('MY_PICK')}
-          className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow cursor-pointer flex items-center justify-between group"
-        >
-          <div>
-            <p className="text-sm font-bold text-yellow-500 uppercase mb-1">My Pick</p>
-            <h3 className="text-4xl font-bold text-slate-900">{pickCount}</h3>
-          </div>
-          <div className="w-12 h-12 bg-yellow-50 rounded-full flex items-center justify-center text-yellow-400 group-hover:bg-yellow-100 group-hover:text-yellow-500 transition-colors">
-            <Heart className="w-6 h-6 fill-current" />
-          </div>
+        <div onClick={() => setActiveCategory('MY_PICK')} className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow cursor-pointer flex items-center justify-between group">
+          <div><p className="text-sm font-bold text-yellow-500 uppercase mb-1">My Pick</p><h3 className="text-4xl font-bold text-slate-900">{pickCount}</h3></div>
+          <div className="w-12 h-12 bg-yellow-50 rounded-full flex items-center justify-center text-yellow-400 group-hover:bg-yellow-100 group-hover:text-yellow-500 transition-colors"><Heart className="w-6 h-6 fill-current" /></div>
         </div>
       </div>
 
-      {/* Graph Section */}
-      <div className="bg-white p-8 rounded-2xl border border-slate-100 shadow-sm">
-        <h3 className="text-lg font-bold text-slate-900 mb-6 flex items-center">
-          <BarChart3 className="w-5 h-5 mr-2 text-slate-400" /> Products by Category
-        </h3>
-        <div className="space-y-4">
-          {standardCategories.map(cat => {
-            const count = categoryCounts[cat.id] || 0;
-            const percentage = (count / maxCount) * 100;
-            return (
-              <div key={cat.id} className="group">
-                <div className="flex justify-between text-xs font-bold text-slate-500 mb-1">
-                  <span>{cat.label}</span>
-                  <span>{count}</span>
-                </div>
-                <div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden">
-                  <div 
-                    className="h-full bg-slate-800 rounded-full transition-all duration-1000 ease-out group-hover:bg-indigo-600"
-                    style={{ width: `${percentage}%` }}
-                  ></div>
-                </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Pie Chart Section */}
+        <div className="bg-white p-8 rounded-2xl border border-slate-100 shadow-sm flex flex-col items-center justify-center min-h-[300px]">
+          <h3 className="text-lg font-bold text-slate-900 mb-6 flex items-center self-start w-full">
+            <PieChart className="w-5 h-5 mr-2 text-slate-400" /> Composition
+          </h3>
+          {totalStandardProducts > 0 ? (
+            <div className="flex flex-col md:flex-row items-center space-y-8 md:space-y-0 md:space-x-10">
+              <div className="relative w-48 h-48 rounded-full shadow-inner" style={chartStyle}>
+                 {/* Donut Hole */}
+                 <div className="absolute inset-0 m-auto w-24 h-24 bg-white rounded-full flex items-center justify-center flex-col">
+                    <span className="text-xs text-slate-400 uppercase font-bold">Total</span>
+                    <span className="text-2xl font-bold text-slate-800">{totalStandardProducts}</span>
+                 </div>
               </div>
-            );
-          })}
+              <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+                {categoryCounts.map(item => (
+                  <div key={item.id} className="flex items-center text-xs">
+                    <div className="w-3 h-3 rounded-full mr-2" style={{ backgroundColor: item.color }}></div>
+                    <span className="font-medium text-slate-600 mr-1">{item.label}</span>
+                    <span className="text-slate-400">({item.count})</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="text-center text-slate-400 text-sm">데이터가 없습니다.</div>
+          )}
+        </div>
+
+        {/* Recent Updates Section */}
+        <div className="bg-white p-8 rounded-2xl border border-slate-100 shadow-sm flex flex-col min-h-[300px]">
+           <h3 className="text-lg font-bold text-slate-900 mb-6 flex items-center">
+             <Clock className="w-5 h-5 mr-2 text-slate-400" /> Recent Updates
+           </h3>
+           <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-3">
+             {recentUpdates.length > 0 ? recentUpdates.map(product => (
+               <div 
+                 key={product.id} 
+                 onClick={() => setSelectedProduct(product)}
+                 className="flex items-center p-3 rounded-xl border border-slate-100 hover:border-slate-300 hover:bg-slate-50 cursor-pointer transition-all"
+               >
+                 <div className="w-10 h-10 bg-slate-100 rounded-lg flex-shrink-0 flex items-center justify-center mr-3 overflow-hidden">
+                    {product.images?.[0] ? <img src={product.images[0]} className="w-full h-full object-cover" alt="" /> : <ImageIcon className="w-4 h-4 text-slate-300"/>}
+                 </div>
+                 <div className="flex-1 min-w-0">
+                    <h4 className="text-sm font-bold text-slate-800 truncate">{product.name}</h4>
+                    <p className="text-[10px] text-slate-500 truncate">
+                      {new Date(product.updatedAt || product.createdAt).toLocaleDateString()} · {product.category}
+                    </p>
+                 </div>
+                 <ChevronRight className="w-4 h-4 text-slate-300" />
+               </div>
+             )) : (
+               <div className="text-center text-slate-400 text-sm py-10">최근 업데이트 내역이 없습니다.</div>
+             )}
+           </div>
         </div>
       </div>
     </div>
@@ -818,7 +868,7 @@ function DashboardView({ products, favorites, setActiveCategory }) {
 }
 
 // ----------------------------------------------------------------------
-// Sub Components (Updated)
+// Sub Components (ProductCard, ProductDetailModal, ProductFormModal)
 // ----------------------------------------------------------------------
 
 function ProductCard({ product, onClick, showMoveControls, onMove, isFavorite, onToggleFavorite }) {
@@ -928,35 +978,15 @@ function ProductDetailModal({ product, onClose, onEdit, isAdmin, showToast, isFa
           </div>
           
           <div className="space-y-6">
-            {/* Specs */}
             <div className="relative group"><h3 className="flex items-center text-sm font-bold text-slate-900 uppercase tracking-wide mb-3"><Settings className="w-4 h-4 mr-2" /> Specifications<button onClick={copyToClipboard} className="ml-2 text-slate-400 hover:text-slate-600 opacity-0 group-hover:opacity-100 transition-opacity"><Copy className="w-3 h-3" /></button></h3><p className="text-slate-600 leading-relaxed bg-slate-50 p-4 rounded-xl text-sm border border-slate-100">{product.specs}</p></div>
-            
-            {/* Features */}
             <div><h3 className="flex items-center text-sm font-bold text-slate-900 uppercase tracking-wide mb-3"><Tag className="w-4 h-4 mr-2" /> Options & Features</h3><div className="flex flex-wrap gap-2">{product.options && product.options.map((opt, idx) => (<span key={idx} className="flex items-center px-3 py-1.5 bg-blue-50 text-blue-700 rounded-lg text-sm font-medium"><Layers className="w-3 h-3 mr-1.5" /> {opt}</span>))}{product.features && product.features.map((feature, idx) => (<span key={idx} className="flex items-center px-3 py-1.5 bg-slate-100 text-slate-600 rounded-lg text-sm"><Check className="w-3 h-3 mr-1.5 text-green-500" /> {feature}</span>))}</div></div>
-
-            {/* Colors */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                <div><h3 className="flex items-center text-sm font-bold text-slate-900 uppercase tracking-wide mb-3">Body Color</h3><div className="flex flex-wrap gap-2">{product.bodyColors && product.bodyColors.map((color, idx) => (<div key={idx} className="flex items-center space-x-2 border border-slate-200 rounded-lg px-2 py-1 pr-3"><div className="w-4 h-4 rounded-full border border-slate-200 shadow-sm" style={{ backgroundColor: color }} /><span className="text-xs text-slate-600">{color}</span></div>))}</div></div>
                <div><h3 className="flex items-center text-sm font-bold text-slate-900 uppercase tracking-wide mb-3">Upholstery Color</h3><div className="flex flex-wrap gap-2">{product.upholsteryColors && product.upholsteryColors.map((color, idx) => (<div key={idx} className="flex items-center space-x-2 border border-slate-200 rounded-lg px-2 py-1 pr-3"><div className="w-4 h-4 rounded-sm border border-slate-200 shadow-sm" style={{ backgroundColor: color }} /><span className="text-xs text-slate-600">{color}</span></div>))}</div></div>
             </div>
-
-            {/* Links & Attachments */}
             <div className="pt-4 border-t border-slate-100 space-y-3">
-               {product.productLink && (
-                 <a href={product.productLink} target="_blank" rel="noopener noreferrer" className="flex items-center text-sm text-blue-600 hover:underline">
-                   <LinkIcon className="w-4 h-4 mr-2" /> Product Webpage
-                 </a>
-               )}
-               {product.attachments && product.attachments.length > 0 && (
-                 <div className="space-y-1">
-                   <h3 className="text-xs font-bold text-slate-400 uppercase mb-1">Downloads</h3>
-                   {product.attachments.map((file, idx) => (
-                     <a key={idx} href={file.url} target="_blank" rel="noopener noreferrer" className="flex items-center text-sm text-slate-600 hover:text-slate-900 p-2 bg-slate-50 rounded-lg border border-slate-100 hover:border-slate-300 transition-colors">
-                       <Paperclip className="w-4 h-4 mr-2 text-slate-400" /> {file.name}
-                     </a>
-                   ))}
-                 </div>
-               )}
+               {product.productLink && <a href={product.productLink} target="_blank" rel="noopener noreferrer" className="flex items-center text-sm text-blue-600 hover:underline"><LinkIcon className="w-4 h-4 mr-2" /> Product Webpage</a>}
+               {product.attachments && product.attachments.length > 0 && <div className="space-y-1"><h3 className="text-xs font-bold text-slate-400 uppercase mb-1">Downloads</h3>{product.attachments.map((file, idx) => (<a key={idx} href={file.url} target="_blank" rel="noopener noreferrer" className="flex items-center text-sm text-slate-600 hover:text-slate-900 p-2 bg-slate-50 rounded-lg border border-slate-100 hover:border-slate-300 transition-colors"><Paperclip className="w-4 h-4 mr-2 text-slate-400" /> {file.name}</a>))}</div>}
             </div>
           </div>
           <div className="mt-8 pt-6 border-t border-slate-100 flex justify-end space-x-3">{isAdmin && (<button onClick={onEdit} className="flex items-center px-5 py-2.5 text-sm font-medium text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors"><Edit2 className="w-4 h-4 mr-2" />Edit Data</button>)}</div>
@@ -1035,20 +1065,11 @@ function ProductFormModal({ categories, existingData, onClose, onSave, onDelete,
   };
 
   const handleAttachmentUpload = (e) => {
-    // 300KB 제한 (DB 용량 보호)
     const files = Array.from(e.target.files);
     files.forEach(file => {
-      if (file.size > 300 * 1024) {
-        alert(`${file.name} is too large (>300KB). Please use external link instead.`);
-        return;
-      }
+      if (file.size > 300 * 1024) { alert(`${file.name} is too large (>300KB). Please use external link.`); return; }
       const reader = new FileReader();
-      reader.onload = (e) => {
-        setFormData(prev => ({
-          ...prev,
-          attachments: [...prev.attachments, { name: file.name, url: e.target.result }]
-        }));
-      };
+      reader.onload = (e) => { setFormData(prev => ({ ...prev, attachments: [...prev.attachments, { name: file.name, url: e.target.result }] })); };
       reader.readAsDataURL(file);
     });
   };
@@ -1056,9 +1077,7 @@ function ProductFormModal({ categories, existingData, onClose, onSave, onDelete,
   const handleAddLinkAttachment = () => {
     const url = prompt("Enter file URL (Google Drive, Dropbox, etc):");
     const name = prompt("Enter file display name:");
-    if (url && name) {
-      setFormData(prev => ({ ...prev, attachments: [...prev.attachments, { name, url }] }));
-    }
+    if (url && name) { setFormData(prev => ({ ...prev, attachments: [...prev.attachments, { name, url }] })); }
   };
 
   const removeImage = (idx) => setFormData(prev => ({ ...prev, images: prev.images.filter((_, i) => i !== idx) }));
@@ -1067,14 +1086,15 @@ function ProductFormModal({ categories, existingData, onClose, onSave, onDelete,
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    // [Bug Fix]: featuresString -> features array mapping
     onSave({ 
       id: formData.id, name: formData.name, category: formData.category, specs: formData.specs, designer: formData.designer,
-      featuresString: formData.featuresString.split(',').map(s => s.trim()).filter(s => s), 
-      optionsString: formData.optionsString.split(',').map(s => s.trim()).filter(s => s),
-      materialsString: formData.materialsString.split(',').map(s => s.trim()).filter(s => s),
-      bodyColorsString: formData.bodyColorsString.split(',').map(s => s.trim()).filter(s => s),
-      upholsteryColorsString: formData.upholsteryColorsString.split(',').map(s => s.trim()).filter(s => s),
-      awardsString: formData.awardsString.split(',').map(s => s.trim()).filter(s => s),
+      features: formData.featuresString.split(',').map(s => s.trim()).filter(s => s), 
+      options: formData.optionsString.split(',').map(s => s.trim()).filter(s => s),
+      materials: formData.materialsString.split(',').map(s => s.trim()).filter(s => s),
+      bodyColors: formData.bodyColorsString.split(',').map(s => s.trim()).filter(s => s),
+      upholsteryColors: formData.upholsteryColorsString.split(',').map(s => s.trim()).filter(s => s),
+      awards: formData.awardsString.split(',').map(s => s.trim()).filter(s => s),
       productLink: formData.productLink,
       isNew: formData.isNew, launchDate: formData.launchDate,
       images: formData.images, attachments: formData.attachments
@@ -1100,7 +1120,7 @@ function ProductFormModal({ categories, existingData, onClose, onSave, onDelete,
              <div><label className="block text-sm font-medium text-slate-700 mb-1">출시일</label><input type="date" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-slate-900 outline-none" value={formData.launchDate} onChange={e => setFormData({...formData, launchDate: e.target.value})} /></div>
              <div><label className="block text-sm font-medium text-slate-700 mb-1">디자이너</label><input type="text" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-slate-900 outline-none" value={formData.designer} onChange={e => setFormData({...formData, designer: e.target.value})} /></div>
           </div>
-          <div><label className="block text-sm font-medium text-slate-700 mb-1">상세 사양</label><textarea required rows={2} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-slate-900 outline-none resize-none" value={formData.specs} onChange={e => setFormData({...formData, specs: e.target.value})} /></div>
+          <div><label className="block text-sm font-medium text-slate-700 mb-1">상세 사양 (Main Specs)</label><textarea required rows={2} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-slate-900 outline-none resize-none" value={formData.specs} onChange={e => setFormData({...formData, specs: e.target.value})} /></div>
           <div className="grid grid-cols-2 gap-6"><div><label className="block text-sm font-medium text-slate-700 mb-1">마감재 (쉼표 구분)</label><input type="text" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-slate-900 outline-none" value={formData.materialsString} onChange={e => setFormData({...formData, materialsString: e.target.value})} /></div><div><label className="block text-sm font-medium text-slate-700 mb-1">수상 내역 (Award)</label><input type="text" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-slate-900 outline-none" value={formData.awardsString} onChange={e => setFormData({...formData, awardsString: e.target.value})} /></div></div>
           
           <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 space-y-4">
@@ -1115,6 +1135,9 @@ function ProductFormModal({ categories, existingData, onClose, onSave, onDelete,
           </div>
 
           <div className="grid grid-cols-2 gap-6"><div><label className="block text-sm font-medium text-slate-700 mb-1">Body Colors</label><input type="text" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-slate-900 outline-none" value={formData.bodyColorsString} onChange={e => setFormData({...formData, bodyColorsString: e.target.value})} /></div><div><label className="block text-sm font-medium text-slate-700 mb-1">Upholstery Colors</label><input type="text" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-slate-900 outline-none" value={formData.upholsteryColorsString} onChange={e => setFormData({...formData, upholsteryColorsString: e.target.value})} /></div></div>
+          
+          <div className="grid grid-cols-2 gap-6"><div><label className="block text-sm font-medium text-slate-700 mb-1">주요 기능 (쉼표 구분)</label><input type="text" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-slate-900 outline-none" value={formData.featuresString} onChange={e => setFormData({...formData, featuresString: e.target.value})} /></div><div><label className="block text-sm font-medium text-slate-700 mb-1">추가 옵션 (쉼표 구분)</label><input type="text" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-slate-900 outline-none" value={formData.optionsString} onChange={e => setFormData({...formData, optionsString: e.target.value})} /></div></div>
+
           <div className="flex items-center space-x-2 pt-2"><input type="checkbox" id="isNew" checked={formData.isNew} onChange={e => setFormData({...formData, isNew: e.target.checked})} className="w-4 h-4 text-slate-900 rounded border-gray-300" /><label htmlFor="isNew" className="text-sm text-slate-700 font-medium">신제품(NEW) 배지 표시</label></div>
         </form>
         <div className="px-8 py-5 border-t border-slate-100 bg-slate-50 flex justify-between items-center"><div>{isEditMode && <button type="button" onClick={() => onDelete(formData.id, formData.name)} className="text-red-500 hover:text-red-700 text-sm font-medium flex items-center px-2 py-1"><Trash2 className="w-4 h-4 mr-1" /> 제품 삭제</button>}</div><div className="flex space-x-3"><button type="button" onClick={onClose} className="px-5 py-2.5 border border-slate-300 rounded-lg text-sm font-medium text-slate-700 hover:bg-white transition-colors">취소</button><button onClick={handleSubmit} disabled={isProcessingImage} className="px-5 py-2.5 bg-slate-900 text-white rounded-lg text-sm font-medium hover:bg-slate-800 transition-colors shadow-lg shadow-slate-200 disabled:opacity-50">{isProcessingImage ? '이미지 처리 중...' : (isEditMode ? '변경사항 저장' : '제품 등록하기')}</button></div></div>
