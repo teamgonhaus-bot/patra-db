@@ -1,50 +1,25 @@
 /* global __firebase_config, __app_id, __initial_auth_token */
 import React, { useState, useRef, useEffect } from 'react';
 import { 
-  Plus, 
-  Search, 
-  X, 
-  Check, 
-  Tag, 
-  Palette, 
-  Settings,
-  Image as ImageIcon,
-  Upload,
-  Trash2,
-  Edit2,
-  RefreshCw,
-  Cloud,
-  CloudOff,
-  Lock,
-  Unlock,
-  Database,
-  Download,
-  Info,
-  ArrowUpDown,
-  ListFilter
+  Plus, Search, X, Check, Tag, Palette, Settings, Image as ImageIcon,
+  Upload, Trash2, Edit2, RefreshCw, Cloud, CloudOff, Lock, Unlock,
+  Database, Download, Info, ArrowUpDown, ListFilter, Menu, History,
+  Copy, ClipboardCheck, ChevronRight
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { 
-  getAuth, 
-  signInWithCustomToken, 
-  signInAnonymously, 
-  onAuthStateChanged 
+  getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged 
 } from 'firebase/auth';
 import { 
-  getFirestore, 
-  collection, 
-  doc, 
-  setDoc, 
-  deleteDoc, 
-  onSnapshot 
+  getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot, addDoc, query, orderBy, limit 
 } from 'firebase/firestore';
 
 // ----------------------------------------------------------------------
 // 상수 및 설정
 // ----------------------------------------------------------------------
-const APP_VERSION = "v1.2.0"; // 기능 업데이트 버전
-const BUILD_DATE = "2024.05.21";
-const ADMIN_PASSWORD = "adminlcg1"; // 관리자 비밀번호
+const APP_VERSION = "v1.3.0"; // Mobile & Log Update
+const BUILD_DATE = "2024.05.22";
+const ADMIN_PASSWORD = "adminlcg1"; 
 
 // Firebase 초기화 (Hybrid Mode)
 let db = null;
@@ -65,7 +40,6 @@ try {
   console.warn("Firebase config not found. Falling back to Local Storage.");
 }
 
-// 카테고리 정의 ('ALL'을 'MAJOR'로 표현)
 const CATEGORIES = [
   { id: 'ALL', label: 'MAJOR PRODUCTS' },
   { id: 'NEW', label: 'NEW ARRIVALS' },
@@ -84,18 +58,21 @@ export default function App() {
   const [products, setProducts] = useState([]);
   const [activeCategory, setActiveCategory] = useState('ALL');
   const [searchTerm, setSearchTerm] = useState('');
-  const [sortOption, setSortOption] = useState('newest'); // 'newest' | 'name'
+  const [sortOption, setSortOption] = useState('newest');
   
-  // 상태 관리
+  // UI 상태
   const [selectedProduct, setSelectedProduct] = useState(null); 
   const [isFormOpen, setIsFormOpen] = useState(false); 
   const [editingProduct, setEditingProduct] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false); // 모바일 메뉴 상태
   
-  // 관리자 모드 & DB 정보
-  const [isAdmin, setIsAdmin] = useState(false); // 기본은 뷰어 모드
+  // 관리자 & 로그
+  const [isAdmin, setIsAdmin] = useState(false);
   const [showDbInfo, setShowDbInfo] = useState(false);
-  const [toast, setToast] = useState(null); // 토스트 메시지 { message, type }
+  const [showLogModal, setShowLogModal] = useState(false); // 로그 모달 상태
+  const [activityLogs, setActivityLogs] = useState([]); // 로그 데이터
+  const [toast, setToast] = useState(null);
 
   // 1. 초기화
   useEffect(() => {
@@ -128,36 +105,30 @@ export default function App() {
           id: doc.id,
           ...doc.data()
         }));
-        // 정렬은 렌더링 시점에 sortOption에 따라 수행
         setProducts(loadedProducts);
-        setIsLoading(false);
-      }, (error) => {
-        console.error("Data Fetch Error:", error);
         setIsLoading(false);
       });
       return () => unsubscribe();
     } 
   }, [user]);
 
-  // 로컬 스토리지 헬퍼
+  // 로컬 스토리지 로드
   const loadFromLocalStorage = () => {
     const saved = localStorage.getItem('patra_products');
     setProducts(saved ? JSON.parse(saved) : []);
     setIsLoading(false);
   };
-
   const saveToLocalStorage = (newProducts) => {
     localStorage.setItem('patra_products', JSON.stringify(newProducts));
     setProducts(newProducts);
   };
 
-  // 토스트 메시지 표시 함수
   const showToast = (message, type = 'success') => {
     setToast({ message, type });
     setTimeout(() => setToast(null), 3000);
   };
 
-  // 관리자 모드 토글 (비밀번호 확인)
+  // 관리자 토글
   const toggleAdminMode = () => {
     if (isAdmin) {
       setIsAdmin(false);
@@ -173,18 +144,33 @@ export default function App() {
     }
   };
 
-  // 데이터 내보내기 (JSON 다운로드)
-  const handleExportData = () => {
-    const dataStr = JSON.stringify(products, null, 2);
-    const blob = new Blob([dataStr], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `patra_db_backup_${new Date().toISOString().slice(0,10)}.json`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    showToast("데이터베이스가 JSON 파일로 다운로드되었습니다.");
+  // 활동 로그 기록 (DB 저장)
+  const logActivity = async (action, productName, details = "") => {
+    if (!isFirebaseAvailable || !db) return;
+    try {
+      await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'logs'), {
+        action,
+        productName,
+        details,
+        timestamp: Date.now(),
+        user: user?.uid || 'anonymous'
+      });
+    } catch (e) {
+      console.error("Logging failed", e);
+    }
+  };
+
+  // 로그 불러오기
+  const fetchLogs = async () => {
+    if (!isFirebaseAvailable || !db) return;
+    setIsLoading(true);
+    // 최근 50개만 조회
+    const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'logs'), orderBy('timestamp', 'desc'), limit(50));
+    onSnapshot(q, (snapshot) => {
+      const logs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setActivityLogs(logs);
+      setIsLoading(false);
+    });
   };
 
   // 필터링 및 정렬
@@ -194,28 +180,24 @@ export default function App() {
         activeCategory === 'ALL' ? true :
         activeCategory === 'NEW' ? product.isNew :
         product.category === activeCategory;
-      
       const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
                             product.specs.toLowerCase().includes(searchTerm.toLowerCase());
-
       return matchesCategory && matchesSearch;
     });
-
-    // 정렬 로직
     if (sortOption === 'newest') {
       filtered.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
     } else if (sortOption === 'name') {
       filtered.sort((a, b) => a.name.localeCompare(b.name));
     }
-
     return filtered;
   };
-
   const processedProducts = getProcessedProducts();
 
   // 저장/수정
   const handleSaveProduct = async (productData) => {
     const docId = productData.id ? String(productData.id) : String(Date.now());
+    const isEdit = !!productData.id && products.some(p => String(p.id) === docId);
+    
     const payload = {
       ...productData,
       id: docId,
@@ -227,6 +209,8 @@ export default function App() {
       try {
         const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'products', docId);
         await setDoc(docRef, payload, { merge: true });
+        // 로그 기록
+        await logActivity(isEdit ? "UPDATE" : "CREATE", productData.name, isEdit ? "제품 정보 수정됨" : "신규 제품 등록됨");
       } catch (error) {
         showToast("클라우드 저장 실패", "error");
         return;
@@ -248,13 +232,14 @@ export default function App() {
   };
 
   // 삭제
-  const handleDeleteProduct = async (productId) => {
-    if (!window.confirm('정말 삭제하시겠습니까?')) return;
+  const handleDeleteProduct = async (productId, productName) => {
+    if (!window.confirm('정말 삭제하시겠습니까? 복구할 수 없습니다.')) return;
 
     if (isFirebaseAvailable && db) {
       try {
         const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'products', String(productId));
         await deleteDoc(docRef);
+        await logActivity("DELETE", productName, "제품 데이터 영구 삭제됨");
       } catch (error) {
         showToast("삭제 실패", "error");
         return;
@@ -271,11 +256,28 @@ export default function App() {
   return (
     <div className="flex h-screen bg-slate-50 font-sans text-slate-800 overflow-hidden relative">
       
-      {/* 사이드바 */}
-      <aside className="w-64 bg-white border-r border-slate-200 flex flex-col shadow-sm z-10 flex-shrink-0">
-        <div className="p-6 border-b border-slate-100 flex items-center space-x-3">
-          <div className="w-8 h-8 bg-black rounded-lg flex items-center justify-center text-white font-bold">P</div>
-          <h1 className="text-xl font-bold tracking-tight text-slate-900">PATRA <span className="text-xs font-normal text-slate-500 block">Design Lab DB</span></h1>
+      {/* 모바일 메뉴 오버레이 */}
+      {isMobileMenuOpen && (
+        <div 
+          className="fixed inset-0 bg-black/50 z-40 md:hidden animate-in fade-in"
+          onClick={() => setIsMobileMenuOpen(false)}
+        />
+      )}
+
+      {/* 사이드바 (데스크탑: flex, 모바일: fixed & transform) */}
+      <aside className={`
+        fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-slate-200 flex flex-col shadow-xl transition-transform duration-300 md:relative md:translate-x-0 md:shadow-sm
+        ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}
+      `}>
+        <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+          <div className="flex items-center space-x-3">
+            <div className="w-8 h-8 bg-black rounded-lg flex items-center justify-center text-white font-bold">P</div>
+            <h1 className="text-xl font-bold tracking-tight text-slate-900">PATRA <span className="text-xs font-normal text-slate-500 block">Design Lab DB</span></h1>
+          </div>
+          {/* 모바일 닫기 버튼 */}
+          <button onClick={() => setIsMobileMenuOpen(false)} className="md:hidden text-slate-400 hover:text-slate-600">
+            <X className="w-6 h-6" />
+          </button>
         </div>
 
         <nav className="flex-1 overflow-y-auto py-6 px-4 space-y-1 custom-scrollbar">
@@ -285,7 +287,10 @@ export default function App() {
           {CATEGORIES.map(cat => (
             <button
               key={cat.id}
-              onClick={() => setActiveCategory(cat.id)}
+              onClick={() => {
+                setActiveCategory(cat.id);
+                setIsMobileMenuOpen(false); // 모바일에서 클릭 시 닫기
+              }}
               className={`w-full text-left px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 flex items-center justify-between group
                 ${activeCategory === cat.id 
                   ? 'bg-slate-900 text-white shadow-md' 
@@ -299,7 +304,6 @@ export default function App() {
         
         {/* 하단 정보 영역 */}
         <div className="p-4 border-t border-slate-200 bg-slate-50 space-y-3">
-           {/* 관리자 모드 토글 */}
            <button 
              onClick={toggleAdminMode}
              className={`w-full flex items-center justify-center px-3 py-2 rounded-lg text-xs font-bold transition-colors ${
@@ -307,23 +311,29 @@ export default function App() {
              }`}
            >
              {isAdmin ? <Unlock className="w-3 h-3 mr-2" /> : <Lock className="w-3 h-3 mr-2" />}
-             {isAdmin ? "ADMIN MODE ON" : "VIEWER MODE"}
+             {isAdmin ? "ADMIN ON" : "VIEWER"}
            </button>
 
-           {/* DB 정보 및 버전 */}
            <div className="flex justify-between items-end">
               <button 
                 onClick={() => setShowDbInfo(true)}
                 className="text-[10px] text-slate-400 hover:text-slate-600 flex items-center"
               >
-                <Database className="w-3 h-3 mr-1" />
-                Data Info
+                <Database className="w-3 h-3 mr-1" /> Data Info
               </button>
-              <div className="text-[10px] text-slate-300 text-right">
-                <p>{APP_VERSION}</p>
-                <p>{BUILD_DATE}</p>
-              </div>
+              {isAdmin && (
+                <button 
+                  onClick={() => {
+                    fetchLogs();
+                    setShowLogModal(true);
+                  }}
+                  className="text-[10px] text-blue-500 hover:text-blue-700 flex items-center font-medium"
+                >
+                  <History className="w-3 h-3 mr-1" /> Logs
+                </button>
+              )}
            </div>
+           <div className="text-[10px] text-slate-300 text-center">{APP_VERSION}</div>
         </div>
       </aside>
 
@@ -331,13 +341,21 @@ export default function App() {
       <main className="flex-1 flex flex-col h-screen overflow-hidden relative">
         
         {/* 헤더 */}
-        <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-8 shadow-sm z-10 flex-shrink-0">
-          <div className="flex items-center space-x-4 w-1/3">
-            <div className="relative w-full">
+        <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 md:px-8 shadow-sm z-10 flex-shrink-0">
+          <div className="flex items-center space-x-4 w-full md:w-1/2">
+            {/* 모바일 햄버거 메뉴 버튼 */}
+            <button 
+              onClick={() => setIsMobileMenuOpen(true)}
+              className="md:hidden p-2 -ml-2 text-slate-600 hover:bg-slate-100 rounded-lg"
+            >
+              <Menu className="w-6 h-6" />
+            </button>
+
+            <div className="relative w-full max-w-md">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-4 h-4" />
               <input 
                 type="text" 
-                placeholder="Find Products..." 
+                placeholder="Search..." 
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full pl-10 pr-4 py-2 bg-slate-100 border-transparent focus:bg-white focus:border-slate-300 rounded-full text-sm transition-all outline-none focus:ring-2 focus:ring-slate-100"
@@ -345,9 +363,9 @@ export default function App() {
             </div>
           </div>
 
-          <div className="flex items-center space-x-4">
-             {/* 정렬 옵션 추가 */}
-             <div className="flex items-center bg-slate-100 rounded-lg p-1">
+          <div className="flex items-center space-x-2 md:space-x-4">
+             {/* 정렬 옵션 */}
+             <div className="hidden md:flex items-center bg-slate-100 rounded-lg p-1">
                 <button 
                   onClick={() => setSortOption('newest')}
                   className={`p-1.5 rounded-md transition-all ${sortOption === 'newest' ? 'bg-white shadow text-slate-900' : 'text-slate-400 hover:text-slate-600'}`}
@@ -370,27 +388,34 @@ export default function App() {
                   setEditingProduct(null);
                   setIsFormOpen(true);
                 }}
-                className="flex items-center space-x-2 bg-slate-900 text-white px-4 py-2 rounded-full text-sm font-medium hover:bg-slate-800 transition-colors shadow-lg shadow-slate-300/50 animate-in fade-in"
+                className="flex items-center space-x-2 bg-slate-900 text-white px-3 py-2 md:px-4 md:py-2 rounded-full text-sm font-medium hover:bg-slate-800 transition-colors shadow-lg shadow-slate-300/50"
               >
                 <Plus className="w-4 h-4" />
-                <span>신제품 등록</span>
+                <span className="hidden md:inline">신제품 등록</span>
               </button>
             )}
           </div>
         </header>
 
         {/* 콘텐츠 영역 */}
-        <div className="flex-1 overflow-y-auto p-8 custom-scrollbar relative">
+        <div className="flex-1 overflow-y-auto p-4 md:p-8 custom-scrollbar relative">
           
-          {isLoading ? (
-            <div className="absolute inset-0 flex items-center justify-center">
-              <RefreshCw className="w-8 h-8 text-slate-400 animate-spin" />
+          {isLoading && products.length === 0 ? (
+            // 스켈레톤 로딩 (Skeleton UI)
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+               {[1,2,3,4].map(n => (
+                 <div key={n} className="bg-white rounded-2xl p-4 h-[350px] animate-pulse border border-slate-100">
+                    <div className="bg-slate-200 h-48 rounded-lg mb-4"></div>
+                    <div className="bg-slate-200 h-6 w-3/4 rounded mb-2"></div>
+                    <div className="bg-slate-200 h-4 w-1/2 rounded"></div>
+                 </div>
+               ))}
             </div>
           ) : (
             <>
               <div className="mb-6 flex items-end justify-between">
                 <div>
-                  <h2 className="text-2xl font-bold text-slate-900">
+                  <h2 className="text-xl md:text-2xl font-bold text-slate-900">
                     {CATEGORIES.find(c => c.id === activeCategory)?.label}
                   </h2>
                   <p className="text-slate-500 text-sm mt-1">Total {processedProducts.length} items</p>
@@ -406,7 +431,6 @@ export default function App() {
                   />
                 ))}
                 
-                {/* Admin일 때만 추가 카드 표시 */}
                 {isAdmin && (
                   <button 
                     onClick={() => {
@@ -423,7 +447,7 @@ export default function App() {
                 )}
               </div>
 
-              {processedProducts.length === 0 && !isLoading && (
+              {processedProducts.length === 0 && (
                  <div className="flex flex-col items-center justify-center py-20 text-slate-400">
                     <Cloud className="w-12 h-12 mb-4 opacity-20" />
                     <p>등록된 데이터가 없습니다.</p>
@@ -436,49 +460,85 @@ export default function App() {
 
       {/* 토스트 알림 */}
       {toast && (
-        <div className="fixed bottom-6 right-6 bg-slate-800 text-white px-4 py-3 rounded-lg shadow-lg flex items-center space-x-3 animate-in slide-in-from-bottom-5 fade-in z-[60]">
+        <div className="fixed bottom-6 right-6 bg-slate-800 text-white px-4 py-3 rounded-lg shadow-lg flex items-center space-x-3 animate-in slide-in-from-bottom-5 fade-in z-[70]">
           {toast.type === 'success' ? <Check className="w-5 h-5 text-green-400" /> : <Info className="w-5 h-5 text-red-400" />}
           <span className="text-sm font-medium">{toast.message}</span>
         </div>
       )}
 
+      {/* 모달: 로그 뷰어 (Admin Only) */}
+      {showLogModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-2xl rounded-2xl overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200 max-h-[80vh] flex flex-col">
+            <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+              <h3 className="text-lg font-bold flex items-center"><History className="w-5 h-5 mr-2" /> Activity Logs (Recent 50)</h3>
+              <button onClick={() => setShowLogModal(false)}><X className="w-5 h-5 text-slate-400" /></button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
+               {isLoading ? (
+                 <div className="flex justify-center p-4"><RefreshCw className="animate-spin text-slate-400" /></div>
+               ) : activityLogs.length === 0 ? (
+                 <div className="text-center text-slate-400 py-10">기록된 활동이 없습니다.</div>
+               ) : (
+                 <table className="w-full text-sm text-left">
+                   <thead className="text-xs text-slate-500 uppercase bg-slate-50">
+                     <tr>
+                       <th className="px-4 py-2">Time</th>
+                       <th className="px-4 py-2">Action</th>
+                       <th className="px-4 py-2">Product</th>
+                       <th className="px-4 py-2">Details</th>
+                     </tr>
+                   </thead>
+                   <tbody>
+                     {activityLogs.map(log => (
+                       <tr key={log.id} className="border-b border-slate-100 hover:bg-slate-50">
+                         <td className="px-4 py-3 text-slate-500 text-xs">
+                           {new Date(log.timestamp).toLocaleString()}
+                         </td>
+                         <td className="px-4 py-3">
+                           <span className={`px-2 py-1 rounded text-[10px] font-bold ${
+                             log.action === 'CREATE' ? 'bg-green-100 text-green-700' :
+                             log.action === 'UPDATE' ? 'bg-blue-100 text-blue-700' :
+                             'bg-red-100 text-red-700'
+                           }`}>
+                             {log.action}
+                           </span>
+                         </td>
+                         <td className="px-4 py-3 font-medium text-slate-800">{log.productName}</td>
+                         <td className="px-4 py-3 text-slate-500">{log.details}</td>
+                       </tr>
+                     ))}
+                   </tbody>
+                 </table>
+               )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 모달: DB 정보 */}
       {showDbInfo && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-md rounded-2xl p-6 shadow-2xl animate-in zoom-in-95 duration-200">
              <div className="flex justify-between items-center mb-4">
                <h3 className="text-lg font-bold flex items-center"><Database className="w-5 h-5 mr-2" /> Database Status</h3>
                <button onClick={() => setShowDbInfo(false)}><X className="w-5 h-5 text-slate-400" /></button>
              </div>
-             
+             {/* ... DB Info Content (Same as before) ... */}
              <div className="space-y-4 text-sm text-slate-600">
                 <div className="bg-slate-50 p-3 rounded-lg border border-slate-100">
-                  <p className="flex justify-between mb-1">
-                    <span className="font-semibold">Status:</span> 
-                    <span className={isFirebaseAvailable ? "text-green-600 font-bold" : "text-orange-500"}>
-                      {isFirebaseAvailable ? "Connected (Cloud)" : "Local Only"}
-                    </span>
-                  </p>
                   <p className="flex justify-between mb-1">
                     <span className="font-semibold">Provider:</span> 
                     <span>{isFirebaseAvailable ? "Google Firestore" : "LocalStorage"}</span>
                   </p>
                   <p className="flex justify-between">
-                    <span className="font-semibold">Total Records:</span> 
+                    <span className="font-semibold">Records:</span> 
                     <span>{products.length}</span>
                   </p>
                 </div>
-                
-                <div className="text-xs text-slate-500">
-                  <p className="mb-2">⚠️ 클라우드 DB 주소는 보안상 노출되지 않습니다. 데이터 백업이 필요하면 아래 버튼을 사용하여 JSON 파일로 내보내세요.</p>
+                <div className="text-xs text-slate-500 text-center">
+                   변경 사항은 실시간으로 모든 기기에 반영됩니다.
                 </div>
-
-                <button 
-                  onClick={handleExportData}
-                  className="w-full py-2 bg-slate-900 text-white rounded-lg flex items-center justify-center hover:bg-slate-800 transition-colors"
-                >
-                  <Download className="w-4 h-4 mr-2" /> Export Data (JSON)
-                </button>
              </div>
           </div>
         </div>
@@ -494,6 +554,7 @@ export default function App() {
             setIsFormOpen(true);
           }}
           isAdmin={isAdmin}
+          showToast={showToast}
         />
       )}
 
@@ -527,7 +588,7 @@ function ProductCard({ product, onClick }) {
       onClick={onClick}
       className="bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 cursor-pointer group border border-slate-100 flex flex-col h-full animate-in fade-in duration-500"
     >
-      <div className="relative h-64 overflow-hidden bg-slate-50 p-6 flex items-center justify-center">
+      <div className="relative h-56 md:h-64 overflow-hidden bg-slate-50 p-6 flex items-center justify-center">
         {product.isNew && (
           <span className="absolute top-4 left-4 bg-black text-white text-[10px] font-bold px-2 py-1 rounded-sm z-10">NEW</span>
         )}
@@ -547,12 +608,9 @@ function ProductCard({ product, onClick }) {
         </div>
       </div>
       
-      <div className="p-5 flex-1 flex flex-col">
+      <div className="p-4 md:p-5 flex-1 flex flex-col">
         <div className="flex justify-between items-start mb-2">
           <span className="text-xs font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded uppercase tracking-wide">{product.category}</span>
-          {product.images && product.images.length > 1 && (
-             <span className="text-[10px] bg-slate-200 text-slate-600 px-1.5 rounded">+{product.images.length - 1}</span>
-          )}
         </div>
         <h3 className="text-lg font-bold text-slate-900 mb-1">{product.name}</h3>
         <p className="text-xs text-slate-500 line-clamp-2 mb-4 flex-1">{product.specs}</p>
@@ -575,7 +633,7 @@ function ProductCard({ product, onClick }) {
             )}
           </div>
           <span className="text-xs text-blue-600 font-semibold group-hover:translate-x-1 transition-transform flex items-center">
-            View Details
+            View <ChevronRight className="w-3 h-3 ml-0.5" />
           </span>
         </div>
       </div>
@@ -583,13 +641,20 @@ function ProductCard({ product, onClick }) {
   );
 }
 
-function ProductDetailModal({ product, onClose, onEdit, isAdmin }) {
+function ProductDetailModal({ product, onClose, onEdit, isAdmin, showToast }) {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
 
   if (!product) return null;
 
   const images = product.images && product.images.length > 0 ? product.images : [];
   const currentImage = images.length > 0 ? images[currentImageIndex] : null;
+
+  // 스펙 복사 기능
+  const copyToClipboard = () => {
+    const text = `[${product.name}]\n- Category: ${product.category}\n- Specs: ${product.specs}\n- Features: ${product.features?.join(', ')}`;
+    navigator.clipboard.writeText(text);
+    showToast("제품 정보가 클립보드에 복사되었습니다.");
+  };
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -602,7 +667,7 @@ function ProductDetailModal({ product, onClose, onEdit, isAdmin }) {
         </button>
 
         {/* Left: Image Gallery */}
-        <div className="w-full md:w-1/2 bg-slate-50 p-8 flex flex-col border-r border-slate-100">
+        <div className="w-full md:w-1/2 bg-slate-50 p-6 md:p-8 flex flex-col border-r border-slate-100">
           <div className="flex-1 w-full bg-white rounded-2xl flex items-center justify-center text-slate-400 shadow-sm overflow-hidden p-4 mb-4 relative">
              {currentImage ? (
                 <img src={currentImage} alt="Main View" className="w-full h-full object-contain" />
@@ -612,12 +677,12 @@ function ProductDetailModal({ product, onClose, onEdit, isAdmin }) {
           </div>
           
           {images.length > 0 && (
-            <div className="h-20 flex space-x-2 overflow-x-auto custom-scrollbar pb-2">
+            <div className="h-16 md:h-20 flex space-x-2 overflow-x-auto custom-scrollbar pb-2">
               {images.map((img, idx) => (
                 <button
                   key={idx}
                   onClick={() => setCurrentImageIndex(idx)}
-                  className={`flex-shrink-0 w-20 h-20 rounded-lg overflow-hidden border-2 transition-all ${
+                  className={`flex-shrink-0 w-16 h-16 md:w-20 md:h-20 rounded-lg overflow-hidden border-2 transition-all ${
                     currentImageIndex === idx ? 'border-slate-900 ring-2 ring-slate-200' : 'border-slate-200 opacity-60 hover:opacity-100'
                   }`}
                 >
@@ -629,21 +694,24 @@ function ProductDetailModal({ product, onClose, onEdit, isAdmin }) {
         </div>
 
         {/* Right: Info Area */}
-        <div className="w-full md:w-1/2 p-10 overflow-y-auto bg-white">
-          <div className="mb-8 flex justify-between items-start">
+        <div className="w-full md:w-1/2 p-6 md:p-10 overflow-y-auto bg-white">
+          <div className="mb-6 md:mb-8 flex justify-between items-start">
             <div>
               <span className="inline-block px-3 py-1 bg-slate-900 text-white text-xs font-bold rounded-full mb-3 uppercase tracking-wider">
                 {product.category}
               </span>
-              <h2 className="text-4xl font-bold text-slate-900 mb-2">{product.name}</h2>
+              <h2 className="text-3xl md:text-4xl font-bold text-slate-900 mb-2">{product.name}</h2>
               {product.isNew && <span className="text-red-500 text-sm font-semibold tracking-wide">● NEW ARRIVAL</span>}
             </div>
           </div>
 
-          <div className="space-y-8">
-            <div>
+          <div className="space-y-6 md:space-y-8">
+            <div className="relative group">
               <h3 className="flex items-center text-sm font-bold text-slate-900 uppercase tracking-wide mb-3">
                 <Settings className="w-4 h-4 mr-2" /> Specifications
+                <button onClick={copyToClipboard} className="ml-2 text-slate-400 hover:text-slate-600 opacity-0 group-hover:opacity-100 transition-opacity">
+                   <Copy className="w-3 h-3" />
+                </button>
               </h3>
               <p className="text-slate-600 leading-relaxed bg-slate-50 p-4 rounded-xl text-sm border border-slate-100">
                 {product.specs}
@@ -806,11 +874,12 @@ function ProductFormModal({ categories, existingData, onClose, onSave, onDelete,
       isNew: formData.isNew,
       images: formData.images,
     };
+    // 이름만 전달하여 삭제 핸들러에서 사용
     onSave(productData);
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[70] flex items-center justify-center p-4">
       <div className="bg-white w-full max-w-3xl rounded-2xl overflow-hidden shadow-2xl flex flex-col max-h-[95vh] animate-in fade-in slide-in-from-bottom-4 duration-200">
         
         <div className="px-8 py-5 border-b border-slate-100 flex justify-between items-center bg-slate-50">
@@ -891,7 +960,7 @@ function ProductFormModal({ categories, existingData, onClose, onSave, onDelete,
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">컬러 옵션 (쉼표 구분)</label>
-              <div className="text-[10px] text-slate-400 mb-1">색상 이름(Red, Blue) 또는 Hex 코드(#FF0000)를 입력하세요.</div>
+              <div className="text-[10px] text-slate-400 mb-1">색상 이름(Red) 또는 Hex(#FF0000)</div>
               <input type="text" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-slate-900 outline-none" placeholder="Black, #FF5733, Navy..." value={formData.colorsString} onChange={e => setFormData({...formData, colorsString: e.target.value})} />
             </div>
           </div>
@@ -905,7 +974,7 @@ function ProductFormModal({ categories, existingData, onClose, onSave, onDelete,
         <div className="px-8 py-5 border-t border-slate-100 bg-slate-50 flex justify-between items-center">
           <div>
             {isEditMode && (
-              <button type="button" onClick={() => onDelete(formData.id)} className="text-red-500 hover:text-red-700 text-sm font-medium flex items-center px-2 py-1">
+              <button type="button" onClick={() => onDelete(formData.id, formData.name)} className="text-red-500 hover:text-red-700 text-sm font-medium flex items-center px-2 py-1">
                 <Trash2 className="w-4 h-4 mr-1" /> 제품 삭제
               </button>
             )}
