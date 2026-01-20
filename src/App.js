@@ -14,7 +14,12 @@ import {
   Edit2,
   RefreshCw,
   Cloud,
-  CloudOff
+  CloudOff,
+  Lock,
+  Unlock,
+  Database,
+  Download,
+  Info
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { 
@@ -33,15 +38,18 @@ import {
 } from 'firebase/firestore';
 
 // ----------------------------------------------------------------------
-// Firebase 설정 및 초기화 (Hybrid Mode)
+// 상수 및 설정
 // ----------------------------------------------------------------------
+const APP_VERSION = "v1.1.0"; // 빌드 버전 표시
+const BUILD_DATE = "2024.05.21";
+
+// Firebase 초기화 (Hybrid Mode)
 let db = null;
 let auth = null;
 let isFirebaseAvailable = false;
 let appId = 'default-app-id';
 
 try {
-  // 1. 환경 변수 존재 여부 확인 (Vercel 빌드 에러 방지)
   if (typeof __firebase_config !== 'undefined') {
     const firebaseConfig = JSON.parse(__firebase_config);
     const app = initializeApp(firebaseConfig);
@@ -54,9 +62,18 @@ try {
   console.warn("Firebase config not found. Falling back to Local Storage.");
 }
 
+// 카테고리 정의 ('ALL'을 'MAJOR'로 표현)
 const CATEGORIES = [
-  'ALL', 'NEW', 'EXECUTIVE', 'TASK', 'CONFERENCE', 'GUEST', 
-  'STOOL', 'LOUNGE', 'PUBLIC', 'HOME', 'TABLE', 'ETC'
+  { id: 'ALL', label: 'MAJOR PRODUCTS' },
+  { id: 'NEW', label: 'NEW ARRIVALS' },
+  { id: 'EXECUTIVE', label: 'EXECUTIVE' },
+  { id: 'TASK', label: 'TASK' },
+  { id: 'CONFERENCE', label: 'CONFERENCE' },
+  { id: 'GUEST', label: 'GUEST' },
+  { id: 'LOUNGE', label: 'LOUNGE' },
+  { id: 'HOME', label: 'HOME' },
+  { id: 'TABLE', label: 'TABLE' },
+  { id: 'ETC', label: 'ETC' }
 ];
 
 export default function App() {
@@ -65,17 +82,21 @@ export default function App() {
   const [activeCategory, setActiveCategory] = useState('ALL');
   const [searchTerm, setSearchTerm] = useState('');
   
-  // 모달 상태 관리
+  // 상태 관리
   const [selectedProduct, setSelectedProduct] = useState(null); 
   const [isFormOpen, setIsFormOpen] = useState(false); 
   const [editingProduct, setEditingProduct] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  
+  // 관리자 모드 & DB 정보
+  const [isAdmin, setIsAdmin] = useState(false); // 기본은 뷰어 모드
+  const [showDbInfo, setShowDbInfo] = useState(false);
+  const [toast, setToast] = useState(null); // 토스트 메시지 { message, type }
 
-  // 1. 인증 및 데이터 로드 초기화
+  // 1. 초기화
   useEffect(() => {
     const initApp = async () => {
       if (isFirebaseAvailable && auth) {
-        // [Cloud Mode] Firebase 인증 시도
         try {
           if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
             await signInWithCustomToken(auth, __initial_auth_token);
@@ -87,18 +108,16 @@ export default function App() {
           console.error("Auth Error:", error);
         }
       } else {
-        // [Local Mode] 로컬 스토리지 데이터 로드
         loadFromLocalStorage();
-        setUser({ uid: 'local-user', isAnonymous: true }); // 가짜 유저 세팅
+        setUser({ uid: 'local-user', isAnonymous: true });
       }
     };
     initApp();
   }, []);
 
-  // 2. 데이터 실시간 동기화 (Cloud vs Local)
+  // 2. 데이터 동기화
   useEffect(() => {
     if (isFirebaseAvailable && user && db) {
-      // [Cloud Mode] Firestore 리스너 연결
       const q = collection(db, 'artifacts', appId, 'public', 'data', 'products');
       const unsubscribe = onSnapshot(q, (snapshot) => {
         const loadedProducts = snapshot.docs.map(doc => ({
@@ -114,17 +133,12 @@ export default function App() {
       });
       return () => unsubscribe();
     } 
-    // [Local Mode]는 위 initApp에서 한 번 로드함. (상태 변경 시 수동 저장)
   }, [user]);
 
-  // 로컬 스토리지 헬퍼 함수
+  // 로컬 스토리지 헬퍼
   const loadFromLocalStorage = () => {
     const saved = localStorage.getItem('patra_products');
-    if (saved) {
-      setProducts(JSON.parse(saved));
-    } else {
-      setProducts([]);
-    }
+    setProducts(saved ? JSON.parse(saved) : []);
     setIsLoading(false);
   };
 
@@ -133,7 +147,27 @@ export default function App() {
     setProducts(newProducts);
   };
 
-  // 필터링 로직
+  // 토스트 메시지 표시 함수
+  const showToast = (message, type = 'success') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3000);
+  };
+
+  // 데이터 내보내기 (JSON 다운로드)
+  const handleExportData = () => {
+    const dataStr = JSON.stringify(products, null, 2);
+    const blob = new Blob([dataStr], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `patra_db_backup_${new Date().toISOString().slice(0,10)}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    showToast("데이터베이스가 JSON 파일로 다운로드되었습니다.");
+  };
+
+  // 필터링
   const filteredProducts = products.filter(product => {
     const matchesCategory = 
       activeCategory === 'ALL' ? true :
@@ -146,7 +180,7 @@ export default function App() {
     return matchesCategory && matchesSearch;
   });
 
-  // 제품 저장 핸들러
+  // 저장/수정
   const handleSaveProduct = async (productData) => {
     const docId = productData.id ? String(productData.id) : String(Date.now());
     const payload = {
@@ -157,72 +191,55 @@ export default function App() {
     };
 
     if (isFirebaseAvailable && db) {
-      // [Cloud Mode]
       try {
         const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'products', docId);
         await setDoc(docRef, payload, { merge: true });
       } catch (error) {
-        alert("클라우드 저장 실패: " + error.message);
+        showToast("클라우드 저장 실패", "error");
         return;
       }
     } else {
-      // [Local Mode]
       const existingIndex = products.findIndex(p => String(p.id) === docId);
-      let newProducts;
-      if (existingIndex >= 0) {
-        newProducts = [...products];
-        newProducts[existingIndex] = payload;
-      } else {
-        newProducts = [payload, ...products];
-      }
+      let newProducts = [...products];
+      if (existingIndex >= 0) newProducts[existingIndex] = payload;
+      else newProducts = [payload, ...products];
       saveToLocalStorage(newProducts);
     }
 
-    // UI 갱신
     if (selectedProduct && String(selectedProduct.id) === docId) {
       setSelectedProduct(payload);
     }
     setIsFormOpen(false);
     setEditingProduct(null);
+    showToast(editingProduct ? "제품 정보가 수정되었습니다." : "새 제품이 등록되었습니다.");
   };
 
-  // 제품 삭제 핸들러
+  // 삭제
   const handleDeleteProduct = async (productId) => {
     if (!window.confirm('정말 삭제하시겠습니까?')) return;
 
     if (isFirebaseAvailable && db) {
-      // [Cloud Mode]
       try {
         const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'products', String(productId));
         await deleteDoc(docRef);
       } catch (error) {
-        alert("삭제 실패: " + error.message);
+        showToast("삭제 실패", "error");
         return;
       }
     } else {
-      // [Local Mode]
       const newProducts = products.filter(p => String(p.id) !== String(productId));
       saveToLocalStorage(newProducts);
     }
     setSelectedProduct(null);
     setIsFormOpen(false);
-  };
-
-  const openEditModal = (product) => {
-    setEditingProduct(product);
-    setIsFormOpen(true);
-  };
-
-  const openAddModal = () => {
-    setEditingProduct(null);
-    setIsFormOpen(true);
+    showToast("제품이 삭제되었습니다.");
   };
 
   return (
-    <div className="flex h-screen bg-slate-50 font-sans text-slate-800 overflow-hidden">
+    <div className="flex h-screen bg-slate-50 font-sans text-slate-800 overflow-hidden relative">
       
       {/* 사이드바 */}
-      <aside className="w-64 bg-white border-r border-slate-200 flex flex-col shadow-sm z-10">
+      <aside className="w-64 bg-white border-r border-slate-200 flex flex-col shadow-sm z-10 flex-shrink-0">
         <div className="p-6 border-b border-slate-100 flex items-center space-x-3">
           <div className="w-8 h-8 bg-black rounded-lg flex items-center justify-center text-white font-bold">P</div>
           <h1 className="text-xl font-bold tracking-tight text-slate-900">PATRA <span className="text-xs font-normal text-slate-500 block">Design Lab DB</span></h1>
@@ -230,32 +247,49 @@ export default function App() {
 
         <nav className="flex-1 overflow-y-auto py-6 px-4 space-y-1 custom-scrollbar">
           <div className="text-xs font-semibold text-slate-400 mb-2 px-2 flex justify-between items-center">
-             <span>BROWSE</span>
-             {isFirebaseAvailable ? (
-               <Cloud className="w-3 h-3 text-green-500" title="Cloud Synced" />
-             ) : (
-               <CloudOff className="w-3 h-3 text-slate-400" title="Local Storage" />
-             )}
+             <span>COLLECTIONS</span>
           </div>
-          {CATEGORIES.map(category => (
+          {CATEGORIES.map(cat => (
             <button
-              key={category}
-              onClick={() => setActiveCategory(category)}
+              key={cat.id}
+              onClick={() => setActiveCategory(cat.id)}
               className={`w-full text-left px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 flex items-center justify-between group
-                ${activeCategory === category 
+                ${activeCategory === cat.id 
                   ? 'bg-slate-900 text-white shadow-md' 
                   : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'}`}
             >
-              {category}
-              {category === 'NEW' && <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>}
+              {cat.label}
+              {cat.id === 'NEW' && <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>}
             </button>
           ))}
         </nav>
         
-        <div className="p-4 border-t border-slate-200 bg-slate-50">
-           <div className="text-[10px] text-slate-400 text-center flex items-center justify-center space-x-1">
-             <div className={`w-2 h-2 rounded-full ${isFirebaseAvailable ? 'bg-green-500' : 'bg-orange-400'}`} />
-             <span>{isFirebaseAvailable ? "Cloud Database On" : "Local Storage Mode"}</span>
+        {/* 하단 정보 영역 */}
+        <div className="p-4 border-t border-slate-200 bg-slate-50 space-y-3">
+           {/* 관리자 모드 토글 */}
+           <button 
+             onClick={() => setIsAdmin(!isAdmin)}
+             className={`w-full flex items-center justify-center px-3 py-2 rounded-lg text-xs font-bold transition-colors ${
+               isAdmin ? 'bg-slate-800 text-white' : 'bg-white border border-slate-300 text-slate-500 hover:bg-slate-100'
+             }`}
+           >
+             {isAdmin ? <Unlock className="w-3 h-3 mr-2" /> : <Lock className="w-3 h-3 mr-2" />}
+             {isAdmin ? "ADMIN MODE ON" : "VIEWER MODE"}
+           </button>
+
+           {/* DB 정보 및 버전 */}
+           <div className="flex justify-between items-end">
+              <button 
+                onClick={() => setShowDbInfo(true)}
+                className="text-[10px] text-slate-400 hover:text-slate-600 flex items-center"
+              >
+                <Database className="w-3 h-3 mr-1" />
+                Data Info
+              </button>
+              <div className="text-[10px] text-slate-300 text-right">
+                <p>{APP_VERSION}</p>
+                <p>{BUILD_DATE}</p>
+              </div>
            </div>
         </div>
       </aside>
@@ -264,13 +298,13 @@ export default function App() {
       <main className="flex-1 flex flex-col h-screen overflow-hidden relative">
         
         {/* 헤더 */}
-        <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-8 shadow-sm z-10">
+        <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-8 shadow-sm z-10 flex-shrink-0">
           <div className="flex items-center space-x-4 w-1/3">
             <div className="relative w-full">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-4 h-4" />
               <input 
                 type="text" 
-                placeholder="제품명, 사양 검색..." 
+                placeholder="Find Products..." 
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full pl-10 pr-4 py-2 bg-slate-100 border-transparent focus:bg-white focus:border-slate-300 rounded-full text-sm transition-all outline-none focus:ring-2 focus:ring-slate-100"
@@ -279,13 +313,18 @@ export default function App() {
           </div>
 
           <div className="flex items-center space-x-4">
-            <button 
-              onClick={openAddModal}
-              className="flex items-center space-x-2 bg-slate-900 text-white px-4 py-2 rounded-full text-sm font-medium hover:bg-slate-800 transition-colors shadow-lg shadow-slate-300/50"
-            >
-              <Plus className="w-4 h-4" />
-              <span>신제품 등록</span>
-            </button>
+            {isAdmin && (
+              <button 
+                onClick={() => {
+                  setEditingProduct(null);
+                  setIsFormOpen(true);
+                }}
+                className="flex items-center space-x-2 bg-slate-900 text-white px-4 py-2 rounded-full text-sm font-medium hover:bg-slate-800 transition-colors shadow-lg shadow-slate-300/50 animate-in fade-in"
+              >
+                <Plus className="w-4 h-4" />
+                <span>신제품 등록</span>
+              </button>
+            )}
           </div>
         </header>
 
@@ -300,8 +339,10 @@ export default function App() {
             <>
               <div className="mb-6 flex items-end justify-between">
                 <div>
-                  <h2 className="text-2xl font-bold text-slate-900">{activeCategory} Collections</h2>
-                  <p className="text-slate-500 text-sm mt-1">총 {filteredProducts.length}개의 제품이 표시되었습니다.</p>
+                  <h2 className="text-2xl font-bold text-slate-900">
+                    {CATEGORIES.find(c => c.id === activeCategory)?.label}
+                  </h2>
+                  <p className="text-slate-500 text-sm mt-1">Total {filteredProducts.length} items</p>
                 </div>
               </div>
               
@@ -314,16 +355,21 @@ export default function App() {
                   />
                 ))}
                 
-                {/* 추가 카드 */}
-                <button 
-                  onClick={openAddModal}
-                  className="border-2 border-dashed border-slate-200 rounded-2xl flex flex-col items-center justify-center min-h-[300px] text-slate-400 hover:border-slate-400 hover:text-slate-600 transition-all group bg-white/50"
-                >
-                  <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center mb-3 group-hover:bg-slate-200 transition-colors">
-                    <Plus className="w-6 h-6" />
-                  </div>
-                  <span className="font-medium">Add New Product</span>
-                </button>
+                {/* Admin일 때만 추가 카드 표시 */}
+                {isAdmin && (
+                  <button 
+                    onClick={() => {
+                      setEditingProduct(null);
+                      setIsFormOpen(true);
+                    }}
+                    className="border-2 border-dashed border-slate-200 rounded-2xl flex flex-col items-center justify-center min-h-[300px] text-slate-400 hover:border-slate-400 hover:text-slate-600 transition-all group bg-white/50"
+                  >
+                    <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center mb-3 group-hover:bg-slate-200 transition-colors">
+                      <Plus className="w-6 h-6" />
+                    </div>
+                    <span className="font-medium">Add New Product</span>
+                  </button>
+                )}
               </div>
 
               {filteredProducts.length === 0 && !isLoading && (
@@ -337,19 +383,73 @@ export default function App() {
         </div>
       </main>
 
+      {/* 토스트 알림 */}
+      {toast && (
+        <div className="fixed bottom-6 right-6 bg-slate-800 text-white px-4 py-3 rounded-lg shadow-lg flex items-center space-x-3 animate-in slide-in-from-bottom-5 fade-in z-[60]">
+          {toast.type === 'success' ? <Check className="w-5 h-5 text-green-400" /> : <Info className="w-5 h-5 text-red-400" />}
+          <span className="text-sm font-medium">{toast.message}</span>
+        </div>
+      )}
+
+      {/* 모달: DB 정보 */}
+      {showDbInfo && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-md rounded-2xl p-6 shadow-2xl animate-in zoom-in-95 duration-200">
+             <div className="flex justify-between items-center mb-4">
+               <h3 className="text-lg font-bold flex items-center"><Database className="w-5 h-5 mr-2" /> Database Status</h3>
+               <button onClick={() => setShowDbInfo(false)}><X className="w-5 h-5 text-slate-400" /></button>
+             </div>
+             
+             <div className="space-y-4 text-sm text-slate-600">
+                <div className="bg-slate-50 p-3 rounded-lg border border-slate-100">
+                  <p className="flex justify-between mb-1">
+                    <span className="font-semibold">Status:</span> 
+                    <span className={isFirebaseAvailable ? "text-green-600 font-bold" : "text-orange-500"}>
+                      {isFirebaseAvailable ? "Connected (Cloud)" : "Local Only"}
+                    </span>
+                  </p>
+                  <p className="flex justify-between mb-1">
+                    <span className="font-semibold">Provider:</span> 
+                    <span>{isFirebaseAvailable ? "Google Firestore" : "LocalStorage"}</span>
+                  </p>
+                  <p className="flex justify-between">
+                    <span className="font-semibold">Total Records:</span> 
+                    <span>{products.length}</span>
+                  </p>
+                </div>
+                
+                <div className="text-xs text-slate-500">
+                  <p className="mb-2">⚠️ 클라우드 DB 주소는 보안상 노출되지 않습니다. 데이터 백업이 필요하면 아래 버튼을 사용하여 JSON 파일로 내보내세요.</p>
+                </div>
+
+                <button 
+                  onClick={handleExportData}
+                  className="w-full py-2 bg-slate-900 text-white rounded-lg flex items-center justify-center hover:bg-slate-800 transition-colors"
+                >
+                  <Download className="w-4 h-4 mr-2" /> Export Data (JSON)
+                </button>
+             </div>
+          </div>
+        </div>
+      )}
+
       {/* 상세 보기 모달 */}
       {selectedProduct && (
         <ProductDetailModal 
           product={selectedProduct} 
           onClose={() => setSelectedProduct(null)} 
-          onEdit={() => openEditModal(selectedProduct)}
+          onEdit={() => {
+            setEditingProduct(selectedProduct);
+            setIsFormOpen(true);
+          }}
+          isAdmin={isAdmin}
         />
       )}
 
       {/* 등록/수정 폼 모달 */}
       {isFormOpen && (
         <ProductFormModal 
-          categories={CATEGORIES.filter(c => c !== 'ALL' && c !== 'NEW')}
+          categories={CATEGORIES.filter(c => c.id !== 'ALL' && c.id !== 'NEW')}
           existingData={editingProduct}
           onClose={() => {
             setIsFormOpen(false);
@@ -365,8 +465,9 @@ export default function App() {
 }
 
 // ----------------------------------------------------------------------
-// 컴포넌트들 (ProductCard, ProductDetailModal) - 변경 없음
+// 하위 컴포넌트
 // ----------------------------------------------------------------------
+
 function ProductCard({ product, onClick }) {
   const mainImage = product.images && product.images.length > 0 ? product.images[0] : null;
 
@@ -384,7 +485,7 @@ function ProductCard({ product, onClick }) {
               <img 
                 src={mainImage} 
                 alt={product.name} 
-                className="w-full h-full object-contain mix-blend-multiply"
+                className="w-full h-full object-contain mix-blend-multiply transition-transform duration-500 group-hover:scale-105"
               />
             ) : (
              <div className="text-center opacity-50">
@@ -399,7 +500,7 @@ function ProductCard({ product, onClick }) {
         <div className="flex justify-between items-start mb-2">
           <span className="text-xs font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded uppercase tracking-wide">{product.category}</span>
           {product.images && product.images.length > 1 && (
-             <span className="text-[10px] bg-slate-200 text-slate-600 px-1.5 rounded">+{product.images.length - 1} images</span>
+             <span className="text-[10px] bg-slate-200 text-slate-600 px-1.5 rounded">+{product.images.length - 1}</span>
           )}
         </div>
         <h3 className="text-lg font-bold text-slate-900 mb-1">{product.name}</h3>
@@ -420,7 +521,7 @@ function ProductCard({ product, onClick }) {
   );
 }
 
-function ProductDetailModal({ product, onClose, onEdit }) {
+function ProductDetailModal({ product, onClose, onEdit, isAdmin }) {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
 
   if (!product) return null;
@@ -516,13 +617,15 @@ function ProductDetailModal({ product, onClose, onEdit }) {
           </div>
 
           <div className="mt-12 pt-6 border-t border-slate-100 flex justify-end space-x-3">
-             <button 
-               onClick={onEdit}
-               className="flex items-center px-5 py-2.5 text-sm font-medium text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors"
-             >
-               <Edit2 className="w-4 h-4 mr-2" />
-               Edit Data
-             </button>
+             {isAdmin && (
+               <button 
+                 onClick={onEdit}
+                 className="flex items-center px-5 py-2.5 text-sm font-medium text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors"
+               >
+                 <Edit2 className="w-4 h-4 mr-2" />
+                 Edit Data
+               </button>
+             )}
              <button className="px-5 py-2.5 bg-slate-900 text-white text-sm font-medium rounded-lg hover:bg-slate-800 transition-colors shadow-lg shadow-slate-200">
                Download Spec Sheet
              </button>
@@ -533,18 +636,14 @@ function ProductDetailModal({ product, onClose, onEdit }) {
   );
 }
 
-// ----------------------------------------------------------------------
-// 컴포넌트: ProductFormModal
-// ----------------------------------------------------------------------
 function ProductFormModal({ categories, existingData, onClose, onSave, onDelete, isFirebaseAvailable }) {
   const isEditMode = !!existingData;
   const fileInputRef = useRef(null);
 
-  // Form State
   const [formData, setFormData] = useState({
     id: isEditMode ? existingData.id : null,
     name: '',
-    category: categories[0],
+    category: categories[0]?.id || 'EXECUTIVE',
     specs: '',
     featuresString: '',
     colorsString: '',
@@ -576,7 +675,7 @@ function ProductFormModal({ categories, existingData, onClose, onSave, onDelete,
         const img = new Image();
         img.onload = () => {
           const canvas = document.createElement('canvas');
-          const MAX_WIDTH = 800; // 최대 너비 제한
+          const MAX_WIDTH = 800; 
           let width = img.width;
           let height = img.height;
 
@@ -603,7 +702,6 @@ function ProductFormModal({ categories, existingData, onClose, onSave, onDelete,
     if (files.length > 0) {
       setIsProcessingImage(true);
       const newImageUrls = [];
-      
       for (const file of files) {
         try {
           const resizedImage = await processImage(file);
@@ -612,20 +710,13 @@ function ProductFormModal({ categories, existingData, onClose, onSave, onDelete,
           console.error("Image processing failed", error);
         }
       }
-
-      setFormData(prev => ({
-        ...prev,
-        images: [...prev.images, ...newImageUrls]
-      }));
+      setFormData(prev => ({ ...prev, images: [...prev.images, ...newImageUrls] }));
       setIsProcessingImage(false);
     }
   };
 
   const removeImage = (indexToRemove) => {
-    setFormData(prev => ({
-      ...prev,
-      images: prev.images.filter((_, idx) => idx !== indexToRemove)
-    }));
+    setFormData(prev => ({ ...prev, images: prev.images.filter((_, idx) => idx !== indexToRemove) }));
   };
 
   const setMainImage = (indexToMain) => {
@@ -662,9 +753,7 @@ function ProductFormModal({ categories, existingData, onClose, onSave, onDelete,
               {isEditMode ? '제품 데이터 수정' : '신제품 등록'}
             </h2>
             <p className="text-xs text-slate-500 mt-1">
-              {isFirebaseAvailable 
-                ? "데이터가 클라우드에 안전하게 저장됩니다." 
-                : "로컬 저장소 모드입니다. 브라우저 캐시 삭제 시 데이터가 유실될 수 있습니다."}
+              {isFirebaseAvailable ? "Cloud Database Mode" : "Local Storage Mode"}
             </p>
           </div>
           <button onClick={onClose} className="p-2 hover:bg-slate-200 rounded-full transition-colors">
@@ -673,7 +762,6 @@ function ProductFormModal({ categories, existingData, onClose, onSave, onDelete,
         </div>
         
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-8 space-y-6">
-          {/* 이미지 관리 섹션 */}
           <div className="bg-slate-50 p-6 rounded-xl border border-slate-200">
             <div className="flex justify-between items-center mb-4">
               <label className="text-sm font-bold text-slate-900 flex items-center">
@@ -687,14 +775,7 @@ function ProductFormModal({ categories, existingData, onClose, onSave, onDelete,
               >
                 {isProcessingImage ? '처리 중...' : <><Plus className="w-3 h-3 mr-1" /> 이미지 추가</>}
               </button>
-              <input 
-                type="file" 
-                ref={fileInputRef} 
-                onChange={handleImageUpload} 
-                accept="image/*" 
-                multiple 
-                className="hidden" 
-              />
+              <input type="file" ref={fileInputRef} onChange={handleImageUpload} accept="image/*" multiple className="hidden" />
             </div>
 
             <div className="grid grid-cols-4 gap-4">
@@ -702,140 +783,69 @@ function ProductFormModal({ categories, existingData, onClose, onSave, onDelete,
                  <div key={idx} className="relative group aspect-square bg-white rounded-lg border border-slate-200 overflow-hidden shadow-sm">
                    <img src={img} alt={`img-${idx}`} className="w-full h-full object-cover" />
                    {idx === 0 && (
-                     <div className="absolute top-2 left-2 bg-slate-900 text-white text-[10px] px-2 py-0.5 rounded font-bold shadow-md z-10">
-                       대표
-                     </div>
+                     <div className="absolute top-2 left-2 bg-slate-900 text-white text-[10px] px-2 py-0.5 rounded font-bold shadow-md z-10">대표</div>
                    )}
                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center space-y-2">
                       {idx !== 0 && (
-                        <button 
-                          type="button" 
-                          onClick={() => setMainImage(idx)}
-                          className="px-3 py-1 bg-white/90 text-xs font-bold rounded-full hover:bg-white text-slate-800"
-                        >
-                          대표 설정
-                        </button>
+                        <button type="button" onClick={() => setMainImage(idx)} className="px-3 py-1 bg-white/90 text-xs font-bold rounded-full hover:bg-white text-slate-800">대표 설정</button>
                       )}
-                      <button 
-                        type="button" 
-                        onClick={() => removeImage(idx)}
-                        className="p-2 bg-red-500/90 rounded-full text-white hover:bg-red-600"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                      <button type="button" onClick={() => removeImage(idx)} className="p-2 bg-red-500/90 rounded-full text-white hover:bg-red-600"><Trash2 className="w-4 h-4" /></button>
                    </div>
                  </div>
                ))}
-               <div 
-                 onClick={() => !isProcessingImage && fileInputRef.current?.click()}
-                 className="aspect-square border-2 border-dashed border-slate-300 rounded-lg flex flex-col items-center justify-center text-slate-400 cursor-pointer hover:border-slate-500 hover:text-slate-600 transition-colors bg-white"
-               >
+               <div onClick={() => !isProcessingImage && fileInputRef.current?.click()} className="aspect-square border-2 border-dashed border-slate-300 rounded-lg flex flex-col items-center justify-center text-slate-400 cursor-pointer hover:border-slate-500 hover:text-slate-600 transition-colors bg-white">
                  <Upload className="w-6 h-6 mb-1" />
                  <span className="text-[10px] font-medium">{isProcessingImage ? '압축 중...' : 'Add Image'}</span>
                </div>
             </div>
-            <p className="text-[11px] text-slate-400 mt-3 text-right">
-              * 자동 리사이징(최대 800px)이 적용되어 저장됩니다.
-            </p>
           </div>
 
           <div className="grid grid-cols-2 gap-6">
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">제품명 (Model Name)</label>
-              <input 
-                required
-                type="text" 
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-slate-900 outline-none"
-                value={formData.name}
-                onChange={e => setFormData({...formData, name: e.target.value})}
-              />
+              <label className="block text-sm font-medium text-slate-700 mb-1">제품명</label>
+              <input required type="text" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-slate-900 outline-none" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">카테고리</label>
-              <select 
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-slate-900 outline-none"
-                value={formData.category}
-                onChange={e => setFormData({...formData, category: e.target.value})}
-              >
-                {categories.map(c => <option key={c} value={c}>{c}</option>)}
+              <select className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-slate-900 outline-none" value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})}>
+                {categories.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
               </select>
             </div>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">상세 사양 (Specifications)</label>
-            <textarea 
-              required
-              rows={3}
-              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-slate-900 outline-none resize-none"
-              placeholder="소재, 마감, 베이스 타입 등 상세 스펙 입력"
-              value={formData.specs}
-              onChange={e => setFormData({...formData, specs: e.target.value})}
-            />
+            <label className="block text-sm font-medium text-slate-700 mb-1">상세 사양</label>
+            <textarea required rows={3} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-slate-900 outline-none resize-none" value={formData.specs} onChange={e => setFormData({...formData, specs: e.target.value})} />
           </div>
 
           <div className="grid grid-cols-2 gap-6">
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">주요 기능 (쉼표 구분)</label>
-              <input 
-                type="text" 
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-slate-900 outline-none"
-                placeholder="틸팅, 럼버서포트, 암레스트..."
-                value={formData.featuresString}
-                onChange={e => setFormData({...formData, featuresString: e.target.value})}
-              />
+              <input type="text" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-slate-900 outline-none" value={formData.featuresString} onChange={e => setFormData({...formData, featuresString: e.target.value})} />
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">컬러 옵션 (쉼표 구분)</label>
-              <input 
-                type="text" 
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-slate-900 outline-none"
-                placeholder="Black, Grey, Blue..."
-                value={formData.colorsString}
-                onChange={e => setFormData({...formData, colorsString: e.target.value})}
-              />
+              <input type="text" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-slate-900 outline-none" value={formData.colorsString} onChange={e => setFormData({...formData, colorsString: e.target.value})} />
             </div>
           </div>
 
           <div className="flex items-center space-x-2 pt-2 bg-slate-50 p-3 rounded-lg border border-slate-100">
-            <input 
-              type="checkbox" 
-              id="isNew"
-              checked={formData.isNew}
-              onChange={e => setFormData({...formData, isNew: e.target.checked})}
-              className="w-4 h-4 text-slate-900 rounded border-gray-300 focus:ring-slate-900"
-            />
-            <label htmlFor="isNew" className="text-sm text-slate-700 font-medium select-none cursor-pointer">
-              신제품(NEW) 배지 표시
-            </label>
+            <input type="checkbox" id="isNew" checked={formData.isNew} onChange={e => setFormData({...formData, isNew: e.target.checked})} className="w-4 h-4 text-slate-900 rounded border-gray-300 focus:ring-slate-900" />
+            <label htmlFor="isNew" className="text-sm text-slate-700 font-medium select-none cursor-pointer">신제품(NEW) 배지 표시</label>
           </div>
         </form>
 
         <div className="px-8 py-5 border-t border-slate-100 bg-slate-50 flex justify-between items-center">
           <div>
             {isEditMode && (
-              <button 
-                type="button"
-                onClick={() => onDelete(formData.id)}
-                className="text-red-500 hover:text-red-700 text-sm font-medium flex items-center px-2 py-1"
-              >
+              <button type="button" onClick={() => onDelete(formData.id)} className="text-red-500 hover:text-red-700 text-sm font-medium flex items-center px-2 py-1">
                 <Trash2 className="w-4 h-4 mr-1" /> 제품 삭제
               </button>
             )}
           </div>
           <div className="flex space-x-3">
-            <button 
-              type="button"
-              onClick={onClose}
-              className="px-5 py-2.5 border border-slate-300 rounded-lg text-sm font-medium text-slate-700 hover:bg-white transition-colors"
-            >
-              취소
-            </button>
-            <button 
-              onClick={handleSubmit}
-              disabled={isProcessingImage}
-              className="px-5 py-2.5 bg-slate-900 text-white rounded-lg text-sm font-medium hover:bg-slate-800 transition-colors shadow-lg shadow-slate-200 disabled:opacity-50"
-            >
+            <button type="button" onClick={onClose} className="px-5 py-2.5 border border-slate-300 rounded-lg text-sm font-medium text-slate-700 hover:bg-white transition-colors">취소</button>
+            <button onClick={handleSubmit} disabled={isProcessingImage} className="px-5 py-2.5 bg-slate-900 text-white rounded-lg text-sm font-medium hover:bg-slate-800 transition-colors shadow-lg shadow-slate-200 disabled:opacity-50">
               {isProcessingImage ? '이미지 처리 중...' : (isEditMode ? '변경사항 저장' : '제품 등록하기')}
             </button>
           </div>
