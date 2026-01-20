@@ -1,3 +1,4 @@
+/* global __firebase_config, __app_id, __initial_auth_token */
 import React, { useState, useRef, useEffect } from 'react';
 import { 
   Plus, 
@@ -11,9 +12,9 @@ import {
   Upload,
   Trash2,
   Edit2,
-  Star,
   RefreshCw,
-  Cloud
+  Cloud,
+  CloudOff
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { 
@@ -32,27 +33,26 @@ import {
 } from 'firebase/firestore';
 
 // ----------------------------------------------------------------------
-// Firebase 설정 및 초기화
+// Firebase 설정 및 초기화 (Hybrid Mode)
 // ----------------------------------------------------------------------
-const firebaseConfig = JSON.parse(__firebase_config);
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
-const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+let db = null;
+let auth = null;
+let isFirebaseAvailable = false;
+let appId = 'default-app-id';
 
-// 초기 샘플 데이터 (DB가 비었을 때 보여줄 용도)
-const INITIAL_DATA = [
-  {
-    id: 'sample-1',
-    name: 'KYLE (카일) - Sample',
-    category: 'EXECUTIVE',
-    images: [], 
-    specs: '천연 가죽, 알루미늄 다이캐스팅 베이스',
-    features: ['싱크로나이즈드 틸팅', '멀티 리미티드 틸팅', '좌판 깊이 조절'],
-    colors: ['Black', 'Dark Brown', 'Camel'],
-    isNew: true,
-  },
-];
+try {
+  // 1. 환경 변수 존재 여부 확인 (Vercel 빌드 에러 방지)
+  if (typeof __firebase_config !== 'undefined') {
+    const firebaseConfig = JSON.parse(__firebase_config);
+    const app = initializeApp(firebaseConfig);
+    auth = getAuth(app);
+    db = getFirestore(app);
+    appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+    isFirebaseAvailable = true;
+  }
+} catch (e) {
+  console.warn("Firebase config not found. Falling back to Local Storage.");
+}
 
 const CATEGORIES = [
   'ALL', 'NEW', 'EXECUTIVE', 'TASK', 'CONFERENCE', 'GUEST', 
@@ -71,50 +71,67 @@ export default function App() {
   const [editingProduct, setEditingProduct] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // 1. 인증 초기화
+  // 1. 인증 및 데이터 로드 초기화
   useEffect(() => {
-    const initAuth = async () => {
-      try {
-        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-          await signInWithCustomToken(auth, __initial_auth_token);
-        } else {
-          await signInAnonymously(auth);
+    const initApp = async () => {
+      if (isFirebaseAvailable && auth) {
+        // [Cloud Mode] Firebase 인증 시도
+        try {
+          if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+            await signInWithCustomToken(auth, __initial_auth_token);
+          } else {
+            await signInAnonymously(auth);
+          }
+          onAuthStateChanged(auth, setUser);
+        } catch (error) {
+          console.error("Auth Error:", error);
         }
-      } catch (error) {
-        console.error("Auth Error:", error);
+      } else {
+        // [Local Mode] 로컬 스토리지 데이터 로드
+        loadFromLocalStorage();
+        setUser({ uid: 'local-user', isAnonymous: true }); // 가짜 유저 세팅
       }
     };
-    initAuth();
-    const unsubscribe = onAuthStateChanged(auth, setUser);
-    return () => unsubscribe();
+    initApp();
   }, []);
 
-  // 2. 데이터 실시간 동기화 (Firestore)
+  // 2. 데이터 실시간 동기화 (Cloud vs Local)
   useEffect(() => {
-    if (!user) return;
-
-    // Rule 1: Strict Path 사용 (public/data/products)
-    const q = collection(db, 'artifacts', appId, 'public', 'data', 'products');
-    
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const loadedProducts = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      
-      // DB가 비어있으면 로딩 상태만 해제, 데이터가 있으면 로드
-      // 정렬은 클라이언트에서 수행 (Rule 2)
-      loadedProducts.sort((a, b) => b.createdAt - a.createdAt); // 최신순
-      
-      setProducts(loadedProducts);
-      setIsLoading(false);
-    }, (error) => {
-      console.error("Data Fetch Error:", error);
-      setIsLoading(false);
-    });
-
-    return () => unsubscribe();
+    if (isFirebaseAvailable && user && db) {
+      // [Cloud Mode] Firestore 리스너 연결
+      const q = collection(db, 'artifacts', appId, 'public', 'data', 'products');
+      const unsubscribe = onSnapshot(q, (snapshot) => {
+        const loadedProducts = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        loadedProducts.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+        setProducts(loadedProducts);
+        setIsLoading(false);
+      }, (error) => {
+        console.error("Data Fetch Error:", error);
+        setIsLoading(false);
+      });
+      return () => unsubscribe();
+    } 
+    // [Local Mode]는 위 initApp에서 한 번 로드함. (상태 변경 시 수동 저장)
   }, [user]);
+
+  // 로컬 스토리지 헬퍼 함수
+  const loadFromLocalStorage = () => {
+    const saved = localStorage.getItem('patra_products');
+    if (saved) {
+      setProducts(JSON.parse(saved));
+    } else {
+      setProducts([]);
+    }
+    setIsLoading(false);
+  };
+
+  const saveToLocalStorage = (newProducts) => {
+    localStorage.setItem('patra_products', JSON.stringify(newProducts));
+    setProducts(newProducts);
+  };
 
   // 필터링 로직
   const filteredProducts = products.filter(product => {
@@ -129,51 +146,66 @@ export default function App() {
     return matchesCategory && matchesSearch;
   });
 
-  // 제품 저장 핸들러 (Firestore)
+  // 제품 저장 핸들러
   const handleSaveProduct = async (productData) => {
-    if (!user) return;
+    const docId = productData.id ? String(productData.id) : String(Date.now());
+    const payload = {
+      ...productData,
+      id: docId,
+      createdAt: productData.createdAt || Date.now(),
+      updatedAt: Date.now()
+    };
 
-    try {
-      // ID가 없으면 생성
-      const docId = productData.id ? String(productData.id) : String(Date.now());
-      const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'products', docId);
-      
-      const payload = {
-        ...productData,
-        id: docId,
-        createdAt: productData.createdAt || Date.now(),
-        updatedAt: Date.now()
-      };
-
-      await setDoc(docRef, payload, { merge: true });
-      
-      // 현재 보고 있는 상세 모달이 있다면 내용 갱신을 위해 업데이트
-      if (selectedProduct && selectedProduct.id === docId) {
-        setSelectedProduct(payload);
+    if (isFirebaseAvailable && db) {
+      // [Cloud Mode]
+      try {
+        const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'products', docId);
+        await setDoc(docRef, payload, { merge: true });
+      } catch (error) {
+        alert("클라우드 저장 실패: " + error.message);
+        return;
       }
-
-      setIsFormOpen(false);
-      setEditingProduct(null);
-    } catch (error) {
-      console.error("Save Error:", error);
-      alert("저장 중 오류가 발생했습니다.");
+    } else {
+      // [Local Mode]
+      const existingIndex = products.findIndex(p => String(p.id) === docId);
+      let newProducts;
+      if (existingIndex >= 0) {
+        newProducts = [...products];
+        newProducts[existingIndex] = payload;
+      } else {
+        newProducts = [payload, ...products];
+      }
+      saveToLocalStorage(newProducts);
     }
+
+    // UI 갱신
+    if (selectedProduct && String(selectedProduct.id) === docId) {
+      setSelectedProduct(payload);
+    }
+    setIsFormOpen(false);
+    setEditingProduct(null);
   };
 
-  // 제품 삭제 핸들러 (Firestore)
+  // 제품 삭제 핸들러
   const handleDeleteProduct = async (productId) => {
-    if (!user) return;
-    if (window.confirm('정말 이 제품 데이터를 영구적으로 삭제하시겠습니까?')) {
+    if (!window.confirm('정말 삭제하시겠습니까?')) return;
+
+    if (isFirebaseAvailable && db) {
+      // [Cloud Mode]
       try {
         const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'products', String(productId));
         await deleteDoc(docRef);
-        setSelectedProduct(null);
-        setIsFormOpen(false);
       } catch (error) {
-        console.error("Delete Error:", error);
-        alert("삭제 중 오류가 발생했습니다.");
+        alert("삭제 실패: " + error.message);
+        return;
       }
+    } else {
+      // [Local Mode]
+      const newProducts = products.filter(p => String(p.id) !== String(productId));
+      saveToLocalStorage(newProducts);
     }
+    setSelectedProduct(null);
+    setIsFormOpen(false);
   };
 
   const openEditModal = (product) => {
@@ -199,7 +231,11 @@ export default function App() {
         <nav className="flex-1 overflow-y-auto py-6 px-4 space-y-1 custom-scrollbar">
           <div className="text-xs font-semibold text-slate-400 mb-2 px-2 flex justify-between items-center">
              <span>BROWSE</span>
-             <Cloud className="w-3 h-3 text-green-500" title="Cloud Synced" />
+             {isFirebaseAvailable ? (
+               <Cloud className="w-3 h-3 text-green-500" title="Cloud Synced" />
+             ) : (
+               <CloudOff className="w-3 h-3 text-slate-400" title="Local Storage" />
+             )}
           </div>
           {CATEGORIES.map(category => (
             <button
@@ -217,8 +253,9 @@ export default function App() {
         </nav>
         
         <div className="p-4 border-t border-slate-200 bg-slate-50">
-           <div className="text-[10px] text-slate-400 text-center">
-             {user ? "Cloud Database Connected" : "Connecting..."}
+           <div className="text-[10px] text-slate-400 text-center flex items-center justify-center space-x-1">
+             <div className={`w-2 h-2 rounded-full ${isFirebaseAvailable ? 'bg-green-500' : 'bg-orange-400'}`} />
+             <span>{isFirebaseAvailable ? "Cloud Database On" : "Local Storage Mode"}</span>
            </div>
         </div>
       </aside>
@@ -277,7 +314,7 @@ export default function App() {
                   />
                 ))}
                 
-                {/* 추가 카드 (Placeholder) */}
+                {/* 추가 카드 */}
                 <button 
                   onClick={openAddModal}
                   className="border-2 border-dashed border-slate-200 rounded-2xl flex flex-col items-center justify-center min-h-[300px] text-slate-400 hover:border-slate-400 hover:text-slate-600 transition-all group bg-white/50"
@@ -320,6 +357,7 @@ export default function App() {
           }}
           onSave={handleSaveProduct}
           onDelete={handleDeleteProduct}
+          isFirebaseAvailable={isFirebaseAvailable}
         />
       )}
     </div>
@@ -327,7 +365,7 @@ export default function App() {
 }
 
 // ----------------------------------------------------------------------
-// 컴포넌트: ProductCard (리스트 아이템)
+// 컴포넌트들 (ProductCard, ProductDetailModal) - 변경 없음
 // ----------------------------------------------------------------------
 function ProductCard({ product, onClick }) {
   const mainImage = product.images && product.images.length > 0 ? product.images[0] : null;
@@ -382,9 +420,6 @@ function ProductCard({ product, onClick }) {
   );
 }
 
-// ----------------------------------------------------------------------
-// 컴포넌트: ProductDetailModal
-// ----------------------------------------------------------------------
 function ProductDetailModal({ product, onClose, onEdit }) {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
 
@@ -501,7 +536,7 @@ function ProductDetailModal({ product, onClose, onEdit }) {
 // ----------------------------------------------------------------------
 // 컴포넌트: ProductFormModal
 // ----------------------------------------------------------------------
-function ProductFormModal({ categories, existingData, onClose, onSave, onDelete }) {
+function ProductFormModal({ categories, existingData, onClose, onSave, onDelete, isFirebaseAvailable }) {
   const isEditMode = !!existingData;
   const fileInputRef = useRef(null);
 
@@ -534,7 +569,6 @@ function ProductFormModal({ categories, existingData, onClose, onSave, onDelete 
     }
   }, [existingData]);
 
-  // 이미지 리사이징 및 Base64 변환 (Firestore 용량 제한 대응)
   const processImage = (file) => {
     return new Promise((resolve) => {
       const reader = new FileReader();
@@ -555,8 +589,6 @@ function ProductFormModal({ categories, existingData, onClose, onSave, onDelete 
           canvas.height = height;
           const ctx = canvas.getContext('2d');
           ctx.drawImage(img, 0, 0, width, height);
-          
-          // JPEG 포맷으로 압축 (품질 0.7)
           const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
           resolve(dataUrl);
         };
@@ -573,7 +605,6 @@ function ProductFormModal({ categories, existingData, onClose, onSave, onDelete 
       const newImageUrls = [];
       
       for (const file of files) {
-        // 간단한 리사이징 로직 적용
         try {
           const resizedImage = await processImage(file);
           newImageUrls.push(resizedImage);
@@ -628,9 +659,13 @@ function ProductFormModal({ categories, existingData, onClose, onSave, onDelete 
         <div className="px-8 py-5 border-b border-slate-100 flex justify-between items-center bg-slate-50">
           <div>
             <h2 className="text-xl font-bold text-slate-800">
-              {isEditMode ? '제품 데이터 수정 (Cloud)' : '신제품 등록 (Cloud)'}
+              {isEditMode ? '제품 데이터 수정' : '신제품 등록'}
             </h2>
-            <p className="text-xs text-slate-500 mt-1">저장된 데이터는 모든 팀원에게 실시간으로 공유됩니다.</p>
+            <p className="text-xs text-slate-500 mt-1">
+              {isFirebaseAvailable 
+                ? "데이터가 클라우드에 안전하게 저장됩니다." 
+                : "로컬 저장소 모드입니다. 브라우저 캐시 삭제 시 데이터가 유실될 수 있습니다."}
+            </p>
           </div>
           <button onClick={onClose} className="p-2 hover:bg-slate-200 rounded-full transition-colors">
             <X className="w-5 h-5 text-slate-500" />
@@ -638,7 +673,7 @@ function ProductFormModal({ categories, existingData, onClose, onSave, onDelete 
         </div>
         
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-8 space-y-6">
-          
+          {/* 이미지 관리 섹션 */}
           <div className="bg-slate-50 p-6 rounded-xl border border-slate-200">
             <div className="flex justify-between items-center mb-4">
               <label className="text-sm font-bold text-slate-900 flex items-center">
