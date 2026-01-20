@@ -5,7 +5,8 @@ import {
   Upload, Trash2, Edit2, RefreshCw, Cloud, CloudOff, Lock, Unlock,
   Database, Info, ArrowUpDown, ListFilter, Menu, History,
   Copy, ChevronRight, Activity, ShieldAlert, FileJson, Calendar,
-  ArrowLeft, ArrowRight, ArrowUp, ArrowDown, Layers, Scissors, Star
+  ArrowLeft, ArrowRight, ArrowUp, ArrowDown, Layers, Star,
+  Trophy, Award, Heart
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { 
@@ -32,8 +33,8 @@ const YOUR_FIREBASE_CONFIG = {
 // ----------------------------------------------------------------------
 // 상수 및 설정
 // ----------------------------------------------------------------------
-const APP_VERSION = "v1.7.0"; // Detail Specs & Dual Color System
-const BUILD_DATE = "2024.05.26";
+const APP_VERSION = "v1.8.0"; // Navigation Re-structure & Awards
+const BUILD_DATE = "2024.05.27";
 const ADMIN_PASSWORD = "adminlcg1"; 
 
 // Firebase 초기화 로직
@@ -62,10 +63,11 @@ try {
   console.warn("Firebase Init Failed. Falling back to Local Storage.", e);
 }
 
+// 카테고리 정의
 const CATEGORIES = [
-  { id: 'ALL', label: 'MAIN PRODUCTS', isSpecial: true },
+  { id: 'ALL', label: 'TOTAL VIEW', isSpecial: true }, // TOTAL로 변경
   { id: 'NEW', label: 'NEW ARRIVALS', isSpecial: true },
-  { id: 'MY_PICK', label: 'MY PICK', isSpecial: true }, // 즐겨찾기 추가
+  // MY_PICK은 별도 렌더링을 위해 리스트에서 제외하거나 별도 처리
   { id: 'EXECUTIVE', label: 'EXECUTIVE' },
   { id: 'TASK', label: 'TASK' },
   { id: 'CONFERENCE', label: 'CONFERENCE' },
@@ -97,7 +99,6 @@ export default function App() {
   const [activityLogs, setActivityLogs] = useState([]);
   const [toast, setToast] = useState(null);
   
-  // 로컬 즐겨찾기 상태
   const [favorites, setFavorites] = useState([]);
 
   // 1. 인증 초기화
@@ -122,7 +123,6 @@ export default function App() {
     };
     initApp();
     
-    // 즐겨찾기 로드
     const savedFavs = localStorage.getItem('patra_favorites');
     if (savedFavs) setFavorites(JSON.parse(savedFavs));
   }, []);
@@ -196,7 +196,6 @@ export default function App() {
     localStorage.setItem('patra_favorites', JSON.stringify(newFavs));
   };
 
-  // 로그 기록
   const logActivity = async (action, productName, details = "") => {
     if (!isFirebaseAvailable || !db) return;
     try {
@@ -241,10 +240,8 @@ export default function App() {
     showToast("전체 데이터 백업이 완료되었습니다.");
   };
 
-  // 필터링 및 정렬 로직
   const getProcessedProducts = () => {
     let filtered = products.filter(product => {
-      // 카테고리 필터
       let matchesCategory = true;
       if (activeCategory === 'MY_PICK') {
         matchesCategory = favorites.includes(product.id);
@@ -254,7 +251,6 @@ export default function App() {
         matchesCategory = product.category === activeCategory;
       }
 
-      // 검색 필터 (이름, 스펙, 옵션, 재질, 컬러 등)
       const searchLower = searchTerm.toLowerCase();
       const matchesSearch = 
         product.name.toLowerCase().includes(searchLower) || 
@@ -262,7 +258,8 @@ export default function App() {
         (product.options && product.options.some(opt => opt.toLowerCase().includes(searchLower))) ||
         (product.materials && product.materials.some(mat => mat.toLowerCase().includes(searchLower))) ||
         (product.bodyColors && product.bodyColors.some(c => c.toLowerCase().includes(searchLower))) ||
-        (product.upholsteryColors && product.upholsteryColors.some(c => c.toLowerCase().includes(searchLower)));
+        (product.upholsteryColors && product.upholsteryColors.some(c => c.toLowerCase().includes(searchLower))) ||
+        (product.awards && product.awards.some(a => a.toLowerCase().includes(searchLower)));
 
       return matchesCategory && matchesSearch;
     });
@@ -291,7 +288,6 @@ export default function App() {
   };
   const processedProducts = getProcessedProducts();
 
-  // 제품 순서 변경
   const handleMoveProduct = async (index, direction) => {
     if (!processedProducts || processedProducts.length <= 1) return;
     
@@ -326,7 +322,6 @@ export default function App() {
     }
   };
 
-  // 저장 로직
   const handleSaveProduct = async (productData) => {
     const docId = productData.id ? String(productData.id) : String(Date.now());
     const isEdit = !!productData.id && products.some(p => String(p.id) === docId);
@@ -364,7 +359,6 @@ export default function App() {
     showToast(isEdit ? "수정 완료" : "등록 완료");
   };
 
-  // 삭제 로직
   const handleDeleteProduct = async (productId, productName) => {
     if (!window.confirm('정말 삭제하시겠습니까?')) return;
 
@@ -389,7 +383,6 @@ export default function App() {
   return (
     <div className="flex h-screen bg-slate-50 font-sans text-slate-800 overflow-hidden relative">
       
-      {/* 모바일 메뉴 오버레이 */}
       {isMobileMenuOpen && (
         <div 
           className="fixed inset-0 bg-black/50 z-40 md:hidden animate-in fade-in"
@@ -420,6 +413,8 @@ export default function App() {
                 <CloudOff className="w-3 h-3 text-red-400" title="Local" />
              }
           </div>
+          
+          {/* Main Category Loop */}
           {CATEGORIES.map((cat, index) => (
             <React.Fragment key={cat.id}>
               <button
@@ -434,15 +429,32 @@ export default function App() {
                   ${cat.isSpecial ? 'text-indigo-700 font-extrabold' : ''}
                 `}
               >
-                {cat.id === 'MY_PICK' && <Star className="w-3 h-3 mr-2 text-yellow-500 fill-yellow-500" />}
                 {cat.label}
                 {cat.id === 'NEW' && <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse ml-auto"></span>}
               </button>
-              {(cat.id === 'NEW' || cat.id === 'MY_PICK') && (
+              {(cat.id === 'NEW') && (
                 <div className="my-3 mx-2 border-b border-slate-200"></div>
               )}
             </React.Fragment>
           ))}
+
+          {/* My Pick - 별도 표기 */}
+          <div className="mt-6 pt-4 border-t border-slate-100">
+            <button
+              onClick={() => {
+                setActiveCategory('MY_PICK');
+                setIsMobileMenuOpen(false);
+              }}
+              className={`w-full text-left px-3 py-2 rounded-lg text-xs font-bold transition-all duration-200 flex items-center space-x-2 group
+                ${activeCategory === 'MY_PICK' 
+                  ? 'bg-yellow-50 text-yellow-700' 
+                  : 'text-slate-400 hover:bg-slate-50 hover:text-slate-600'}
+              `}
+            >
+              <Heart className={`w-3 h-3 ${activeCategory === 'MY_PICK' ? 'fill-yellow-500 text-yellow-500' : ''}`} />
+              <span>MY PICK ({favorites.length})</span>
+            </button>
+          </div>
         </nav>
         
         <div className="p-4 border-t border-slate-200 bg-slate-50 space-y-3">
@@ -490,7 +502,7 @@ export default function App() {
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-4 h-4" />
               <input 
                 type="text" 
-                placeholder="검색 (제품명, 옵션, 컬러, 마감...)" 
+                placeholder="검색 (제품명, 어워드, 컬러...)" 
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full pl-9 pr-4 py-2 bg-slate-100 border-transparent focus:bg-white focus:border-slate-300 rounded-full text-sm transition-all outline-none focus:ring-2 focus:ring-slate-100"
@@ -549,7 +561,7 @@ export default function App() {
               <div className="mb-4 md:mb-6 flex items-end justify-between">
                 <div>
                   <h2 className="text-lg md:text-2xl font-bold text-slate-900">
-                    {CATEGORIES.find(c => c.id === activeCategory)?.label}
+                    {activeCategory === 'MY_PICK' ? 'MY PICK' : CATEGORIES.find(c => c.id === activeCategory)?.label}
                   </h2>
                   <p className="text-slate-500 text-xs md:text-sm mt-1">
                     {processedProducts.length} items 
@@ -685,6 +697,7 @@ export default function App() {
       {isFormOpen && (
         <ProductFormModal 
           categories={CATEGORIES.filter(c => !c.isSpecial)}
+          initialCategory={activeCategory} // 현재 선택된 카테고리 전달
           existingData={editingProduct}
           onClose={() => {
             setIsFormOpen(false);
@@ -710,16 +723,18 @@ function ProductCard({ product, onClick, showMoveControls, onMove, isFavorite, o
     onMove(dir);
   };
 
-  // 마감재 뱃지
   const materialBadge = product.materials && product.materials.length > 0 ? product.materials[0] : null;
+  // 첫 번째 어워드만 배지로 표시
+  const awardBadge = product.awards && product.awards.length > 0 ? product.awards[0] : null;
 
   return (
     <div onClick={onClick} className="bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 cursor-pointer group border border-slate-100 flex flex-col h-full animate-in fade-in duration-500 relative">
       <div className="relative h-40 md:h-64 overflow-hidden bg-slate-50 p-4 md:p-6 flex items-center justify-center">
         {/* 배지 영역 */}
-        <div className="absolute top-3 left-3 flex flex-col space-y-1 z-10">
-           {product.isNew && <span className="bg-black text-white text-[10px] font-bold px-2 py-1 rounded-sm self-start">NEW</span>}
-           {materialBadge && <span className="bg-white/80 backdrop-blur border border-slate-200 text-slate-600 text-[9px] font-bold px-2 py-0.5 rounded-sm self-start uppercase tracking-wide">{materialBadge}</span>}
+        <div className="absolute top-3 left-3 flex flex-col space-y-1 z-10 items-start">
+           {product.isNew && <span className="bg-black text-white text-[10px] font-bold px-2 py-1 rounded-sm">NEW</span>}
+           {awardBadge && <span className="bg-yellow-500 text-white text-[9px] font-bold px-2 py-0.5 rounded-sm flex items-center shadow-sm"><Trophy className="w-2.5 h-2.5 mr-1" /> {awardBadge}</span>}
+           {materialBadge && !awardBadge && <span className="bg-white/80 backdrop-blur border border-slate-200 text-slate-600 text-[9px] font-bold px-2 py-0.5 rounded-sm uppercase tracking-wide">{materialBadge}</span>}
         </div>
         
         {/* 즐겨찾기 버튼 */}
@@ -752,7 +767,6 @@ function ProductCard({ product, onClick, showMoveControls, onMove, isFavorite, o
         
         {/* 이원화된 컬러 뷰 (Compact) */}
         <div className="mt-auto space-y-1.5 pt-2 border-t border-slate-100">
-          {/* Body Colors (Circle) */}
           <div className="flex items-center space-x-1.5 overflow-hidden">
              <span className="text-[9px] text-slate-400 w-6 uppercase">Body</span>
              <div className="flex -space-x-1">
@@ -761,7 +775,6 @@ function ProductCard({ product, onClick, showMoveControls, onMove, isFavorite, o
                 ))}
              </div>
           </div>
-          {/* Upholstery Colors (Square) */}
           <div className="flex items-center space-x-1.5 overflow-hidden">
              <span className="text-[9px] text-slate-400 w-6 uppercase">Seat</span>
              <div className="flex -space-x-1">
@@ -806,10 +819,12 @@ function ProductDetailModal({ product, onClose, onEdit, isAdmin, showToast, isFa
         <div className="w-full md:w-1/2 p-6 md:p-10 overflow-y-auto bg-white">
           <div className="mb-6 md:mb-8 flex justify-between items-start">
             <div>
-              <div className="flex space-x-2 mb-2">
+              <div className="flex flex-wrap gap-2 mb-2">
                 <span className="inline-block px-3 py-1 bg-slate-900 text-white text-xs font-bold rounded-full uppercase tracking-wider">{product.category}</span>
-                {product.materials && product.materials.map(m => (
-                  <span key={m} className="inline-block px-3 py-1 border border-slate-200 text-slate-600 text-xs font-bold rounded-full uppercase tracking-wider">{m}</span>
+                {product.awards && product.awards.map(award => (
+                  <span key={award} className="inline-flex items-center px-3 py-1 bg-yellow-500 text-white text-xs font-bold rounded-full uppercase tracking-wider shadow-sm">
+                    <Trophy className="w-3 h-3 mr-1" /> {award}
+                  </span>
                 ))}
               </div>
               <h2 className="text-3xl md:text-4xl font-bold text-slate-900 mb-2">{product.name}</h2>
@@ -819,7 +834,6 @@ function ProductDetailModal({ product, onClose, onEdit, isAdmin, showToast, isFa
           <div className="space-y-6 md:space-y-8">
             <div className="relative group"><h3 className="flex items-center text-sm font-bold text-slate-900 uppercase tracking-wide mb-3"><Settings className="w-4 h-4 mr-2" /> Specifications<button onClick={copyToClipboard} className="ml-2 text-slate-400 hover:text-slate-600 opacity-0 group-hover:opacity-100 transition-opacity"><Copy className="w-3 h-3" /></button></h3><p className="text-slate-600 leading-relaxed bg-slate-50 p-4 rounded-xl text-sm border border-slate-100">{product.specs}</p></div>
             
-            {/* 옵션 & 기능 표시 */}
             <div>
               <h3 className="flex items-center text-sm font-bold text-slate-900 uppercase tracking-wide mb-3"><Tag className="w-4 h-4 mr-2" /> Options & Features</h3>
               <div className="flex flex-wrap gap-2">
@@ -836,7 +850,6 @@ function ProductDetailModal({ product, onClose, onEdit, isAdmin, showToast, isFa
               </div>
             </div>
 
-            {/* 듀얼 컬러 표시 */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                <div>
                   <h3 className="flex items-center text-sm font-bold text-slate-900 uppercase tracking-wide mb-3">Body Color</h3>
@@ -869,13 +882,19 @@ function ProductDetailModal({ product, onClose, onEdit, isAdmin, showToast, isFa
   );
 }
 
-function ProductFormModal({ categories, existingData, onClose, onSave, onDelete, isFirebaseAvailable }) {
+function ProductFormModal({ categories, existingData, onClose, onSave, onDelete, isFirebaseAvailable, initialCategory }) {
   const isEditMode = !!existingData;
   const fileInputRef = useRef(null);
+  
+  // 현재 카테고리 자동 선택 로직: ALL/NEW/MY_PICK이 아니면 해당 카테고리, 아니면 기본값(EXECUTIVE)
+  const defaultCategory = (initialCategory && initialCategory !== 'ALL' && initialCategory !== 'NEW' && initialCategory !== 'MY_PICK') 
+    ? initialCategory 
+    : 'EXECUTIVE';
+
   const [formData, setFormData] = useState({ 
-    id: null, name: '', category: 'EXECUTIVE', specs: '', 
+    id: null, name: '', category: defaultCategory, specs: '', 
     featuresString: '', optionsString: '', materialsString: '',
-    bodyColorsString: '', upholsteryColorsString: '',
+    bodyColorsString: '', upholsteryColorsString: '', awardsString: '',
     isNew: false, launchDate: new Date().toISOString().split('T')[0], images: [] 
   });
   const [isProcessingImage, setIsProcessingImage] = useState(false);
@@ -892,6 +911,7 @@ function ProductFormModal({ categories, existingData, onClose, onSave, onDelete,
         materialsString: existingData.materials ? existingData.materials.join(', ') : '',
         bodyColorsString: existingData.bodyColors ? existingData.bodyColors.join(', ') : '',
         upholsteryColorsString: existingData.upholsteryColors ? existingData.upholsteryColors.join(', ') : '',
+        awardsString: existingData.awards ? existingData.awards.join(', ') : '',
         isNew: existingData.isNew, 
         launchDate: existingData.launchDate || new Date().toISOString().split('T')[0],
         images: existingData.images || [] 
@@ -944,6 +964,7 @@ function ProductFormModal({ categories, existingData, onClose, onSave, onDelete,
       materials: formData.materialsString.split(',').map(s => s.trim()).filter(s => s),
       bodyColors: formData.bodyColorsString.split(',').map(s => s.trim()).filter(s => s),
       upholsteryColors: formData.upholsteryColorsString.split(',').map(s => s.trim()).filter(s => s),
+      awards: formData.awardsString.split(',').map(s => s.trim()).filter(s => s),
       isNew: formData.isNew, 
       launchDate: formData.launchDate,
       images: formData.images 
@@ -970,7 +991,6 @@ function ProductFormModal({ categories, existingData, onClose, onSave, onDelete,
              <div className="flex items-end pb-2"><div className="flex items-center space-x-2"><input type="checkbox" id="isNew" checked={formData.isNew} onChange={e => setFormData({...formData, isNew: e.target.checked})} className="w-4 h-4 text-slate-900 rounded border-gray-300 focus:ring-slate-900" /><label htmlFor="isNew" className="text-sm text-slate-700 font-medium select-none cursor-pointer">신제품(NEW) 배지 표시</label></div></div>
           </div>
           
-          {/* 상세 스펙 및 옵션 */}
           <div><label className="block text-sm font-medium text-slate-700 mb-1">상세 사양 (Main Specs)</label><textarea required rows={2} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-slate-900 outline-none resize-none" value={formData.specs} onChange={e => setFormData({...formData, specs: e.target.value})} /></div>
           
           <div className="grid grid-cols-2 gap-6">
@@ -978,9 +998,11 @@ function ProductFormModal({ categories, existingData, onClose, onSave, onDelete,
              <div><label className="block text-sm font-medium text-slate-700 mb-1">마감재 (쉼표 구분)</label><input type="text" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-slate-900 outline-none" placeholder="Mesh, Fabric, Leather..." value={formData.materialsString} onChange={e => setFormData({...formData, materialsString: e.target.value})} /></div>
           </div>
 
-          <div className="grid grid-cols-2 gap-6"><div><label className="block text-sm font-medium text-slate-700 mb-1">주요 기능 (쉼표 구분)</label><input type="text" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-slate-900 outline-none" value={formData.featuresString} onChange={e => setFormData({...formData, featuresString: e.target.value})} /></div></div>
+          <div className="grid grid-cols-2 gap-6">
+            <div><label className="block text-sm font-medium text-slate-700 mb-1">주요 기능 (쉼표 구분)</label><input type="text" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-slate-900 outline-none" value={formData.featuresString} onChange={e => setFormData({...formData, featuresString: e.target.value})} /></div>
+            <div><label className="block text-sm font-medium text-slate-700 mb-1">수상 내역 (Award)</label><input type="text" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-slate-900 outline-none" placeholder="Red Dot 2024, iF Design..." value={formData.awardsString} onChange={e => setFormData({...formData, awardsString: e.target.value})} /></div>
+          </div>
 
-          {/* 컬러 입력 분리 */}
           <div className="grid grid-cols-2 gap-6 bg-slate-50 p-4 rounded-xl border border-slate-100">
              <div>
                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Body Colors</label>
