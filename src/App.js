@@ -6,7 +6,8 @@ import {
   Database, Info, ArrowUpDown, ListFilter, Menu, History,
   Copy, ChevronRight, Activity, ShieldAlert, FileJson, Calendar,
   ArrowLeft, ArrowRight, ArrowUp, ArrowDown, Layers, Star,
-  Trophy, Heart, Link as LinkIcon, Paperclip, PieChart, Clock
+  Trophy, Heart, Link as LinkIcon, Paperclip, PieChart, Clock,
+  Share2, Download, Maximize2
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { 
@@ -33,8 +34,8 @@ const YOUR_FIREBASE_CONFIG = {
 // ----------------------------------------------------------------------
 // 상수 및 설정
 // ----------------------------------------------------------------------
-const APP_VERSION = "v2.0.0"; // Major: PieChart, BugFix, Recent Updates
-const BUILD_DATE = "2024.05.29";
+const APP_VERSION = "v2.1.0"; // Search Fix, Card Download, Share Link
+const BUILD_DATE = "2024.05.30";
 const ADMIN_PASSWORD = "adminlcg1"; 
 
 // Firebase 초기화
@@ -63,19 +64,19 @@ try {
   console.warn("Firebase Init Failed. Falling back to Local Storage.", e);
 }
 
-// 카테고리 정의 (색상 코드 추가 for Chart)
+// 카테고리 정의
 const CATEGORIES = [
   { id: 'ALL', label: 'TOTAL VIEW', isSpecial: true, color: '#1e293b' },
   { id: 'NEW', label: 'NEW ARRIVALS', isSpecial: true, color: '#ef4444' },
-  { id: 'EXECUTIVE', label: 'EXECUTIVE', color: '#3b82f6' }, // Blue
-  { id: 'TASK', label: 'TASK', color: '#06b6d4' }, // Cyan
-  { id: 'CONFERENCE', label: 'CONFERENCE', color: '#8b5cf6' }, // Violet
-  { id: 'GUEST', label: 'GUEST', color: '#ec4899' }, // Pink
-  { id: 'STOOL', label: 'STOOL', color: '#10b981' }, // Emerald
-  { id: 'LOUNGE', label: 'LOUNGE', color: '#f59e0b' }, // Amber
-  { id: 'HOME', label: 'HOME', color: '#f97316' }, // Orange
-  { id: 'TABLE', label: 'TABLE', color: '#64748b' }, // Slate
-  { id: 'ETC', label: 'ETC', color: '#94a3b8' } // Gray
+  { id: 'EXECUTIVE', label: 'EXECUTIVE', color: '#3b82f6' },
+  { id: 'TASK', label: 'TASK', color: '#06b6d4' },
+  { id: 'CONFERENCE', label: 'CONFERENCE', color: '#8b5cf6' },
+  { id: 'GUEST', label: 'GUEST', color: '#ec4899' },
+  { id: 'STOOL', label: 'STOOL', color: '#10b981' },
+  { id: 'LOUNGE', label: 'LOUNGE', color: '#f59e0b' },
+  { id: 'HOME', label: 'HOME', color: '#f97316' },
+  { id: 'TABLE', label: 'TABLE', color: '#64748b' },
+  { id: 'ETC', label: 'ETC', color: '#94a3b8' }
 ];
 
 export default function App() {
@@ -97,8 +98,21 @@ export default function App() {
   const [showAdminDashboard, setShowAdminDashboard] = useState(false);
   const [activityLogs, setActivityLogs] = useState([]);
   const [toast, setToast] = useState(null);
-  
   const [favorites, setFavorites] = useState([]);
+
+  // URL Query Parameter Check (Share Link)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const sharedId = params.get('id');
+    if (sharedId && products.length > 0) {
+      const found = products.find(p => String(p.id) === sharedId);
+      if (found) {
+        setSelectedProduct(found);
+        // Remove query param from URL without reload
+        window.history.replaceState({}, document.title, window.location.pathname);
+      }
+    }
+  }, [products]);
 
   // 1. 인증 초기화
   useEffect(() => {
@@ -239,6 +253,7 @@ export default function App() {
     showToast("전체 데이터 백업이 완료되었습니다.");
   };
 
+  // 필터링 및 정렬 로직 (검색어 기능 강화)
   const getProcessedProducts = () => {
     let filtered = products.filter(product => {
       let matchesCategory = true;
@@ -253,11 +268,13 @@ export default function App() {
       }
 
       const searchLower = searchTerm.toLowerCase();
+      // [Update]: Features 검색 추가
       const matchesSearch = 
         product.name.toLowerCase().includes(searchLower) || 
         product.specs.toLowerCase().includes(searchLower) ||
         (product.designer && product.designer.toLowerCase().includes(searchLower)) ||
         (product.options && product.options.some(opt => opt.toLowerCase().includes(searchLower))) ||
+        (product.features && product.features.some(ft => ft.toLowerCase().includes(searchLower))) || // 기능 검색 추가
         (product.materials && product.materials.some(mat => mat.toLowerCase().includes(searchLower))) ||
         (product.bodyColors && product.bodyColors.some(c => c.toLowerCase().includes(searchLower))) ||
         (product.upholsteryColors && product.upholsteryColors.some(c => c.toLowerCase().includes(searchLower))) ||
@@ -562,17 +579,14 @@ export default function App() {
         </header>
 
         <div className="flex-1 overflow-y-auto p-4 md:p-8 custom-scrollbar relative">
-          
-          {/* Dashboard View (Pie Chart 적용) */}
           {activeCategory === 'DASHBOARD' && !searchTerm ? (
             <DashboardView 
               products={products} 
               favorites={favorites} 
               setActiveCategory={setActiveCategory} 
-              setSelectedProduct={setSelectedProduct} // 상세보기 연결
+              setSelectedProduct={setSelectedProduct} 
             />
           ) : (
-            // List View
             <>
               {isLoading && products.length === 0 ? (
                 <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-6">
@@ -742,14 +756,13 @@ export default function App() {
 }
 
 // ----------------------------------------------------------------------
-// New Component: DashboardView (Updated with Donut Chart & Recent Updates)
+// New Component: DashboardView
 // ----------------------------------------------------------------------
 function DashboardView({ products, favorites, setActiveCategory, setSelectedProduct }) {
   const totalCount = products.length;
   const newCount = products.filter(p => p.isNew).length;
   const pickCount = favorites.length;
   
-  // 카테고리별 분포 계산 (표준 카테고리만)
   const categoryCounts = [];
   let totalStandardProducts = 0;
   const standardCategories = CATEGORIES.filter(c => !c.isSpecial);
@@ -762,7 +775,6 @@ function DashboardView({ products, favorites, setActiveCategory, setSelectedProd
     }
   });
 
-  // Pie Chart (Conic Gradient) Style 생성
   let currentAngle = 0;
   const gradientParts = categoryCounts.map(item => {
     const start = currentAngle;
@@ -776,7 +788,6 @@ function DashboardView({ products, favorites, setActiveCategory, setSelectedProd
       : '#f1f5f9'
   };
 
-  // 최근 업데이트 (최신 5개)
   const recentUpdates = [...products]
     .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
     .slice(0, 5);
@@ -788,7 +799,6 @@ function DashboardView({ products, favorites, setActiveCategory, setSelectedProd
         <p className="text-slate-500">Overview of PATRA Design Database</p>
       </div>
 
-      {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div onClick={() => setActiveCategory('ALL')} className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow cursor-pointer flex items-center justify-between group">
           <div><p className="text-sm font-bold text-slate-400 uppercase mb-1">Total Products</p><h3 className="text-4xl font-bold text-slate-900">{totalCount}</h3></div>
@@ -805,7 +815,6 @@ function DashboardView({ products, favorites, setActiveCategory, setSelectedProd
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Pie Chart Section */}
         <div className="bg-white p-8 rounded-2xl border border-slate-100 shadow-sm flex flex-col items-center justify-center min-h-[300px]">
           <h3 className="text-lg font-bold text-slate-900 mb-6 flex items-center self-start w-full">
             <PieChart className="w-5 h-5 mr-2 text-slate-400" /> Composition
@@ -813,7 +822,6 @@ function DashboardView({ products, favorites, setActiveCategory, setSelectedProd
           {totalStandardProducts > 0 ? (
             <div className="flex flex-col md:flex-row items-center space-y-8 md:space-y-0 md:space-x-10">
               <div className="relative w-48 h-48 rounded-full shadow-inner" style={chartStyle}>
-                 {/* Donut Hole */}
                  <div className="absolute inset-0 m-auto w-24 h-24 bg-white rounded-full flex items-center justify-center flex-col">
                     <span className="text-xs text-slate-400 uppercase font-bold">Total</span>
                     <span className="text-2xl font-bold text-slate-800">{totalStandardProducts}</span>
@@ -834,7 +842,6 @@ function DashboardView({ products, favorites, setActiveCategory, setSelectedProd
           )}
         </div>
 
-        {/* Recent Updates Section */}
         <div className="bg-white p-8 rounded-2xl border border-slate-100 shadow-sm flex flex-col min-h-[300px]">
            <h3 className="text-lg font-bold text-slate-900 mb-6 flex items-center">
              <Clock className="w-5 h-5 mr-2 text-slate-400" /> Recent Updates
@@ -920,9 +927,16 @@ function ProductCard({ product, onClick, showMoveControls, onMove, isFavorite, o
         <h3 className="text-sm md:text-lg font-bold text-slate-900 mb-1 line-clamp-1">{product.name}</h3>
         {product.designer && <p className="text-[10px] text-slate-400 mb-1">by {product.designer}</p>}
         
-        <p className="text-[10px] md:text-xs text-slate-500 line-clamp-1 mb-2">
-          {product.options && product.options.length > 0 ? product.options.join(' · ') : product.specs}
+        {/* Specs always shown */}
+        <p className="text-[10px] md:text-xs text-slate-500 line-clamp-1 mb-1">
+          {product.specs}
         </p>
+        {/* Options shown separately if available */}
+        {product.options && product.options.length > 0 && (
+          <p className="text-[9px] md:text-[10px] text-blue-500 line-clamp-1 mb-2 font-medium">
+            {product.options.join(' · ')}
+          </p>
+        )}
         
         <div className="mt-auto space-y-1.5 pt-2 border-t border-slate-100">
           <div className="flex items-center space-x-1.5 overflow-hidden">
@@ -947,21 +961,99 @@ function ProductCard({ product, onClick, showMoveControls, onMove, isFavorite, o
 
 function ProductDetailModal({ product, onClose, onEdit, isAdmin, showToast, isFavorite, onToggleFavorite }) {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const [isZoomed, setIsZoomed] = useState(false); // Zoom state
+
   if (!product) return null;
   const images = product.images || [];
   const currentImage = images.length > 0 ? images[currentImageIndex] : null;
+  
   const copyToClipboard = () => {
     const text = `[${product.name}]\n- Category: ${product.category}\n- Specs: ${product.specs}`;
     navigator.clipboard.writeText(text);
     showToast("클립보드 복사 완료");
   };
+
+  const copyShareLink = () => {
+    const url = `${window.location.origin}${window.location.pathname}?id=${product.id}`;
+    navigator.clipboard.writeText(url);
+    showToast("공유 링크 복사 완료");
+  };
+
+  const handleDownloadCard = () => {
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <title>${product.name} - Spec Card</title>
+        <style>
+          body { font-family: sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; background: #f1f5f9; margin: 0; }
+          .card { width: 320px; background: white; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.1); border: 1px solid #e2e8f0; }
+          .image-area { width: 100%; height: 320px; background: #f8fafc; display: flex; align-items: center; justify-content: center; position: relative; }
+          .image-area img { width: 100%; height: 100%; object-fit: contain; mix-blend-mode: multiply; }
+          .content { padding: 20px; }
+          .category { font-size: 10px; font-weight: bold; color: #64748b; background: #f1f5f9; padding: 4px 8px; border-radius: 4px; text-transform: uppercase; display: inline-block; margin-bottom: 8px; }
+          .title { font-size: 20px; font-weight: bold; color: #0f172a; margin: 0 0 4px 0; }
+          .designer { font-size: 11px; color: #94a3b8; margin-bottom: 12px; }
+          .specs { font-size: 12px; color: #475569; line-height: 1.5; margin-bottom: 12px; border-top: 1px solid #f1f5f9; padding-top: 12px; }
+          .options { font-size: 11px; color: #3b82f6; margin-bottom: 12px; font-weight: 500; }
+          .footer { font-size: 10px; color: #cbd5e1; text-align: center; margin-top: 20px; }
+        </style>
+      </head>
+      <body>
+        <div class="card">
+          <div class="image-area">
+            ${currentImage ? `<img src="${currentImage}" />` : '<div style="color:#cbd5e1">No Image</div>'}
+          </div>
+          <div class="content">
+            <div class="category">${product.category}</div>
+            <h1 class="title">${product.name}</h1>
+            ${product.designer ? `<div class="designer">Designed by ${product.designer}</div>` : ''}
+            <div class="specs">${product.specs}</div>
+            ${product.options && product.options.length > 0 ? `<div class="options">Options: ${product.options.join(', ')}</div>` : ''}
+            <div class="footer">PATRA DESIGN DATABASE</div>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+    const blob = new Blob([htmlContent], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${product.name.replace(/\s+/g, '_')}_Card.html`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast("카드 다운로드 완료 (HTML)");
+  };
+
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      {/* Zoom Modal */}
+      {isZoomed && currentImage && (
+        <div className="fixed inset-0 z-[60] bg-black/90 flex items-center justify-center p-4" onClick={() => setIsZoomed(false)}>
+           <img src={currentImage} className="max-w-full max-h-full object-contain" alt="Zoomed" />
+           <button className="absolute top-4 right-4 text-white p-2"><X className="w-8 h-8" /></button>
+        </div>
+      )}
+
       <div className="bg-white w-full max-w-5xl max-h-[95vh] rounded-3xl overflow-hidden shadow-2xl flex flex-col md:flex-row relative animate-in fade-in zoom-in duration-200">
         <button onClick={onClose} className="absolute top-4 right-4 p-2 bg-white/80 hover:bg-slate-100 rounded-full z-10 transition-colors"><X className="w-5 h-5 text-slate-600" /></button>
         <div className="w-full md:w-1/2 bg-slate-50 p-6 md:p-8 flex flex-col border-r border-slate-100">
-          <div className="flex-1 w-full bg-white rounded-2xl flex items-center justify-center text-slate-400 shadow-sm overflow-hidden p-4 mb-4 relative">
-             {currentImage ? <img src={currentImage} alt="Main View" className="w-full h-full object-contain" /> : <ImageIcon className="w-16 h-16 opacity-30" />}
+          <div className="flex-1 w-full bg-white rounded-2xl flex items-center justify-center text-slate-400 shadow-sm overflow-hidden p-4 mb-4 relative group">
+             {currentImage ? (
+                <>
+                  <img 
+                    src={currentImage} 
+                    alt="Main View" 
+                    className="w-full h-full object-contain cursor-zoom-in" 
+                    onClick={() => setIsZoomed(true)}
+                  />
+                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="bg-black/30 text-white p-2 rounded-full"><Maximize2 className="w-6 h-6"/></div>
+                  </div>
+                </>
+             ) : <ImageIcon className="w-16 h-16 opacity-30" />}
              <button onClick={onToggleFavorite} className="absolute top-4 left-4 p-2 bg-white/80 rounded-full shadow-sm hover:bg-white transition-colors"><Star className={`w-6 h-6 ${isFavorite ? 'text-yellow-400 fill-yellow-400' : 'text-slate-300'}`} /></button>
           </div>
           {images.length > 0 && (<div className="h-16 md:h-20 flex space-x-2 overflow-x-auto custom-scrollbar pb-2">{images.map((img, idx) => (<button key={idx} onClick={() => setCurrentImageIndex(idx)} className={`flex-shrink-0 w-16 h-16 md:w-20 md:h-20 rounded-lg overflow-hidden border-2 transition-all ${currentImageIndex === idx ? 'border-slate-900 ring-2 ring-slate-200' : 'border-slate-200 opacity-60 hover:opacity-100'}`}><img src={img} alt={`Thumbnail ${idx}`} className="w-full h-full object-cover" /></button>))}</div>)}
@@ -989,7 +1081,18 @@ function ProductDetailModal({ product, onClose, onEdit, isAdmin, showToast, isFa
                {product.attachments && product.attachments.length > 0 && <div className="space-y-1"><h3 className="text-xs font-bold text-slate-400 uppercase mb-1">Downloads</h3>{product.attachments.map((file, idx) => (<a key={idx} href={file.url} target="_blank" rel="noopener noreferrer" className="flex items-center text-sm text-slate-600 hover:text-slate-900 p-2 bg-slate-50 rounded-lg border border-slate-100 hover:border-slate-300 transition-colors"><Paperclip className="w-4 h-4 mr-2 text-slate-400" /> {file.name}</a>))}</div>}
             </div>
           </div>
-          <div className="mt-8 pt-6 border-t border-slate-100 flex justify-end space-x-3">{isAdmin && (<button onClick={onEdit} className="flex items-center px-5 py-2.5 text-sm font-medium text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors"><Edit2 className="w-4 h-4 mr-2" />Edit Data</button>)}</div>
+          
+          <div className="mt-8 pt-6 border-t border-slate-100 flex justify-between items-center">
+             <div className="flex space-x-2">
+                <button onClick={copyShareLink} className="flex items-center px-4 py-2 bg-slate-100 text-slate-600 rounded-lg text-sm font-bold hover:bg-slate-200 transition-colors">
+                   <Share2 className="w-4 h-4 mr-2" /> Share
+                </button>
+                <button onClick={handleDownloadCard} className="flex items-center px-4 py-2 bg-slate-100 text-slate-600 rounded-lg text-sm font-bold hover:bg-slate-200 transition-colors">
+                   <Download className="w-4 h-4 mr-2" /> Card
+                </button>
+             </div>
+             {isAdmin && (<button onClick={onEdit} className="flex items-center px-5 py-2.5 text-sm font-medium text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors"><Edit2 className="w-4 h-4 mr-2" />Edit Data</button>)}
+          </div>
         </div>
       </div>
     </div>
@@ -1086,7 +1189,6 @@ function ProductFormModal({ categories, existingData, onClose, onSave, onDelete,
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    // [Bug Fix]: featuresString -> features array mapping
     onSave({ 
       id: formData.id, name: formData.name, category: formData.category, specs: formData.specs, designer: formData.designer,
       features: formData.featuresString.split(',').map(s => s.trim()).filter(s => s), 
