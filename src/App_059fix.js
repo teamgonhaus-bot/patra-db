@@ -10,7 +10,7 @@ import {
   Share2, Download, Maximize2, LayoutGrid, Zap, GripHorizontal, ImageIcon as ImgIcon,
   ChevronsUp, Camera, ImagePlus, Sofa, Briefcase, Users, Home as HomeIcon, MapPin,
   Edit3, Grid, MoreVertical, MousePointer2, CheckSquare, XCircle, Printer, List, Eye,
-  PlayCircle, BarChart3, CornerUpLeft, Grid3X3, Droplet
+  PlayCircle, BarChart3, CornerUpLeft
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { 
@@ -36,7 +36,7 @@ const YOUR_FIREBASE_CONFIG = {
 // ----------------------------------------------------------------------
 // 상수 및 설정
 // ----------------------------------------------------------------------
-const APP_VERSION = "v0.6.0"; 
+const APP_VERSION = "v0.5.9-fix"; 
 const BUILD_DATE = "2026.01.21";
 const ADMIN_PASSWORD = "adminlcg1"; 
 
@@ -89,20 +89,9 @@ const SPACES = [
   { id: 'HOME_SPACE', label: 'Home Interior', icon: HomeIcon },
 ];
 
-// 스와치(마감재) 정의 - v0.6.0 추가
-const SWATCH_CATEGORIES = [
-  { id: 'MESH', label: 'Mesh', color: '#a1a1aa' },
-  { id: 'FABRIC', label: 'Fabric', color: '#a1a1aa' },
-  { id: 'LEATHER', label: 'Leather', color: '#78350f' },
-  { id: 'RESIN', label: 'Resin', color: '#27272a' },
-  { id: 'STEEL', label: 'Steel', color: '#64748b' },
-  { id: 'WOOD', label: 'Wood', color: '#92400e' },
-];
-
 export default function App() {
   const [user, setUser] = useState(null);
   const [products, setProducts] = useState([]);
-  const [swatches, setSwatches] = useState([]); // New Swatch State
   const [activeCategory, setActiveCategory] = useState('DASHBOARD');
   const [searchTerm, setSearchTerm] = useState('');
   
@@ -122,7 +111,7 @@ export default function App() {
   const [toast, setToast] = useState(null);
   const [favorites, setFavorites] = useState([]);
   
-  const [sidebarState, setSidebarState] = useState({ spaces: true, collections: true, materials: true });
+  const [sidebarState, setSidebarState] = useState({ spaces: true, collections: true });
   const [myPickViewMode, setMyPickViewMode] = useState('grid'); 
 
   const [bannerData, setBannerData] = useState({ url: null, title: 'Design Lab DB', subtitle: 'Integrated Product Database & Archives' });
@@ -206,30 +195,16 @@ export default function App() {
     initApp();
     const savedFavs = localStorage.getItem('patra_favorites');
     if (savedFavs) setFavorites(JSON.parse(savedFavs));
-    
-    // Load local swatches if offline
-    if (!isFirebaseAvailable) {
-       const localSwatches = localStorage.getItem('patra_swatches');
-       setSwatches(localSwatches ? JSON.parse(localSwatches) : []);
-    }
   }, []);
 
   useEffect(() => {
     if (isFirebaseAvailable && user && db) {
-      // Products Listener
       const qProducts = collection(db, 'artifacts', appId, 'public', 'data', 'products');
       const unsubProducts = onSnapshot(qProducts, (snapshot) => {
         const loadedProducts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         setProducts(loadedProducts);
         setIsLoading(false);
       });
-      // Swatches Listener
-      const qSwatches = collection(db, 'artifacts', appId, 'public', 'data', 'swatches');
-      const unsubSwatches = onSnapshot(qSwatches, (snapshot) => {
-        const loadedSwatches = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        setSwatches(loadedSwatches);
-      });
-
       const bannerDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'banner');
       const unsubBanner = onSnapshot(bannerDocRef, (doc) => {
         if (doc.exists()) setBannerData(prev => ({ ...prev, ...doc.data() }));
@@ -241,7 +216,7 @@ export default function App() {
             }
          });
       });
-      return () => { unsubProducts(); unsubSwatches(); unsubBanner(); };
+      return () => { unsubProducts(); unsubBanner(); };
     } else {
       const localBanner = localStorage.getItem('patra_banner_data');
       if (localBanner) setBannerData(JSON.parse(localBanner));
@@ -258,12 +233,6 @@ export default function App() {
   const saveToLocalStorage = (newProducts) => {
     localStorage.setItem('patra_products', JSON.stringify(newProducts));
     setProducts(newProducts);
-  };
-
-  // Swatch LocalStorage Helper
-  const saveSwatchesToLocal = (newSwatches) => {
-    localStorage.setItem('patra_swatches', JSON.stringify(newSwatches));
-    setSwatches(newSwatches);
   };
 
   const showToast = (message, type = 'success') => {
@@ -316,32 +285,6 @@ export default function App() {
   
   const logActivity = async (action, productName, details = "") => { if (!isFirebaseAvailable || !db) return; try { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'logs'), { action, productName, details, timestamp: Date.now(), adminId: 'admin' }); } catch (e) { console.error(e); } };
   const fetchLogs = async () => { if (!isFirebaseAvailable || !db) return; const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'logs'), orderBy('timestamp', 'desc'), limit(100)); onSnapshot(q, (snapshot) => { setActivityLogs(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))); }); };
-  
-  // Swatch Management
-  const handleSaveSwatch = async (swatchData) => {
-    const docId = swatchData.id ? String(swatchData.id) : String(Date.now());
-    const payload = { ...swatchData, id: docId, updatedAt: Date.now() };
-    if (isFirebaseAvailable && db) {
-      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'swatches', docId), payload, { merge: true });
-    } else {
-      const idx = swatches.findIndex(s => s.id === docId);
-      let newSwatches = [...swatches];
-      if (idx >= 0) newSwatches[idx] = payload; else newSwatches = [payload, ...newSwatches];
-      saveSwatchesToLocal(newSwatches);
-    }
-    showToast("마감재가 저장되었습니다.");
-  };
-
-  const handleDeleteSwatch = async (swatchId) => {
-    if (!window.confirm("정말 삭제하시겠습니까?")) return;
-    if (isFirebaseAvailable && db) {
-      await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'swatches', String(swatchId)));
-    } else {
-      saveSwatchesToLocal(swatches.filter(s => s.id !== swatchId));
-    }
-    showToast("마감재가 삭제되었습니다.");
-  };
-
   const handleSaveProduct = async (productData) => { const docId = productData.id ? String(productData.id) : String(Date.now()); const isEdit = !!productData.id && products.some(p => String(p.id) === docId); const payload = { ...productData, id: docId, updatedAt: Date.now(), createdAt: isEdit ? (products.find(p => String(p.id) === docId)?.createdAt || Date.now()) : Date.now(), orderIndex: isEdit ? (products.find(p => String(p.id) === docId)?.orderIndex || Date.now()) : Date.now() }; if (isFirebaseAvailable && db) { try { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'products', docId), payload, { merge: true }); } catch (error) { showToast("저장 실패", "error"); return; } } else { const idx = products.findIndex(p => String(p.id) === docId); let newProducts = [...products]; if (idx >= 0) newProducts[idx] = payload; else newProducts = [payload, ...products]; saveToLocalStorage(newProducts); } if (selectedProduct && String(selectedProduct.id) === docId) setSelectedProduct(payload); setIsFormOpen(false); setEditingProduct(null); showToast(isEdit ? "수정 완료" : "등록 완료"); };
   const handleDeleteProduct = async (productId, productName) => { if (!window.confirm('정말 삭제하시겠습니까?')) return; if (isFirebaseAvailable && db) { try { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'products', String(productId))); await logActivity("DELETE", productName, "삭제됨"); } catch (error) { showToast("삭제 실패", "error"); return; } } else { const newProducts = products.filter(p => String(p.id) !== String(productId)); saveToLocalStorage(newProducts); } setSelectedProduct(null); setIsFormOpen(false); showToast("삭제되었습니다."); };
   
@@ -353,7 +296,6 @@ export default function App() {
       else if (activeCategory === 'NEW') matchesCategory = product.isNew;
       else if (activeCategory === 'ALL') matchesCategory = true;
       else if (SPACES.find(s => s.id === activeCategory)) matchesCategory = product.spaces && product.spaces.includes(activeCategory);
-      else if (SWATCH_CATEGORIES.find(s => s.id === activeCategory)) matchesCategory = false; // Swatch views are handled separately
       else matchesCategory = product.category === activeCategory;
       const searchLower = searchTerm.toLowerCase();
       const matchesSearch = product.name.toLowerCase().includes(searchLower) || product.specs.toLowerCase().includes(searchLower) || (product.designer && product.designer.toLowerCase().includes(searchLower)) || (product.options && product.options.some(opt => opt.toLowerCase().includes(searchLower)));
@@ -398,11 +340,6 @@ export default function App() {
              <button onClick={() => setSidebarState(p => ({...p, collections: !p.collections}))} className="w-full flex items-center justify-between text-[10px] font-bold text-zinc-400 mb-2 px-3 tracking-widest uppercase hover:text-zinc-600 transition-colors"><div className="flex items-center"><span>COLLECTIONS</span>{isFirebaseAvailable ? <Cloud className="w-3 h-3 ml-2 text-green-500" /> : <CloudOff className="w-3 h-3 ml-2 text-zinc-300" />}</div>{sidebarState.collections ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}</button>
              {sidebarState.collections && (<div className="space-y-0.5 animate-in slide-in-from-top-2 duration-200">{CATEGORIES.filter(c => !c.isSpecial).map((cat) => (<button key={cat.id} onClick={() => { setActiveCategory(cat.id); setIsMobileMenuOpen(false); }} className={`w-full text-left px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center justify-between group ${activeCategory === cat.id ? 'bg-zinc-100 text-zinc-900 font-bold' : 'text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900'}`}>{cat.label}</button>))}</div>)}
           </div>
-          {/* Swatch Section */}
-          <div className="py-2 border-t border-zinc-100">
-             <button onClick={() => setSidebarState(p => ({...p, materials: !p.materials}))} className="w-full flex items-center justify-between text-[10px] font-bold text-zinc-400 mb-2 px-3 tracking-widest uppercase hover:text-zinc-600 transition-colors"><div className="flex items-center"><span>MATERIALS (SWATCH)</span><Palette className="w-3 h-3 ml-2" /></div>{sidebarState.materials ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}</button>
-             {sidebarState.materials && (<div className="space-y-0.5 animate-in slide-in-from-top-2 duration-200">{SWATCH_CATEGORIES.map((cat) => (<button key={cat.id} onClick={() => { setActiveCategory(cat.id); setIsMobileMenuOpen(false); }} className={`w-full text-left px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center justify-between group ${activeCategory === cat.id ? 'bg-zinc-100 text-zinc-900 font-bold' : 'text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900'}`}>{cat.label}</button>))}</div>)}
-          </div>
           <div className="pt-2"><button onClick={() => { setActiveCategory('MY_PICK'); setIsMobileMenuOpen(false); }} className={`w-full text-left px-4 py-3 rounded-xl text-sm font-bold transition-all duration-200 flex items-center space-x-3 group border ${activeCategory === 'MY_PICK' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' : 'text-zinc-400 border-transparent hover:bg-zinc-50 hover:text-zinc-600'}`}><Heart className={`w-4 h-4 ${activeCategory === 'MY_PICK' ? 'fill-yellow-500 text-yellow-500' : ''}`} /><span>My Pick ({favorites.length})</span></button></div>
         </nav>
         <div className="p-4 border-t border-zinc-100 bg-zinc-50/50 space-y-3"><button onClick={toggleAdminMode} className={`w-full flex items-center justify-center px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${isAdmin ? 'bg-zinc-900 text-white shadow-md' : 'bg-white border border-zinc-200 text-zinc-500 hover:bg-zinc-100'}`}>{isAdmin ? <Unlock className="w-3 h-3 mr-2" /> : <Lock className="w-3 h-3 mr-2" />}{isAdmin ? "ADMIN MODE" : "VIEWER MODE"}</button><div className="flex justify-between items-center px-1">{isAdmin ? (<button onClick={() => { fetchLogs(); setShowAdminDashboard(true); }} className="text-[10px] text-blue-600 hover:text-blue-800 flex items-center font-bold"><Settings className="w-3 h-3 mr-1" /> Dashboard</button>) : <span className="text-[10px] text-zinc-400">{APP_VERSION}</span>}{isAdmin && <span className="text-[10px] text-zinc-300">{BUILD_DATE}</span>}</div></div>
@@ -446,94 +383,68 @@ export default function App() {
                  />
               )}
 
-              {/* Swatch Management View */}
-              {SWATCH_CATEGORIES.find(s => s.id === activeCategory) && (
-                <SwatchManager 
-                  category={SWATCH_CATEGORIES.find(s => s.id === activeCategory)}
-                  swatches={swatches.filter(s => s.category === activeCategory)}
-                  isAdmin={isAdmin}
-                  onSave={handleSaveSwatch}
-                  onDelete={handleDeleteSwatch}
-                />
-              )}
-
-              {/* Standard Product List View */}
-              {!SWATCH_CATEGORIES.find(s => s.id === activeCategory) && (
+              {isLoading && products.length === 0 ? (
+                <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-6">{[1,2,3,4].map(n => (<div key={n} className="bg-white rounded-2xl p-4 h-[250px] md:h-[300px] animate-pulse border border-zinc-100"><div className="bg-zinc-100 h-32 md:h-40 rounded-xl mb-4"></div><div className="bg-zinc-100 h-4 w-2/3 rounded mb-2"></div><div className="bg-zinc-100 h-3 w-1/2 rounded"></div></div>))}</div>
+              ) : (
                 <>
-                  {isLoading && products.length === 0 ? (
-                    <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-6">{[1,2,3,4].map(n => (<div key={n} className="bg-white rounded-2xl p-4 h-[250px] md:h-[300px] animate-pulse border border-zinc-100"><div className="bg-zinc-100 h-32 md:h-40 rounded-xl mb-4"></div><div className="bg-zinc-100 h-4 w-2/3 rounded mb-2"></div><div className="bg-zinc-100 h-3 w-1/2 rounded"></div></div>))}</div>
-                  ) : (
-                    <>
-                      {!SPACES.find(s => s.id === activeCategory) && (
-                        <div className="mb-4 md:mb-8 flex flex-col md:flex-row md:items-end justify-between px-1 print:hidden">
-                          <div className="mb-4 md:mb-0">
-                            <h2 className="text-xl md:text-3xl font-extrabold text-zinc-900 tracking-tight">{activeCategory === 'MY_PICK' ? 'MY PICK' : CATEGORIES.find(c => c.id === activeCategory)?.label || activeCategory}</h2>
-                            <p className="text-zinc-500 text-xs md:text-sm mt-1 font-medium">{processedProducts.length} items found {!isFirebaseAvailable && <span className="ml-2 text-red-400 bg-red-50 px-2 py-0.5 rounded-full text-xs">Offline Mode</span>}</p>
-                          </div>
-                          
-                          {activeCategory === 'MY_PICK' && processedProducts.length > 0 && (
-                            <div className="flex space-x-2">
-                              <div className="flex bg-zinc-100 p-1 rounded-lg">
-                                  <button onClick={() => setMyPickViewMode('grid')} className={`p-2 rounded-md ${myPickViewMode === 'grid' ? 'bg-white shadow-sm text-zinc-900' : 'text-zinc-400'}`} title="Grid View"><Grid className="w-4 h-4"/></button>
-                                  <button onClick={() => setMyPickViewMode('list')} className={`p-2 rounded-md ${myPickViewMode === 'list' ? 'bg-white shadow-sm text-zinc-900' : 'text-zinc-400'}`} title="List View"><List className="w-4 h-4"/></button>
-                              </div>
-                              <button onClick={() => window.print()} className="flex items-center px-4 py-2 bg-zinc-900 text-white rounded-lg text-sm font-bold hover:bg-black transition-colors"><Printer className="w-4 h-4 mr-2"/> Export</button>
-                            </div>
-                          )}
+                  {!SPACES.find(s => s.id === activeCategory) && (
+                    <div className="mb-4 md:mb-8 flex flex-col md:flex-row md:items-end justify-between px-1 print:hidden">
+                      <div className="mb-4 md:mb-0">
+                        <h2 className="text-xl md:text-3xl font-extrabold text-zinc-900 tracking-tight">{activeCategory === 'MY_PICK' ? 'MY PICK' : CATEGORIES.find(c => c.id === activeCategory)?.label || activeCategory}</h2>
+                        <p className="text-zinc-500 text-xs md:text-sm mt-1 font-medium">{processedProducts.length} items found {!isFirebaseAvailable && <span className="ml-2 text-red-400 bg-red-50 px-2 py-0.5 rounded-full text-xs">Offline Mode</span>}</p>
+                      </div>
+                      
+                      {activeCategory === 'MY_PICK' && processedProducts.length > 0 && (
+                        <div className="flex space-x-2">
+                           <div className="flex bg-zinc-100 p-1 rounded-lg">
+                              <button onClick={() => setMyPickViewMode('grid')} className={`p-2 rounded-md ${myPickViewMode === 'grid' ? 'bg-white shadow-sm text-zinc-900' : 'text-zinc-400'}`} title="Grid View"><Grid className="w-4 h-4"/></button>
+                              <button onClick={() => setMyPickViewMode('list')} className={`p-2 rounded-md ${myPickViewMode === 'list' ? 'bg-white shadow-sm text-zinc-900' : 'text-zinc-400'}`} title="List View"><List className="w-4 h-4"/></button>
+                           </div>
+                           <button onClick={() => window.print()} className="flex items-center px-4 py-2 bg-zinc-900 text-white rounded-lg text-sm font-bold hover:bg-black transition-colors"><Printer className="w-4 h-4 mr-2"/> Export</button>
                         </div>
                       )}
-                      
-                      {activeCategory === 'MY_PICK' && myPickViewMode === 'list' ? (
-                        <div className="space-y-4 print:space-y-6">
-                            <div className="hidden print:block mb-8">
-                              <h1 className="text-4xl font-bold mb-2">MY PICK SELECTION</h1>
-                              <p className="text-zinc-500">{new Date().toLocaleDateString()} · Patra Design Lab</p>
-                            </div>
-                            {processedProducts.map((product) => (
-                              <div key={product.id} className="flex flex-col md:flex-row gap-6 p-6 bg-white rounded-2xl border border-zinc-200 print:border-zinc-300 print:break-inside-avoid">
-                                  <div className="w-full md:w-48 h-48 bg-zinc-50 rounded-xl overflow-hidden flex-shrink-0 border border-zinc-100 flex items-center justify-center">
-                                    {product.images?.[0] ? <img src={product.images[0]} className="w-full h-full object-contain mix-blend-multiply" alt={product.name} /> : <ImageIcon className="w-8 h-8 text-zinc-300"/>}
-                                  </div>
-                                  <div className="flex-1">
-                                    <div className="flex justify-between items-start">
-                                        <div>
-                                          <span className="inline-block px-2 py-0.5 bg-zinc-100 text-zinc-600 text-xs font-bold rounded mb-2">{product.category}</span>
-                                          <h3 className="text-2xl font-bold text-zinc-900 mb-1">{product.name}</h3>
-                                          <p className="text-zinc-500 font-medium text-sm mb-4">Designed by {product.designer || 'Patra Design Lab'}</p>
-                                        </div>
-                                        <button onClick={(e) => toggleFavorite(e, product.id)} className="print:hidden text-yellow-400 hover:scale-110 transition-transform"><Star className="w-6 h-6 fill-current"/></button>
-                                    </div>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                                        <div className="bg-zinc-50 p-3 rounded-lg"><span className="font-bold block text-xs text-zinc-400 uppercase mb-1">Specs</span>{product.specs}</div>
-                                        <div className="space-y-2">
-                                          <div><span className="font-bold text-xs text-zinc-400 uppercase">Options</span> <span className="text-zinc-700">{product.options?.join(', ')}</span></div>
-                                          <div>
-                                            <span className="font-bold text-xs text-zinc-400 uppercase block mb-1">Colors</span> 
-                                            <div className="flex gap-2 mb-1">
-                                              <span className="text-xs text-zinc-400 w-16">Body:</span>
-                                              <div className="flex gap-1">{product.bodyColors?.map((c, i) => <SwatchDisplay key={i} color={c} size="small" />)}</div>
-                                            </div>
-                                            <div className="flex gap-2">
-                                              <span className="text-xs text-zinc-400 w-16">Upholstery:</span>
-                                              <div className="flex gap-1">{product.upholsteryColors?.map((c, i) => <SwatchDisplay key={i} color={c} size="small" />)}</div>
-                                            </div>
-                                          </div>
-                                        </div>
-                                    </div>
-                                  </div>
-                              </div>
-                            ))}
-                        </div>
-                      ) : (
-                        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-6 pb-20 print:grid-cols-3 print:gap-4">
-                            {processedProducts.map((product, idx) => (<ProductCard key={product.id} product={product} onClick={() => setSelectedProduct(product)} isAdmin={isAdmin} showMoveControls={isAdmin && sortOption === 'manual'} onMove={(dir) => handleMoveProduct(idx, dir)} isFavorite={favorites.includes(product.id)} onToggleFavorite={(e) => toggleFavorite(e, product.id)} />))}
-                            {isAdmin && activeCategory !== 'MY_PICK' && activeCategory !== 'NEW' && !SPACES.find(s => s.id === activeCategory) && (<button onClick={() => { setEditingProduct(null); setIsFormOpen(true); }} className="border-2 border-dashed border-zinc-200 rounded-2xl flex flex-col items-center justify-center min-h-[250px] md:min-h-[300px] text-zinc-400 hover:border-zinc-400 hover:text-zinc-600 hover:bg-zinc-50 transition-all group print:hidden"><div className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-zinc-100 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform"><Plus className="w-6 h-6" /></div><span className="text-xs md:text-sm font-bold">Add Product</span></button>)}
-                        </div>
-                      )}
-                      
-                      {processedProducts.length === 0 && (<div className="flex flex-col items-center justify-center py-32 text-zinc-300"><CloudOff className="w-16 h-16 mb-4 opacity-50" /><p className="text-sm font-medium">No products found for this space.</p>{isAdmin && SPACES.find(s => s.id === activeCategory) && (<button onClick={() => setManagingSpaceProductsId(activeCategory)} className="mt-4 px-4 py-2 bg-blue-50 text-blue-600 rounded-lg text-sm font-bold hover:bg-blue-100 transition-colors">+ Select Products</button>)}</div>)}
-                    </>
+                    </div>
                   )}
+                  
+                  {activeCategory === 'MY_PICK' && myPickViewMode === 'list' ? (
+                     <div className="space-y-4 print:space-y-6">
+                        <div className="hidden print:block mb-8">
+                           <h1 className="text-4xl font-bold mb-2">MY PICK SELECTION</h1>
+                           <p className="text-zinc-500">{new Date().toLocaleDateString()} · Patra Design Lab</p>
+                        </div>
+                        {processedProducts.map((product) => (
+                           <div key={product.id} className="flex flex-col md:flex-row gap-6 p-6 bg-white rounded-2xl border border-zinc-200 print:border-zinc-300 print:break-inside-avoid">
+                              <div className="w-full md:w-48 h-48 bg-zinc-50 rounded-xl overflow-hidden flex-shrink-0 border border-zinc-100 flex items-center justify-center">
+                                 {product.images?.[0] ? <img src={product.images[0]} className="w-full h-full object-contain mix-blend-multiply" alt={product.name} /> : <ImageIcon className="w-8 h-8 text-zinc-300"/>}
+                              </div>
+                              <div className="flex-1">
+                                 <div className="flex justify-between items-start">
+                                    <div>
+                                       <span className="inline-block px-2 py-0.5 bg-zinc-100 text-zinc-600 text-xs font-bold rounded mb-2">{product.category}</span>
+                                       <h3 className="text-2xl font-bold text-zinc-900 mb-1">{product.name}</h3>
+                                       <p className="text-zinc-500 font-medium text-sm mb-4">Designed by {product.designer || 'Patra Design Lab'}</p>
+                                    </div>
+                                    <button onClick={(e) => toggleFavorite(e, product.id)} className="print:hidden text-yellow-400 hover:scale-110 transition-transform"><Star className="w-6 h-6 fill-current"/></button>
+                                 </div>
+                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                                    <div className="bg-zinc-50 p-3 rounded-lg"><span className="font-bold block text-xs text-zinc-400 uppercase mb-1">Specs</span>{product.specs}</div>
+                                    <div className="space-y-2">
+                                       <div><span className="font-bold text-xs text-zinc-400 uppercase">Options</span> <span className="text-zinc-700">{product.options?.join(', ')}</span></div>
+                                       <div><span className="font-bold text-xs text-zinc-400 uppercase">Colors</span> <span className="text-zinc-700">{product.bodyColors?.join(', ')} / {product.upholsteryColors?.join(', ')}</span></div>
+                                    </div>
+                                 </div>
+                              </div>
+                           </div>
+                        ))}
+                     </div>
+                  ) : (
+                     <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-6 pb-20 print:grid-cols-3 print:gap-4">
+                        {processedProducts.map((product, idx) => (<ProductCard key={product.id} product={product} onClick={() => setSelectedProduct(product)} isAdmin={isAdmin} showMoveControls={isAdmin && sortOption === 'manual'} onMove={(dir) => handleMoveProduct(idx, dir)} isFavorite={favorites.includes(product.id)} onToggleFavorite={(e) => toggleFavorite(e, product.id)} />))}
+                        {isAdmin && activeCategory !== 'MY_PICK' && activeCategory !== 'NEW' && !SPACES.find(s => s.id === activeCategory) && (<button onClick={() => { setEditingProduct(null); setIsFormOpen(true); }} className="border-2 border-dashed border-zinc-200 rounded-2xl flex flex-col items-center justify-center min-h-[250px] md:min-h-[300px] text-zinc-400 hover:border-zinc-400 hover:text-zinc-600 hover:bg-zinc-50 transition-all group print:hidden"><div className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-zinc-100 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform"><Plus className="w-6 h-6" /></div><span className="text-xs md:text-sm font-bold">Add Product</span></button>)}
+                     </div>
+                  )}
+                  
+                  {processedProducts.length === 0 && (<div className="flex flex-col items-center justify-center py-32 text-zinc-300"><CloudOff className="w-16 h-16 mb-4 opacity-50" /><p className="text-sm font-medium">No products found for this space.</p>{isAdmin && SPACES.find(s => s.id === activeCategory) && (<button onClick={() => setManagingSpaceProductsId(activeCategory)} className="mt-4 px-4 py-2 bg-blue-50 text-blue-600 rounded-lg text-sm font-bold hover:bg-blue-100 transition-colors">+ Select Products</button>)}</div>)}
                 </>
               )}
             </>
@@ -544,7 +455,7 @@ export default function App() {
 
       {toast && <div className="fixed bottom-8 right-8 bg-zinc-900 text-white px-5 py-3.5 rounded-xl shadow-2xl flex items-center space-x-3 animate-in slide-in-from-bottom-10 fade-in z-[90] print:hidden">{toast.type === 'success' ? <Check className="w-5 h-5 text-green-400" /> : <Info className="w-5 h-5 text-red-400" />}<span className="text-sm font-bold tracking-wide">{toast.message}</span></div>}
       {selectedProduct && <ProductDetailModal product={selectedProduct} spaceContents={spaceContents} onClose={() => setSelectedProduct(null)} onEdit={() => { setEditingProduct(selectedProduct); setIsFormOpen(true); }} isAdmin={isAdmin} showToast={showToast} isFavorite={favorites.includes(selectedProduct.id)} onToggleFavorite={(e) => toggleFavorite(e, selectedProduct.id)} onNavigateSpace={(spaceId) => { setSelectedProduct(null); setActiveCategory(spaceId); }} onNavigateScene={(scene) => { setSelectedProduct(null); setActiveCategory(scene.spaceId || scene.id); setSelectedScene({...scene, spaceId: scene.spaceId || 'UNKNOWN'}); }} />}
-      {isFormOpen && <ProductFormModal categories={CATEGORIES.filter(c => !c.isSpecial)} swatches={swatches} initialCategory={activeCategory} existingData={editingProduct} onClose={() => { setIsFormOpen(false); setEditingProduct(null); }} onSave={handleSaveProduct} onDelete={handleDeleteProduct} isFirebaseAvailable={isFirebaseAvailable} />}
+      {isFormOpen && <ProductFormModal categories={CATEGORIES.filter(c => !c.isSpecial)} initialCategory={activeCategory} existingData={editingProduct} onClose={() => { setIsFormOpen(false); setEditingProduct(null); }} onSave={handleSaveProduct} onDelete={handleDeleteProduct} isFirebaseAvailable={isFirebaseAvailable} />}
       
       {editingSpaceInfoId && (
         <SpaceInfoEditModal spaceId={editingSpaceInfoId} currentData={spaceContents[editingSpaceInfoId]} onClose={() => setEditingSpaceInfoId(null)} onSave={(data) => { handleSpaceInfoSave(editingSpaceInfoId, data); setEditingSpaceInfoId(null); }} />
@@ -591,182 +502,6 @@ export default function App() {
     </div>
   );
 }
-
-// ----------------------------------------------------------------------
-// Helper Component: Swatch Display (small circle/square with tooltip)
-// Handles both legacy hex strings and new Swatch objects
-// ----------------------------------------------------------------------
-function SwatchDisplay({ color, size = 'medium', className = '' }) {
-  // If color is object, use its data. If string, treat as hex/name
-  const isObject = typeof color === 'object' && color !== null;
-  const hex = isObject ? color.hex : color;
-  const image = isObject ? color.image : null;
-  const name = isObject ? color.name : color;
-
-  const sizeClass = size === 'large' ? 'w-10 h-10' : size === 'small' ? 'w-4 h-4' : 'w-6 h-6';
-
-  return (
-    <div className={`group relative inline-block ${className}`} title={name}>
-       <div className={`${sizeClass} rounded-full border border-zinc-200 shadow-sm overflow-hidden flex items-center justify-center bg-zinc-50 print:border-gray-400`}>
-         {image ? (
-            <img src={image} alt={name} className="w-full h-full object-cover scale-150" />
-         ) : (
-            <div className="w-full h-full" style={{ backgroundColor: hex }} />
-         )}
-       </div>
-       <span className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 px-2 py-1 bg-black text-white text-[10px] rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10 pointer-events-none print:hidden shadow-lg">
-          {name}
-       </span>
-    </div>
-  );
-}
-
-// ----------------------------------------------------------------------
-// New Component: Swatch Manager
-// ----------------------------------------------------------------------
-function SwatchManager({ category, swatches, isAdmin, onSave, onDelete }) {
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingSwatch, setEditingSwatch] = useState(null);
-
-  return (
-    <div className="p-1 animate-in fade-in">
-       <div className="flex justify-between items-end mb-8 border-b border-zinc-100 pb-4">
-          <div>
-            <h2 className="text-3xl font-extrabold text-zinc-900 tracking-tight flex items-center">
-              <div className="w-3 h-8 mr-3 rounded-full" style={{backgroundColor: category.color}}></div>
-              {category.label} Materials
-            </h2>
-            <p className="text-zinc-500 text-sm mt-1 ml-6">{swatches.length} finishes available</p>
-          </div>
-          {isAdmin && (
-             <button onClick={() => { setEditingSwatch(null); setIsModalOpen(true); }} className="px-4 py-2 bg-zinc-900 text-white text-sm font-bold rounded-xl hover:bg-black transition-all flex items-center shadow-lg">
-                <Plus className="w-4 h-4 mr-2" /> Add Material
-             </button>
-          )}
-       </div>
-
-       <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-4">
-          {swatches.map(swatch => (
-             <div key={swatch.id} className="bg-white rounded-xl border border-zinc-200 overflow-hidden group hover:shadow-lg transition-all relative">
-                <div className="aspect-square relative bg-zinc-100 flex items-center justify-center">
-                   {swatch.image ? (
-                      <img src={swatch.image} className="w-full h-full object-cover" alt={swatch.name} />
-                   ) : (
-                      <div className="w-full h-full" style={{backgroundColor: swatch.hex}}></div>
-                   )}
-                   {isAdmin && (
-                     <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button onClick={() => { setEditingSwatch(swatch); setIsModalOpen(true); }} className="p-1.5 bg-white rounded-full shadow hover:text-blue-600"><Edit2 className="w-3 h-3"/></button>
-                        <button onClick={() => onDelete(swatch.id)} className="p-1.5 bg-white rounded-full shadow hover:text-red-600"><Trash2 className="w-3 h-3"/></button>
-                     </div>
-                   )}
-                </div>
-                <div className="p-3">
-                   <h4 className="font-bold text-sm truncate">{swatch.name}</h4>
-                   <p className="text-[10px] text-zinc-400 uppercase font-medium">{swatch.category}</p>
-                </div>
-             </div>
-          ))}
-          {swatches.length === 0 && (
-             <div className="col-span-full py-20 text-center text-zinc-400 border-2 border-dashed border-zinc-100 rounded-xl">
-                <Palette className="w-10 h-10 mx-auto mb-2 opacity-20" />
-                No materials registered in this category.
-             </div>
-          )}
-       </div>
-
-       {isModalOpen && (
-         <SwatchFormModal 
-            category={category} 
-            existingData={editingSwatch} 
-            onClose={() => setIsModalOpen(false)} 
-            onSave={(data) => { onSave(data); setIsModalOpen(false); }} 
-         />
-       )}
-    </div>
-  );
-}
-
-function SwatchFormModal({ category, existingData, onClose, onSave }) {
-  const [data, setData] = useState({ id: null, name: '', category: category.id, hex: '#000000', image: null });
-  const fileRef = useRef(null);
-
-  useEffect(() => {
-     if(existingData) setData(existingData);
-  }, [existingData]);
-
-  const processImage = (file) => {
-    return new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const img = new Image();
-        img.onload = () => {
-           const canvas = document.createElement('canvas'); 
-           const MAX = 300; // Resize for swatch
-           let w = img.width; let h = img.height; 
-           // Center crop to square
-           const minDim = Math.min(w, h);
-           const sx = (w - minDim) / 2; const sy = (h - minDim) / 2;
-           canvas.width = MAX; canvas.height = MAX;
-           const ctx = canvas.getContext('2d'); 
-           ctx.drawImage(img, sx, sy, minDim, minDim, 0, 0, MAX, MAX); 
-           resolve(canvas.toDataURL('image/jpeg', 0.9));
-        };
-        img.src = e.target.result;
-      };
-      reader.readAsDataURL(file);
-    });
-  };
-
-  const handleUpload = async (e) => {
-     const file = e.target.files[0];
-     if(file) {
-        try { const url = await processImage(file); setData(p => ({...p, image: url})); } catch(e){}
-     }
-  };
-
-  return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[90] flex items-center justify-center p-4">
-       <div className="bg-white rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl">
-          <div className="px-5 py-4 border-b border-zinc-100 font-bold text-lg">
-             {existingData ? 'Edit Material' : 'Add Material'}
-          </div>
-          <div className="p-6 space-y-4">
-             <div className="flex justify-center mb-4">
-                <div onClick={() => fileRef.current.click()} className="w-24 h-24 rounded-full shadow-md border-4 border-white cursor-pointer overflow-hidden relative group bg-zinc-100">
-                   {data.image ? <img src={data.image} className="w-full h-full object-cover" /> : <div className="w-full h-full" style={{backgroundColor: data.hex}}></div>}
-                   <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"><Camera className="w-6 h-6 text-white"/></div>
-                </div>
-                <input type="file" ref={fileRef} className="hidden" accept="image/*" onChange={handleUpload} />
-             </div>
-             
-             <div>
-                <label className="text-xs font-bold text-zinc-500 uppercase block mb-1">Name</label>
-                <input value={data.name} onChange={e=>setData({...data, name: e.target.value})} className="w-full border rounded-lg p-2 text-sm outline-none focus:border-black" placeholder="Material Name" />
-             </div>
-             <div>
-                <label className="text-xs font-bold text-zinc-500 uppercase block mb-1">Fallback Color (Hex)</label>
-                <div className="flex gap-2">
-                   <input type="color" value={data.hex} onChange={e=>setData({...data, hex: e.target.value})} className="h-9 w-12 p-0 border rounded overflow-hidden" />
-                   <input value={data.hex} onChange={e=>setData({...data, hex: e.target.value})} className="flex-1 border rounded-lg p-2 text-sm outline-none" />
-                </div>
-             </div>
-             <div>
-                <label className="text-xs font-bold text-zinc-500 uppercase block mb-1">Type</label>
-                <select value={data.category} onChange={e=>setData({...data, category: e.target.value})} className="w-full border rounded-lg p-2 text-sm outline-none bg-white">
-                   {SWATCH_CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
-                </select>
-             </div>
-          </div>
-          <div className="px-5 py-4 border-t border-zinc-100 bg-zinc-50 flex justify-end space-x-2">
-             <button onClick={onClose} className="px-4 py-2 text-sm font-bold text-zinc-500 hover:text-zinc-900">Cancel</button>
-             <button onClick={() => onSave(data)} className="px-4 py-2 bg-zinc-900 text-white rounded-lg text-sm font-bold shadow-md hover:bg-black">Save</button>
-          </div>
-       </div>
-    </div>
-  );
-}
-
 
 function PieChartComponent({ data, total }) {
   const [hoveredIndex, setHoveredIndex] = useState(null);
@@ -1171,11 +906,11 @@ function ProductCard({ product, onClick, showMoveControls, onMove, isFavorite, o
         <div className="mt-auto pt-2 md:pt-4 border-t border-zinc-50 space-y-2">
           <div className="flex items-center gap-1 md:gap-2">
              <div className="flex -space-x-1">
-                {product.bodyColors?.slice(0, 4).map((c, i) => <SwatchDisplay key={i} color={c} size="small" className="ring-1 ring-white" />)}
+                {product.bodyColors?.slice(0, 4).map((c, i) => <div key={i} className="w-2.5 h-2.5 md:w-3.5 md:h-3.5 rounded-full border border-white shadow-sm ring-1 ring-zinc-100" style={{ backgroundColor: c }} />)}
              </div>
              {product.upholsteryColors?.length > 0 && <span className="text-zinc-200 text-[10px] mx-0.5">|</span>}
              <div className="flex -space-x-1">
-                {product.upholsteryColors?.slice(0, 4).map((c, i) => <SwatchDisplay key={i} color={c} size="small" className="ring-1 ring-white rounded-sm" />)}
+                {product.upholsteryColors?.slice(0, 4).map((c, i) => <div key={i} className="w-2.5 h-2.5 md:w-3.5 md:h-3.5 rounded-sm border border-white shadow-sm ring-1 ring-zinc-100" style={{ backgroundColor: c }} />)}
              </div>
           </div>
         </div>
@@ -1229,7 +964,7 @@ function ProductDetailModal({ product, spaceContents, onClose, onEdit, isAdmin, 
      return y + lineHeight;
   };
 
-  const handleShareImage = async () => {
+  const handleShareImage = () => {
     const canvas = canvasRef.current; if (!canvas) return; const ctx = canvas.getContext('2d');
     const w = 1080;
     
@@ -1238,120 +973,57 @@ function ProductDetailModal({ product, spaceContents, onClose, onEdit, isAdmin, 
     const baseHeight = 1400 + specLinesHeight + (product.features?.length || 0) * 50;
     
     canvas.width = w; canvas.height = baseHeight; 
-    
-    // Draw Background
-    ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, w, baseHeight);
-    
-    // Draw Header
-    ctx.fillStyle = '#18181b'; ctx.fillRect(0, 0, w, 140);
-    ctx.fillStyle = '#ffffff'; ctx.font = 'bold 40px sans-serif'; ctx.textAlign = 'left'; ctx.fillText("PATRA DESIGN LAB", 60, 85);
+    const img = new Image(); img.crossOrigin = "Anonymous";
+    img.onload = () => {
+      ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, w, baseHeight);
+      ctx.fillStyle = '#18181b'; ctx.fillRect(0, 0, w, 140);
+      ctx.fillStyle = '#ffffff'; ctx.font = 'bold 40px sans-serif'; ctx.textAlign = 'left'; ctx.fillText("PATRA DESIGN LAB", 60, 85);
+      
+      const ratio = Math.min((w - 120) / img.width, 600 / img.height);
+      const imgW = img.width * ratio; const imgH = img.height * ratio;
+      ctx.drawImage(img, (w - imgW) / 2, 200, imgW, imgH);
+      
+      let cursorY = 200 + imgH + 80;
+      ctx.textAlign = 'center'; ctx.fillStyle = '#18181b'; ctx.font = 'bold 70px sans-serif'; 
+      ctx.fillText(product.name, w/2, cursorY);
+      cursorY += 60;
+      
+      ctx.fillStyle = '#71717a'; ctx.font = 'bold 30px sans-serif'; 
+      ctx.fillText(product.category.toUpperCase(), w/2, cursorY);
+      cursorY += 50;
 
-    // Draw Main Image
-    const loadImg = (src) => new Promise(res => { const i = new Image(); i.crossOrigin = "Anonymous"; i.onload = () => res(i); i.onerror = () => res(null); i.src = src; });
-    
-    if (currentImage) {
-        const img = await loadImg(currentImage);
-        if(img) {
-            const ratio = Math.min((w - 120) / img.width, 600 / img.height);
-            const imgW = img.width * ratio; const imgH = img.height * ratio;
-            ctx.drawImage(img, (w - imgW) / 2, 200, imgW, imgH);
-            let cursorY = 200 + imgH + 80;
-            
-            // Draw Text Info
-            ctx.textAlign = 'center'; ctx.fillStyle = '#18181b'; ctx.font = 'bold 70px sans-serif'; 
-            ctx.fillText(product.name, w/2, cursorY);
-            cursorY += 60;
-            
-            ctx.fillStyle = '#71717a'; ctx.font = 'bold 30px sans-serif'; 
-            ctx.fillText(product.category.toUpperCase(), w/2, cursorY);
-            cursorY += 50;
+      if(product.designer) {
+        ctx.fillStyle = '#a1a1aa'; ctx.font = '30px sans-serif'; 
+        ctx.fillText(`Designed by ${product.designer}`, w/2, cursorY);
+        cursorY += 80;
+      } else { cursorY += 40; }
 
-            if(product.designer) {
-                ctx.fillStyle = '#a1a1aa'; ctx.font = '30px sans-serif'; 
-                ctx.fillText(`Designed by ${product.designer}`, w/2, cursorY);
-                cursorY += 80;
-            } else { cursorY += 40; }
+      ctx.textAlign = 'left';
+      ctx.fillStyle = '#f4f4f5'; ctx.fillRect(60, cursorY, w - 120, baseHeight - cursorY - 60);
+      cursorY += 60;
+      ctx.fillStyle = '#3f3f46'; ctx.font = 'bold 30px sans-serif';
+      ctx.fillText("SPECIFICATIONS", 100, cursorY);
+      cursorY += 50;
+      
+      ctx.font = '26px sans-serif'; ctx.fillStyle = '#52525b';
+      const specText = product.specs.split('\n');
+      specText.forEach(line => { 
+         cursorY = wrapText(ctx, line, 100, cursorY, w - 200, 40);
+      });
+      cursorY += 40;
 
-            ctx.textAlign = 'left';
-            ctx.fillStyle = '#f4f4f5'; ctx.fillRect(60, cursorY, w - 120, baseHeight - cursorY - 60);
-            cursorY += 60;
-            ctx.fillStyle = '#3f3f46'; ctx.font = 'bold 30px sans-serif';
-            ctx.fillText("SPECIFICATIONS", 100, cursorY);
-            cursorY += 50;
-            
-            ctx.font = '26px sans-serif'; ctx.fillStyle = '#52525b';
-            const specText = product.specs.split('\n');
-            specText.forEach(line => { 
-                cursorY = wrapText(ctx, line, 100, cursorY, w - 200, 40);
-            });
-            cursorY += 40;
+      if (product.features?.length > 0 || product.options?.length > 0) {
+         ctx.fillStyle = '#3f3f46'; ctx.font = 'bold 30px sans-serif';
+         ctx.fillText("FEATURES & OPTIONS", 100, cursorY);
+         cursorY += 50;
+         ctx.font = '26px sans-serif'; ctx.fillStyle = '#52525b';
+         const allFeatures = [...(product.options||[]), ...(product.features||[])];
+         allFeatures.forEach(f => { cursorY = wrapText(ctx, `• ${f}`, 100, cursorY, w - 200, 40); });
+      }
 
-            if (product.features?.length > 0 || product.options?.length > 0) {
-                ctx.fillStyle = '#3f3f46'; ctx.font = 'bold 30px sans-serif';
-                ctx.fillText("FEATURES & OPTIONS", 100, cursorY);
-                cursorY += 50;
-                ctx.font = '26px sans-serif'; ctx.fillStyle = '#52525b';
-                const allFeatures = [...(product.options||[]), ...(product.features||[])];
-                allFeatures.forEach(f => { cursorY = wrapText(ctx, `• ${f}`, 100, cursorY, w - 200, 40); });
-            }
-
-            // [New] Draw Swatches for Export
-            cursorY += 40;
-            if ((product.bodyColors && product.bodyColors.length > 0) || (product.upholsteryColors && product.upholsteryColors.length > 0)) {
-                ctx.fillStyle = '#3f3f46'; ctx.font = 'bold 30px sans-serif';
-                ctx.fillText("MATERIALS & FINISHES", 100, cursorY);
-                cursorY += 50;
-
-                const drawSwatchRow = async (label, colors) => {
-                    if (!colors || colors.length === 0) return;
-                    ctx.font = 'bold 24px sans-serif'; ctx.fillStyle = '#71717a';
-                    ctx.fillText(label, 100, cursorY);
-                    cursorY += 40;
-                    
-                    let startX = 100;
-                    for (const color of colors) {
-                        const isObj = typeof color === 'object';
-                        const hex = isObj ? color.hex : color;
-                        const imgUrl = isObj ? color.image : null;
-                        
-                        ctx.save();
-                        ctx.beginPath();
-                        ctx.arc(startX + 25, cursorY + 25, 25, 0, Math.PI * 2);
-                        ctx.closePath();
-                        ctx.clip();
-
-                        if (imgUrl) {
-                            const sImg = await loadImg(imgUrl);
-                            if(sImg) ctx.drawImage(sImg, startX, cursorY, 50, 50);
-                            else { ctx.fillStyle = '#eee'; ctx.fillRect(startX, cursorY, 50, 50); }
-                        } else {
-                            ctx.fillStyle = hex || '#ccc';
-                            ctx.fillRect(startX, cursorY, 50, 50);
-                        }
-                        ctx.restore();
-                        // Border
-                        ctx.beginPath(); ctx.arc(startX + 25, cursorY + 25, 25, 0, Math.PI * 2);
-                        ctx.strokeStyle = '#e4e4e7'; ctx.lineWidth = 2; ctx.stroke();
-
-                        // Label
-                        if(isObj) {
-                            ctx.font = '20px sans-serif'; ctx.fillStyle = '#18181b';
-                            ctx.fillText(color.name, startX + 60, cursorY + 32);
-                            startX += 250; // More space for name
-                        } else {
-                           startX += 60;
-                        }
-                    }
-                    cursorY += 70;
-                };
-
-                await drawSwatchRow("Body Colors", product.bodyColors);
-                await drawSwatchRow("Upholstery", product.upholsteryColors);
-            }
-
-            const dataUrl = canvas.toDataURL('image/png'); const a = document.createElement('a'); a.href = dataUrl; a.download = `${product.name}-card.png`; a.click(); showToast("이미지가 저장되었습니다.");
-        }
-    } else showToast("이미지가 없어 생성할 수 없습니다.", "error");
+      const dataUrl = canvas.toDataURL('image/png'); const a = document.createElement('a'); a.href = dataUrl; a.download = `${product.name}-card.png`; a.click(); showToast("이미지가 저장되었습니다.");
+    };
+    if(currentImage) img.src = currentImage; else showToast("이미지가 없어 생성할 수 없습니다.", "error");
   };
 
   return (
@@ -1387,18 +1059,8 @@ function ProductDetailModal({ product, spaceContents, onClose, onEdit, isAdmin, 
               <div><h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-3 flex items-center justify-between">Specifications <button onClick={copyToClipboard} className="text-zinc-400 hover:text-zinc-900 print:hidden"><Copy className="w-4 h-4" /></button></h3><p className="text-sm text-zinc-600 leading-relaxed bg-zinc-50 p-4 md:p-6 rounded-2xl border border-zinc-100 whitespace-pre-wrap print:bg-transparent print:border-none print:p-0">{product.specs}</p></div>
               {(product.features?.length > 0 || product.options?.length > 0) && (<div><h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-3">Features & Options</h3><div className="flex flex-wrap gap-2">{product.options?.map((opt, idx) => (<span key={idx} className="px-3 py-1.5 bg-blue-50 text-blue-600 border border-blue-100 rounded-lg text-xs font-bold print:border-gray-300 print:text-black">{opt}</span>))}{product.features?.map((ft, idx) => (<span key={idx} className="px-3 py-1.5 bg-zinc-100 text-zinc-600 rounded-lg text-xs font-medium flex items-center print:bg-transparent"><Check className="w-3 h-3 mr-1.5" /> {ft}</span>))}</div></div>)}
               <div className="grid grid-cols-2 gap-4 md:gap-8">
-                 <div>
-                    <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2">Body Color</h3>
-                    <div className="flex flex-wrap gap-2">
-                       {product.bodyColors?.map((c, i) => <SwatchDisplay key={i} color={c} size="medium" />)}
-                    </div>
-                 </div>
-                 <div>
-                    <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2">Upholstery</h3>
-                    <div className="flex flex-wrap gap-2">
-                       {product.upholsteryColors?.map((c, i) => <SwatchDisplay key={i} color={c} size="medium" />)}
-                    </div>
-                 </div>
+                 <div><h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2">Body Color</h3><div className="flex flex-wrap gap-2">{product.bodyColors?.map((c, i) => (<div key={i} className="group relative"><div className="w-6 h-6 rounded-full border border-zinc-200 shadow-sm cursor-help print:border-gray-400" style={{ backgroundColor: c }} /><span className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 px-2 py-1 bg-black text-white text-[10px] rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10 pointer-events-none print:hidden">{c}</span></div>))}</div></div>
+                 <div><h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2">Upholstery</h3><div className="flex flex-wrap gap-2">{product.upholsteryColors?.map((c, i) => (<div key={i} className="group relative"><div className="w-6 h-6 rounded-md border border-zinc-200 shadow-sm cursor-help print:border-gray-400" style={{ backgroundColor: c }} /><span className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 px-2 py-1 bg-black text-white text-[10px] rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10 pointer-events-none print:hidden">{c}</span></div>))}</div></div>
               </div>
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-8 border-t border-zinc-100 print:hidden">
@@ -1460,21 +1122,17 @@ function ProductDetailModal({ product, spaceContents, onClose, onEdit, isAdmin, 
   );
 }
 
-// ----------------------------------------------------------------------
-// Enhanced Product Form: With Swatch Selector
-// ----------------------------------------------------------------------
-function ProductFormModal({ categories, swatches = [], existingData, onClose, onSave, onDelete, isFirebaseAvailable, initialCategory }) {
+function ProductFormModal({ categories, existingData, onClose, onSave, onDelete, isFirebaseAvailable, initialCategory }) {
   const isEditMode = !!existingData;
   const fileInputRef = useRef(null);
   const contentInputRef = useRef(null);
   const defaultCategory = (initialCategory && !['ALL','NEW','MY_PICK','DASHBOARD'].includes(initialCategory) && !SPACES.find(s=>s.id===initialCategory)) ? initialCategory : 'EXECUTIVE';
-  
   const [formData, setFormData] = useState({ 
     id: null, name: '', category: defaultCategory, specs: '', designer: '',
-    featuresString: '', optionsString: '', materialsString: '', awardsString: '',
+    featuresString: '', optionsString: '', materialsString: '',
+    bodyColorsString: '', upholsteryColorsString: '', awardsString: '',
     productLink: '', isNew: false, launchDate: new Date().toISOString().split('T')[0],
-    images: [], attachments: [], contentImages: [], spaces: [],
-    bodyColors: [], upholsteryColors: [] // Array of Objects or Strings
+    images: [], attachments: [], contentImages: [], spaces: []
   });
   const [isProcessingImage, setIsProcessingImage] = useState(false);
 
@@ -1483,11 +1141,10 @@ function ProductFormModal({ categories, swatches = [], existingData, onClose, on
       setFormData({ 
         id: existingData.id, name: existingData.name, category: existingData.category, specs: existingData.specs, designer: existingData.designer || '',
         featuresString: existingData.features?.join(', ') || '', optionsString: existingData.options?.join(', ') || '', materialsString: existingData.materials?.join(', ') || '',
-        awardsString: existingData.awards?.join(', ') || '', productLink: existingData.productLink || '', isNew: existingData.isNew, launchDate: existingData.launchDate || new Date().toISOString().split('T')[0],
+        bodyColorsString: existingData.bodyColors?.join(', ') || '', upholsteryColorsString: existingData.upholsteryColors?.join(', ') || '', awardsString: existingData.awards?.join(', ') || '',
+        productLink: existingData.productLink || '', isNew: existingData.isNew, launchDate: existingData.launchDate || new Date().toISOString().split('T')[0],
         images: existingData.images || [], attachments: existingData.attachments || [], contentImages: existingData.contentImages || [],
-        spaces: existingData.spaces || [],
-        bodyColors: existingData.bodyColors || [],
-        upholsteryColors: existingData.upholsteryColors || []
+        spaces: existingData.spaces || []
       });
     }
   }, [existingData]);
@@ -1510,6 +1167,8 @@ function ProductFormModal({ categories, swatches = [], existingData, onClose, on
       features: formData.featuresString.split(',').map(s=>s.trim()).filter(Boolean),
       options: formData.optionsString.split(',').map(s=>s.trim()).filter(Boolean),
       materials: formData.materialsString.split(',').map(s=>s.trim()).filter(Boolean),
+      bodyColors: formData.bodyColorsString.split(',').map(s=>s.trim()).filter(Boolean),
+      upholsteryColors: formData.upholsteryColorsString.split(',').map(s=>s.trim()).filter(Boolean),
       awards: formData.awardsString.split(',').map(s=>s.trim()).filter(Boolean),
     });
   };
@@ -1528,6 +1187,7 @@ function ProductFormModal({ categories, swatches = [], existingData, onClose, on
                {formData.images.map((img, i) => (<div key={i} className="relative aspect-square bg-white rounded-lg border overflow-hidden group"><img src={img} className="w-full h-full object-cover" /><button type="button" onClick={()=>removeImage(i)} className="absolute top-1 right-1 bg-red-500 text-white p-1 rounded-full opacity-0 group-hover:opacity-100"><X className="w-3 h-3"/></button>{i===0 && <span className="absolute bottom-1 left-1 bg-black text-white text-[9px] px-1 rounded">MAIN</span>}{i!==0 && <button type="button" onClick={()=>setMainImage(i)} className="absolute bottom-1 left-1 bg-white text-black text-[9px] px-1 rounded opacity-0 group-hover:opacity-100">Set Main</button>}</div>))}
              </div>
           </div>
+          {/* ... (Rest of form similar to previous version) ... */}
           <div className="bg-zinc-50 p-6 rounded-xl border border-zinc-200">
              <div className="flex justify-between mb-4"><span className="font-bold text-sm">Detailed Content Images (Vertical Scroll)</span><div className="space-x-2"><button type="button" onClick={() => contentInputRef.current.click()} className="text-xs bg-white border px-3 py-1 rounded-lg font-medium hover:bg-zinc-100">Upload</button></div><input ref={contentInputRef} type="file" multiple className="hidden" onChange={handleContentImageUpload} accept="image/*"/></div>
              <div className="grid grid-cols-3 sm:grid-cols-5 gap-3">
@@ -1540,23 +1200,7 @@ function ProductFormModal({ categories, swatches = [], existingData, onClose, on
           <div><label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Specs</label><textarea required rows={2} className="w-full border p-2 rounded-lg" value={formData.specs} onChange={e=>setFormData({...formData, specs: e.target.value})}/></div>
           <div className="grid grid-cols-2 gap-6"><div><label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Options (comma)</label><input className="w-full border p-2 rounded-lg" value={formData.optionsString} onChange={e=>setFormData({...formData, optionsString: e.target.value})}/></div><div><label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Features (comma)</label><input className="w-full border p-2 rounded-lg" value={formData.featuresString} onChange={e=>setFormData({...formData, featuresString: e.target.value})}/></div></div>
           <div className="grid grid-cols-2 gap-6"><div><label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Materials (comma)</label><input className="w-full border p-2 rounded-lg" value={formData.materialsString} onChange={e=>setFormData({...formData, materialsString: e.target.value})}/></div><div><label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Awards (comma)</label><input className="w-full border p-2 rounded-lg" value={formData.awardsString} onChange={e=>setFormData({...formData, awardsString: e.target.value})}/></div></div>
-          
-          {/* Enhanced Swatch Selection */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-zinc-50 p-4 rounded-xl border border-zinc-100">
-             <SwatchSelector 
-                label="Body Colors" 
-                selected={formData.bodyColors} 
-                swatches={swatches}
-                onChange={(newColors) => setFormData({...formData, bodyColors: newColors})}
-             />
-             <SwatchSelector 
-                label="Upholstery Colors" 
-                selected={formData.upholsteryColors} 
-                swatches={swatches}
-                onChange={(newColors) => setFormData({...formData, upholsteryColors: newColors})}
-             />
-          </div>
-          
+          <div className="grid grid-cols-2 gap-6 bg-zinc-50 p-4 rounded-xl border border-zinc-100"><div><label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Body Colors</label><input className="w-full border p-2 rounded-lg" placeholder="Black, #fff..." value={formData.bodyColorsString} onChange={e=>setFormData({...formData, bodyColorsString: e.target.value})}/></div><div><label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Upholstery Colors</label><input className="w-full border p-2 rounded-lg" placeholder="Red, Blue..." value={formData.upholsteryColorsString} onChange={e=>setFormData({...formData, upholsteryColorsString: e.target.value})}/></div></div>
           <div className="space-y-4"><div><label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Link</label><input className="w-full border p-2 rounded-lg" placeholder="https://..." value={formData.productLink} onChange={e=>setFormData({...formData, productLink: e.target.value})}/></div><div className="flex justify-between"><label className="block text-xs font-bold text-zinc-500 uppercase">Attachments</label><div className="space-x-2"><button type="button" onClick={()=>document.getElementById('doc-upload').click()} className="text-xs border px-2 py-1 rounded bg-white">File</button><button type="button" onClick={handleAddLinkAttachment} className="text-xs border px-2 py-1 rounded bg-white">Link</button></div><input id="doc-upload" type="file" multiple className="hidden" onChange={handleAttachmentUpload}/></div><div className="space-y-1">{formData.attachments.map((f, i)=><div key={i} className="flex justify-between text-xs bg-zinc-50 p-2 rounded"><span>{f.name}</span><button type="button" onClick={()=>removeAttachment(i)} className="text-red-500"><X className="w-3 h-3"/></button></div>)}</div></div>
           <div className="flex items-center space-x-2"><input type="checkbox" checked={formData.isNew} onChange={e=>setFormData({...formData, isNew: e.target.checked})}/><label className="text-sm font-bold">Mark as New Arrival</label></div>
         </form>
@@ -1568,91 +1212,6 @@ function ProductFormModal({ categories, swatches = [], existingData, onClose, on
            </div>
         </div>
       </div>
-    </div>
-  );
-}
-
-// ----------------------------------------------------------------------
-// Helper Component: Swatch Selector for Product Form
-// ----------------------------------------------------------------------
-function SwatchSelector({ label, selected, swatches, onChange }) {
-  const [isOpen, setIsOpen] = useState(false);
-  const [filter, setFilter] = useState('');
-  const [activeTab, setActiveTab] = useState('ALL');
-
-  const handleSelect = (swatch) => {
-     // Save snapshot of swatch data
-     const snapshot = { id: swatch.id, name: swatch.name, hex: swatch.hex, image: swatch.image, category: swatch.category };
-     // Avoid duplicates
-     if(!selected.find(s => (typeof s === 'object' ? s.id === swatch.id : false))) {
-        onChange([...selected, snapshot]);
-     }
-     setIsOpen(false);
-  };
-
-  const handleRemove = (index) => {
-     const newSelected = [...selected];
-     newSelected.splice(index, 1);
-     onChange(newSelected);
-  };
-
-  // Allow manual hex entry for backward compatibility or quick adds
-  const handleManualAdd = () => {
-     const hex = prompt("Enter Hex Color (e.g. #000000) or Name:");
-     if(hex) onChange([...selected, hex]);
-  };
-
-  const filteredSwatches = swatches.filter(s => {
-     if(activeTab !== 'ALL' && s.category !== activeTab) return false;
-     return s.name.toLowerCase().includes(filter.toLowerCase());
-  });
-
-  return (
-    <div className="relative">
-       <div className="flex justify-between items-center mb-1">
-          <label className="block text-xs font-bold text-zinc-500 uppercase">{label}</label>
-          <button type="button" onClick={handleManualAdd} className="text-[10px] text-blue-600 font-bold hover:underline">Manual Input</button>
-       </div>
-       <div className="flex flex-wrap gap-2 min-h-[40px] p-2 bg-white border rounded-lg items-center">
-          {selected.map((item, idx) => (
-             <div key={idx} className="relative group">
-                <SwatchDisplay color={item} size="small" />
-                <button type="button" onClick={() => handleRemove(idx)} className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100"><X className="w-2 h-2"/></button>
-             </div>
-          ))}
-          <button type="button" onClick={() => setIsOpen(true)} className="w-6 h-6 rounded-full border border-dashed border-zinc-400 flex items-center justify-center text-zinc-400 hover:border-zinc-900 hover:text-zinc-900"><Plus className="w-3 h-3"/></button>
-       </div>
-
-       {isOpen && (
-          <div className="absolute top-full left-0 z-50 mt-2 w-full md:w-[400px] bg-white rounded-xl shadow-xl border border-zinc-200 p-4">
-             <div className="flex justify-between items-center mb-3">
-                <h4 className="font-bold text-sm">Select Material</h4>
-                <button onClick={() => setIsOpen(false)}><X className="w-4 h-4 text-zinc-400 hover:text-black"/></button>
-             </div>
-             
-             {/* Category Tabs */}
-             <div className="flex gap-1 overflow-x-auto pb-2 mb-2 custom-scrollbar">
-                <button type="button" onClick={()=>setActiveTab('ALL')} className={`px-2 py-1 rounded text-[10px] font-bold whitespace-nowrap ${activeTab==='ALL'?'bg-black text-white':'bg-zinc-100'}`}>ALL</button>
-                {SWATCH_CATEGORIES.map(c => (
-                   <button key={c.id} type="button" onClick={()=>setActiveTab(c.id)} className={`px-2 py-1 rounded text-[10px] font-bold whitespace-nowrap ${activeTab===c.id?'bg-black text-white':'bg-zinc-100'}`}>{c.label}</button>
-                ))}
-             </div>
-
-             <input placeholder="Search materials..." value={filter} onChange={e=>setFilter(e.target.value)} className="w-full text-xs p-2 bg-zinc-50 rounded border mb-3 outline-none" />
-             
-             <div className="grid grid-cols-5 gap-2 max-h-48 overflow-y-auto custom-scrollbar">
-                {filteredSwatches.map(s => (
-                   <button key={s.id} type="button" onClick={() => handleSelect(s)} className="flex flex-col items-center group">
-                      <div className="w-8 h-8 rounded-full border overflow-hidden relative">
-                         {s.image ? <img src={s.image} className="w-full h-full object-cover"/> : <div className="w-full h-full" style={{backgroundColor:s.hex}}></div>}
-                         <div className="absolute inset-0 bg-black/20 hidden group-hover:flex items-center justify-center"><Plus className="w-4 h-4 text-white"/></div>
-                      </div>
-                      <span className="text-[9px] text-zinc-500 truncate w-full text-center mt-1">{s.name}</span>
-                   </button>
-                ))}
-             </div>
-          </div>
-       )}
     </div>
   );
 }
