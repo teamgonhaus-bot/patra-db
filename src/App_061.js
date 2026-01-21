@@ -36,7 +36,7 @@ const YOUR_FIREBASE_CONFIG = {
 // ----------------------------------------------------------------------
 // 상수 및 설정
 // ----------------------------------------------------------------------
-const APP_VERSION = "v0.6.2"; 
+const APP_VERSION = "v0.6.1"; 
 const BUILD_DATE = "2026.01.21";
 const ADMIN_PASSWORD = "adminlcg1"; 
 
@@ -109,8 +109,7 @@ export default function App() {
   const [sortOption, setSortOption] = useState('manual'); 
   const [sortDirection, setSortDirection] = useState('desc'); 
   
-  const [selectedProduct, setSelectedProduct] = useState(null);
-  const [selectedSwatch, setSelectedSwatch] = useState(null); // New state for Swatch Detail
+  const [selectedProduct, setSelectedProduct] = useState(null); 
   const [isFormOpen, setIsFormOpen] = useState(false); 
   const [editingProduct, setEditingProduct] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -448,7 +447,6 @@ export default function App() {
                   isAdmin={isAdmin}
                   onSave={handleSaveSwatch}
                   onDelete={handleDeleteSwatch}
-                  onSelect={(swatch) => setSelectedSwatch(swatch)}
                 />
               )}
 
@@ -540,16 +538,6 @@ export default function App() {
       {selectedProduct && <ProductDetailModal product={selectedProduct} spaceContents={spaceContents} onClose={() => setSelectedProduct(null)} onEdit={() => { setEditingProduct(selectedProduct); setIsFormOpen(true); }} isAdmin={isAdmin} showToast={showToast} isFavorite={favorites.includes(selectedProduct.id)} onToggleFavorite={(e) => toggleFavorite(e, selectedProduct.id)} onNavigateSpace={(spaceId) => { setSelectedProduct(null); setActiveCategory(spaceId); }} onNavigateScene={(scene) => { setSelectedProduct(null); setActiveCategory(scene.spaceId || scene.id); setSelectedScene({...scene, spaceId: scene.spaceId || 'UNKNOWN'}); }} />}
       {isFormOpen && <ProductFormModal categories={CATEGORIES.filter(c => !c.isSpecial)} swatches={swatches} initialCategory={activeCategory} existingData={editingProduct} onClose={() => { setIsFormOpen(false); setEditingProduct(null); }} onSave={handleSaveProduct} onDelete={handleDeleteProduct} isFirebaseAvailable={isFirebaseAvailable} />}
       
-      {/* Swatch Detail Modal */}
-      {selectedSwatch && (
-        <SwatchDetailModal 
-          swatch={selectedSwatch}
-          allProducts={products}
-          onClose={() => setSelectedSwatch(null)}
-          onNavigateProduct={(product) => { setSelectedSwatch(null); setSelectedProduct(product); }}
-        />
-      )}
-
       {editingSpaceInfoId && (
         <SpaceInfoEditModal spaceId={editingSpaceInfoId} currentData={spaceContents[editingSpaceInfoId]} onClose={() => setEditingSpaceInfoId(null)} onSave={(data) => { handleSpaceInfoSave(editingSpaceInfoId, data); setEditingSpaceInfoId(null); }} />
       )}
@@ -619,19 +607,9 @@ function SwatchDisplay({ color, size = 'medium', className = '' }) {
   );
 }
 
-function SwatchManager({ category, swatches, isAdmin, onSave, onDelete, onSelect }) {
+function SwatchManager({ category, swatches, isAdmin, onSave, onDelete }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingSwatch, setEditingSwatch] = useState(null);
-
-  const handleCardClick = (swatch) => {
-     onSelect(swatch);
-  };
-
-  const handleEditClick = (e, swatch) => {
-     e.stopPropagation();
-     setEditingSwatch(swatch); 
-     setIsModalOpen(true);
-  };
 
   return (
     <div className="p-1 animate-in fade-in">
@@ -652,7 +630,7 @@ function SwatchManager({ category, swatches, isAdmin, onSave, onDelete, onSelect
 
        <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-4">
           {swatches.map(swatch => (
-             <div key={swatch.id} onClick={() => handleCardClick(swatch)} className="bg-white rounded-xl border border-zinc-200 overflow-hidden group hover:shadow-lg transition-all relative cursor-pointer">
+             <div key={swatch.id} className="bg-white rounded-xl border border-zinc-200 overflow-hidden group hover:shadow-lg transition-all relative">
                 <div className="aspect-square relative bg-zinc-100 flex items-center justify-center">
                    {swatch.image ? (
                       <img src={swatch.image} className="w-full h-full object-cover" alt={swatch.name} />
@@ -661,17 +639,14 @@ function SwatchManager({ category, swatches, isAdmin, onSave, onDelete, onSelect
                    )}
                    {isAdmin && (
                      <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button onClick={(e) => handleEditClick(e, swatch)} className="p-1.5 bg-white rounded-full shadow hover:text-blue-600"><Edit2 className="w-3 h-3"/></button>
-                        <button onClick={(e) => { e.stopPropagation(); onDelete(swatch.id); }} className="p-1.5 bg-white rounded-full shadow hover:text-red-600"><Trash2 className="w-3 h-3"/></button>
+                        <button onClick={() => { setEditingSwatch(swatch); setIsModalOpen(true); }} className="p-1.5 bg-white rounded-full shadow hover:text-blue-600"><Edit2 className="w-3 h-3"/></button>
+                        <button onClick={() => onDelete(swatch.id)} className="p-1.5 bg-white rounded-full shadow hover:text-red-600"><Trash2 className="w-3 h-3"/></button>
                      </div>
                    )}
                 </div>
                 <div className="p-3">
                    <h4 className="font-bold text-sm truncate">{swatch.name}</h4>
-                   <div className="flex justify-between items-center mt-1">
-                      <p className="text-[10px] text-zinc-400 uppercase font-medium">{swatch.category}</p>
-                      <p className="text-[10px] text-zinc-400 font-mono bg-zinc-50 px-1 rounded">{swatch.hex}</p>
-                   </div>
+                   <p className="text-[10px] text-zinc-400 uppercase font-medium">{swatch.category}</p>
                 </div>
              </div>
           ))}
@@ -695,83 +670,12 @@ function SwatchManager({ category, swatches, isAdmin, onSave, onDelete, onSelect
   );
 }
 
-function SwatchDetailModal({ swatch, allProducts, onClose, onNavigateProduct }) {
-    // Find products using this swatch
-    const relatedProducts = allProducts.filter(p => {
-        const inBody = p.bodyColors?.some(c => typeof c === 'object' && c.id === swatch.id);
-        const inUph = p.upholsteryColors?.some(c => typeof c === 'object' && c.id === swatch.id);
-        return inBody || inUph;
-    });
-
-    return (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[90] flex items-center justify-center p-4 animate-in zoom-in-95 duration-200">
-            <div className="bg-white w-full max-w-4xl rounded-3xl overflow-hidden shadow-2xl flex flex-col md:flex-row max-h-[90vh]">
-                <button onClick={onClose} className="absolute top-4 right-4 z-[100] p-2 bg-white/50 hover:bg-zinc-100 rounded-full backdrop-blur"><X className="w-6 h-6"/></button>
-                
-                {/* Left: Swatch Image */}
-                <div className="w-full md:w-5/12 bg-zinc-50 flex items-center justify-center p-8 relative">
-                    <div className="w-48 h-48 md:w-64 md:h-64 rounded-full shadow-2xl overflow-hidden border-4 border-white">
-                        {swatch.image ? (
-                            <img src={swatch.image} className="w-full h-full object-cover scale-110" alt={swatch.name} />
-                        ) : (
-                            <div className="w-full h-full" style={{backgroundColor: swatch.hex}}></div>
-                        )}
-                    </div>
-                </div>
-
-                {/* Right: Info */}
-                <div className="w-full md:w-7/12 bg-white p-8 md:p-10 flex flex-col overflow-y-auto">
-                    <div className="mb-6">
-                        <span className="inline-block px-2.5 py-0.5 bg-zinc-900 text-white text-[10px] font-bold rounded uppercase tracking-widest mb-2">{swatch.category}</span>
-                        <h2 className="text-3xl font-black text-zinc-900">{swatch.name}</h2>
-                        <div className="flex items-center mt-2 text-zinc-500 font-mono text-sm">
-                            <span className="w-4 h-4 rounded-full mr-2 border border-zinc-200" style={{backgroundColor: swatch.hex}}></span>
-                            {swatch.hex}
-                        </div>
-                    </div>
-
-                    <div className="space-y-6">
-                        <div>
-                            <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2">Description</h3>
-                            <p className="text-sm text-zinc-600 leading-relaxed whitespace-pre-wrap">
-                                {swatch.description || "No description provided for this material."}
-                            </p>
-                        </div>
-
-                        <div className="pt-6 border-t border-zinc-100">
-                             <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-3 flex justify-between items-center">
-                                 Applied Products 
-                                 <span className="bg-zinc-100 text-zinc-600 px-2 py-0.5 rounded-full text-[10px]">{relatedProducts.length}</span>
-                             </h3>
-                             <div className="grid grid-cols-2 gap-3 max-h-60 overflow-y-auto custom-scrollbar p-1">
-                                 {relatedProducts.length > 0 ? relatedProducts.map(p => (
-                                     <button key={p.id} onClick={() => onNavigateProduct(p)} className="flex items-center p-2 rounded-lg border border-zinc-100 hover:border-zinc-300 hover:bg-zinc-50 transition-all text-left group">
-                                         <div className="w-10 h-10 rounded-md bg-zinc-100 overflow-hidden mr-3 flex-shrink-0">
-                                            {p.images?.[0] ? <img src={p.images[0]} className="w-full h-full object-cover" /> : <div className="w-full h-full bg-zinc-200"></div>}
-                                         </div>
-                                         <div className="min-w-0">
-                                             <div className="text-xs font-bold text-zinc-900 truncate group-hover:text-blue-600">{p.name}</div>
-                                             <div className="text-[10px] text-zinc-500 truncate">{p.category}</div>
-                                         </div>
-                                     </button>
-                                 )) : (
-                                     <div className="col-span-2 text-center py-6 text-zinc-300 text-xs">No products currently use this finish.</div>
-                                 )}
-                             </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    );
-}
-
 function SwatchFormModal({ category, existingData, onClose, onSave }) {
-  const [data, setData] = useState({ id: null, name: '', category: category.id, hex: '#000000', image: null, description: '' });
+  const [data, setData] = useState({ id: null, name: '', category: category.id, hex: '#000000', image: null });
   const fileRef = useRef(null);
 
   useEffect(() => {
-     if(existingData) setData({ ...existingData, description: existingData.description || '' });
+     if(existingData) setData(existingData);
   }, [existingData]);
 
   const processImage = (file) => {
@@ -828,10 +732,6 @@ function SwatchFormModal({ category, existingData, onClose, onSave }) {
                    <input type="color" value={data.hex} onChange={e=>setData({...data, hex: e.target.value})} className="h-9 w-12 p-0 border rounded overflow-hidden" />
                    <input value={data.hex} onChange={e=>setData({...data, hex: e.target.value})} className="flex-1 border rounded-lg p-2 text-sm outline-none" />
                 </div>
-             </div>
-             <div>
-                <label className="text-xs font-bold text-zinc-500 uppercase block mb-1">Description</label>
-                <textarea rows={3} value={data.description} onChange={e=>setData({...data, description: e.target.value})} className="w-full border rounded-lg p-2 text-sm outline-none focus:border-black" placeholder="Material details..." />
              </div>
              <div>
                 <label className="text-xs font-bold text-zinc-500 uppercase block mb-1">Type</label>
