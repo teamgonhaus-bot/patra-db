@@ -4,7 +4,7 @@ import {
   Plus, Search, X, Check, Tag, Palette, Settings, Image as ImageIcon,
   Upload, Trash2, Edit2, RefreshCw, Cloud, CloudOff, Lock, Unlock,
   Database, Info, ArrowUpDown, ListFilter, Menu, History,
-  Copy, ChevronRight, ChevronDown, ChevronUp, ChevronLeft, Activity, ShieldAlert, FileJson, Calendar,
+  Copy, ChevronRight, ChevronDown, ChevronUp, Activity, ShieldAlert, FileJson, Calendar,
   ArrowLeft, ArrowRight, ArrowUp, ArrowDown, Layers, Star,
   Trophy, Heart, Link as LinkIcon, Paperclip, PieChart, Clock,
   Share2, Download, Maximize2, LayoutGrid, Zap, GripHorizontal, ImageIcon as ImgIcon,
@@ -36,7 +36,7 @@ const YOUR_FIREBASE_CONFIG = {
 // ----------------------------------------------------------------------
 // 상수 및 설정
 // ----------------------------------------------------------------------
-const APP_VERSION = "v0.6.1"; 
+const APP_VERSION = "v0.6.0"; 
 const BUILD_DATE = "2026.01.21";
 const ADMIN_PASSWORD = "adminlcg1"; 
 
@@ -89,7 +89,7 @@ const SPACES = [
   { id: 'HOME_SPACE', label: 'Home Interior', icon: HomeIcon },
 ];
 
-// 스와치(마감재) 정의
+// 스와치(마감재) 정의 - v0.6.0 추가
 const SWATCH_CATEGORIES = [
   { id: 'MESH', label: 'Mesh', color: '#a1a1aa' },
   { id: 'FABRIC', label: 'Fabric', color: '#a1a1aa' },
@@ -102,7 +102,7 @@ const SWATCH_CATEGORIES = [
 export default function App() {
   const [user, setUser] = useState(null);
   const [products, setProducts] = useState([]);
-  const [swatches, setSwatches] = useState([]); 
+  const [swatches, setSwatches] = useState([]); // New Swatch State
   const [activeCategory, setActiveCategory] = useState('DASHBOARD');
   const [searchTerm, setSearchTerm] = useState('');
   
@@ -207,6 +207,7 @@ export default function App() {
     const savedFavs = localStorage.getItem('patra_favorites');
     if (savedFavs) setFavorites(JSON.parse(savedFavs));
     
+    // Load local swatches if offline
     if (!isFirebaseAvailable) {
        const localSwatches = localStorage.getItem('patra_swatches');
        setSwatches(localSwatches ? JSON.parse(localSwatches) : []);
@@ -215,12 +216,14 @@ export default function App() {
 
   useEffect(() => {
     if (isFirebaseAvailable && user && db) {
+      // Products Listener
       const qProducts = collection(db, 'artifacts', appId, 'public', 'data', 'products');
       const unsubProducts = onSnapshot(qProducts, (snapshot) => {
         const loadedProducts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         setProducts(loadedProducts);
         setIsLoading(false);
       });
+      // Swatches Listener
       const qSwatches = collection(db, 'artifacts', appId, 'public', 'data', 'swatches');
       const unsubSwatches = onSnapshot(qSwatches, (snapshot) => {
         const loadedSwatches = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -257,6 +260,7 @@ export default function App() {
     setProducts(newProducts);
   };
 
+  // Swatch LocalStorage Helper
   const saveSwatchesToLocal = (newSwatches) => {
     localStorage.setItem('patra_swatches', JSON.stringify(newSwatches));
     setSwatches(newSwatches);
@@ -313,6 +317,7 @@ export default function App() {
   const logActivity = async (action, productName, details = "") => { if (!isFirebaseAvailable || !db) return; try { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'logs'), { action, productName, details, timestamp: Date.now(), adminId: 'admin' }); } catch (e) { console.error(e); } };
   const fetchLogs = async () => { if (!isFirebaseAvailable || !db) return; const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'logs'), orderBy('timestamp', 'desc'), limit(100)); onSnapshot(q, (snapshot) => { setActivityLogs(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))); }); };
   
+  // Swatch Management
   const handleSaveSwatch = async (swatchData) => {
     const docId = swatchData.id ? String(swatchData.id) : String(Date.now());
     const payload = { ...swatchData, id: docId, updatedAt: Date.now() };
@@ -348,7 +353,7 @@ export default function App() {
       else if (activeCategory === 'NEW') matchesCategory = product.isNew;
       else if (activeCategory === 'ALL') matchesCategory = true;
       else if (SPACES.find(s => s.id === activeCategory)) matchesCategory = product.spaces && product.spaces.includes(activeCategory);
-      else if (SWATCH_CATEGORIES.find(s => s.id === activeCategory)) matchesCategory = false; 
+      else if (SWATCH_CATEGORIES.find(s => s.id === activeCategory)) matchesCategory = false; // Swatch views are handled separately
       else matchesCategory = product.category === activeCategory;
       const searchLower = searchTerm.toLowerCase();
       const matchesSearch = product.name.toLowerCase().includes(searchLower) || product.specs.toLowerCase().includes(searchLower) || (product.designer && product.designer.toLowerCase().includes(searchLower)) || (product.options && product.options.some(opt => opt.toLowerCase().includes(searchLower)));
@@ -393,6 +398,7 @@ export default function App() {
              <button onClick={() => setSidebarState(p => ({...p, collections: !p.collections}))} className="w-full flex items-center justify-between text-[10px] font-bold text-zinc-400 mb-2 px-3 tracking-widest uppercase hover:text-zinc-600 transition-colors"><div className="flex items-center"><span>COLLECTIONS</span>{isFirebaseAvailable ? <Cloud className="w-3 h-3 ml-2 text-green-500" /> : <CloudOff className="w-3 h-3 ml-2 text-zinc-300" />}</div>{sidebarState.collections ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}</button>
              {sidebarState.collections && (<div className="space-y-0.5 animate-in slide-in-from-top-2 duration-200">{CATEGORIES.filter(c => !c.isSpecial).map((cat) => (<button key={cat.id} onClick={() => { setActiveCategory(cat.id); setIsMobileMenuOpen(false); }} className={`w-full text-left px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center justify-between group ${activeCategory === cat.id ? 'bg-zinc-100 text-zinc-900 font-bold' : 'text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900'}`}>{cat.label}</button>))}</div>)}
           </div>
+          {/* Swatch Section */}
           <div className="py-2 border-t border-zinc-100">
              <button onClick={() => setSidebarState(p => ({...p, materials: !p.materials}))} className="w-full flex items-center justify-between text-[10px] font-bold text-zinc-400 mb-2 px-3 tracking-widest uppercase hover:text-zinc-600 transition-colors"><div className="flex items-center"><span>MATERIALS (SWATCH)</span><Palette className="w-3 h-3 ml-2" /></div>{sidebarState.materials ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}</button>
              {sidebarState.materials && (<div className="space-y-0.5 animate-in slide-in-from-top-2 duration-200">{SWATCH_CATEGORIES.map((cat) => (<button key={cat.id} onClick={() => { setActiveCategory(cat.id); setIsMobileMenuOpen(false); }} className={`w-full text-left px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center justify-between group ${activeCategory === cat.id ? 'bg-zinc-100 text-zinc-900 font-bold' : 'text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900'}`}>{cat.label}</button>))}</div>)}
@@ -440,6 +446,7 @@ export default function App() {
                  />
               )}
 
+              {/* Swatch Management View */}
               {SWATCH_CATEGORIES.find(s => s.id === activeCategory) && (
                 <SwatchManager 
                   category={SWATCH_CATEGORIES.find(s => s.id === activeCategory)}
@@ -450,6 +457,7 @@ export default function App() {
                 />
               )}
 
+              {/* Standard Product List View */}
               {!SWATCH_CATEGORIES.find(s => s.id === activeCategory) && (
                 <>
                   {isLoading && products.length === 0 ? (
@@ -584,11 +592,17 @@ export default function App() {
   );
 }
 
+// ----------------------------------------------------------------------
+// Helper Component: Swatch Display (small circle/square with tooltip)
+// Handles both legacy hex strings and new Swatch objects
+// ----------------------------------------------------------------------
 function SwatchDisplay({ color, size = 'medium', className = '' }) {
+  // If color is object, use its data. If string, treat as hex/name
   const isObject = typeof color === 'object' && color !== null;
   const hex = isObject ? color.hex : color;
   const image = isObject ? color.image : null;
   const name = isObject ? color.name : color;
+
   const sizeClass = size === 'large' ? 'w-10 h-10' : size === 'small' ? 'w-4 h-4' : 'w-6 h-6';
 
   return (
@@ -607,6 +621,9 @@ function SwatchDisplay({ color, size = 'medium', className = '' }) {
   );
 }
 
+// ----------------------------------------------------------------------
+// New Component: Swatch Manager
+// ----------------------------------------------------------------------
 function SwatchManager({ category, swatches, isAdmin, onSave, onDelete }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingSwatch, setEditingSwatch] = useState(null);
@@ -685,8 +702,9 @@ function SwatchFormModal({ category, existingData, onClose, onSave }) {
         const img = new Image();
         img.onload = () => {
            const canvas = document.createElement('canvas'); 
-           const MAX = 300; 
+           const MAX = 300; // Resize for swatch
            let w = img.width; let h = img.height; 
+           // Center crop to square
            const minDim = Math.min(w, h);
            const sx = (w - minDim) / 2; const sy = (h - minDim) / 2;
            canvas.width = MAX; canvas.height = MAX;
@@ -1277,7 +1295,7 @@ function ProductDetailModal({ product, spaceContents, onClose, onEdit, isAdmin, 
                 allFeatures.forEach(f => { cursorY = wrapText(ctx, `• ${f}`, 100, cursorY, w - 200, 40); });
             }
 
-            // Draw Swatches for Export
+            // [New] Draw Swatches for Export
             cursorY += 40;
             if ((product.bodyColors && product.bodyColors.length > 0) || (product.upholsteryColors && product.upholsteryColors.length > 0)) {
                 ctx.fillStyle = '#3f3f46'; ctx.font = 'bold 30px sans-serif';
@@ -1319,7 +1337,7 @@ function ProductDetailModal({ product, spaceContents, onClose, onEdit, isAdmin, 
                         if(isObj) {
                             ctx.font = '20px sans-serif'; ctx.fillStyle = '#18181b';
                             ctx.fillText(color.name, startX + 60, cursorY + 32);
-                            startX += 250; 
+                            startX += 250; // More space for name
                         } else {
                            startX += 60;
                         }
@@ -1359,7 +1377,7 @@ function ProductDetailModal({ product, spaceContents, onClose, onEdit, isAdmin, 
             </div>
             {images.length > 0 && (<div className="flex space-x-2 md:space-x-3 overflow-x-auto custom-scrollbar pb-1 px-1 print:hidden">{images.map((img, idx) => (<button key={idx} onClick={() => setCurrentImageIndex(idx)} className={`flex-shrink-0 w-10 h-10 md:w-20 md:h-20 rounded-lg md:rounded-xl overflow-hidden border-2 transition-all ${currentImageIndex === idx ? 'border-zinc-900 ring-2 ring-zinc-200' : 'border-transparent opacity-60 hover:opacity-100 bg-white'}`}><img src={img} alt={`Thumbnail ${idx}`} className="w-full h-full object-cover" /></button>))}</div>)}
           </div>
-          <div className="w-full md:w-1/2 p-6 md:p-12 bg-white pb-12 print:pb-0">
+          <div className="w-full md:w-1/2 p-6 md:p-12 bg-white pb-32 md:pb-12 print:pb-0">
             <div className="mb-6 md:mb-10">
               <div className="flex flex-wrap gap-2 mb-2"><span className="inline-block px-2.5 py-0.5 bg-zinc-900 text-white text-[10px] font-extrabold rounded uppercase tracking-widest">{product.category}</span>{product.awards?.map(award => (<span key={award} className="inline-flex items-center px-2.5 py-0.5 bg-yellow-400/20 text-yellow-700 border border-yellow-400/30 text-[10px] font-bold rounded uppercase tracking-wide"><Trophy className="w-3 h-3 mr-1" /> {award}</span>))}</div>
               <h2 className="text-3xl md:text-5xl font-black text-zinc-900 mb-1 tracking-tight">{product.name}</h2>
@@ -1418,22 +1436,6 @@ function ProductDetailModal({ product, spaceContents, onClose, onEdit, isAdmin, 
               </div>
 
               {contentImages.length > 0 && (<div className="pt-8 border-t border-zinc-100 space-y-4"><h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Detail View</h3><div className="flex flex-col gap-4">{contentImages.map((img, idx) => (<img key={idx} src={img} alt={`Detail ${idx+1}`} className="w-full h-auto rounded-xl border border-zinc-100 print:border-none" />))}</div></div>)}
-
-              {/* Mobile Actions: Not fixed, at bottom of scroll */}
-              <div className="md:hidden mt-8 pt-8 border-t border-zinc-100 pb-10 print:hidden">
-                 <div className="flex justify-center gap-4 mb-4">
-                    <button onClick={handleShareImage} className="flex flex-col items-center justify-center w-14 h-14 bg-zinc-50 rounded-2xl text-zinc-600 active:scale-95 transition-transform border border-zinc-100">
-                        <ImgIcon className="w-5 h-5 mb-1"/>
-                        <span className="text-[9px] font-bold">Image</span>
-                    </button>
-                    <button onClick={() => window.print()} className="flex flex-col items-center justify-center w-14 h-14 bg-zinc-50 rounded-2xl text-zinc-600 active:scale-95 transition-transform border border-zinc-100">
-                        <Printer className="w-5 h-5 mb-1"/>
-                        <span className="text-[9px] font-bold">PDF</span>
-                    </button>
-                 </div>
-                 {isAdmin && <button onClick={onEdit} className="w-full h-12 bg-zinc-900 text-white rounded-xl text-sm font-bold shadow-lg active:scale-95 transition-transform">Edit Product</button>}
-              </div>
-
             </div>
             
             <div className="hidden md:flex mt-12 pt-6 border-t border-zinc-100 justify-between items-center pb-8 print:hidden">
@@ -1445,11 +1447,22 @@ function ProductDetailModal({ product, spaceContents, onClose, onEdit, isAdmin, 
             </div>
           </div>
         </div>
+        
+        <div className="md:hidden absolute bottom-0 left-0 right-0 bg-white/95 backdrop-blur border-t border-zinc-100 p-4 pb-6 flex justify-between items-center z-50 shadow-[0_-4px_10px_-1px_rgba(0,0,0,0.1)] print:hidden">
+           <div className="flex gap-3">
+             <button onClick={handleShareImage} className="flex flex-col items-center justify-center w-12 h-12 bg-zinc-50 rounded-xl text-zinc-600 active:scale-95 transition-transform"><ImgIcon className="w-5 h-5"/></button>
+             <button onClick={() => window.print()} className="flex flex-col items-center justify-center w-12 h-12 bg-zinc-50 rounded-xl text-zinc-600 active:scale-95 transition-transform"><Printer className="w-5 h-5"/></button>
+           </div>
+           {isAdmin && <button onClick={onEdit} className="flex-1 ml-4 flex items-center justify-center h-12 bg-zinc-900 text-white rounded-xl text-sm font-bold shadow-lg active:scale-95 transition-transform">Edit Product</button>}
+        </div>
       </div>
     </div>
   );
 }
 
+// ----------------------------------------------------------------------
+// Enhanced Product Form: With Swatch Selector
+// ----------------------------------------------------------------------
 function ProductFormModal({ categories, swatches = [], existingData, onClose, onSave, onDelete, isFirebaseAvailable, initialCategory }) {
   const isEditMode = !!existingData;
   const fileInputRef = useRef(null);
@@ -1461,7 +1474,7 @@ function ProductFormModal({ categories, swatches = [], existingData, onClose, on
     featuresString: '', optionsString: '', materialsString: '', awardsString: '',
     productLink: '', isNew: false, launchDate: new Date().toISOString().split('T')[0],
     images: [], attachments: [], contentImages: [], spaces: [],
-    bodyColors: [], upholsteryColors: [] 
+    bodyColors: [], upholsteryColors: [] // Array of Objects or Strings
   });
   const [isProcessingImage, setIsProcessingImage] = useState(false);
 
@@ -1528,6 +1541,7 @@ function ProductFormModal({ categories, swatches = [], existingData, onClose, on
           <div className="grid grid-cols-2 gap-6"><div><label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Options (comma)</label><input className="w-full border p-2 rounded-lg" value={formData.optionsString} onChange={e=>setFormData({...formData, optionsString: e.target.value})}/></div><div><label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Features (comma)</label><input className="w-full border p-2 rounded-lg" value={formData.featuresString} onChange={e=>setFormData({...formData, featuresString: e.target.value})}/></div></div>
           <div className="grid grid-cols-2 gap-6"><div><label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Materials (comma)</label><input className="w-full border p-2 rounded-lg" value={formData.materialsString} onChange={e=>setFormData({...formData, materialsString: e.target.value})}/></div><div><label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Awards (comma)</label><input className="w-full border p-2 rounded-lg" value={formData.awardsString} onChange={e=>setFormData({...formData, awardsString: e.target.value})}/></div></div>
           
+          {/* Enhanced Swatch Selection */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-zinc-50 p-4 rounded-xl border border-zinc-100">
              <SwatchSelector 
                 label="Body Colors" 
@@ -1558,13 +1572,18 @@ function ProductFormModal({ categories, swatches = [], existingData, onClose, on
   );
 }
 
+// ----------------------------------------------------------------------
+// Helper Component: Swatch Selector for Product Form
+// ----------------------------------------------------------------------
 function SwatchSelector({ label, selected, swatches, onChange }) {
   const [isOpen, setIsOpen] = useState(false);
   const [filter, setFilter] = useState('');
   const [activeTab, setActiveTab] = useState('ALL');
 
   const handleSelect = (swatch) => {
+     // Save snapshot of swatch data
      const snapshot = { id: swatch.id, name: swatch.name, hex: swatch.hex, image: swatch.image, category: swatch.category };
+     // Avoid duplicates
      if(!selected.find(s => (typeof s === 'object' ? s.id === swatch.id : false))) {
         onChange([...selected, snapshot]);
      }
@@ -1576,18 +1595,8 @@ function SwatchSelector({ label, selected, swatches, onChange }) {
      newSelected.splice(index, 1);
      onChange(newSelected);
   };
-  
-  const handleMove = (index, direction) => {
-     const newSelected = [...selected];
-     const targetIndex = index + direction;
-     if (targetIndex >= 0 && targetIndex < newSelected.length) {
-        const temp = newSelected[index];
-        newSelected[index] = newSelected[targetIndex];
-        newSelected[targetIndex] = temp;
-        onChange(newSelected);
-     }
-  };
 
+  // Allow manual hex entry for backward compatibility or quick adds
   const handleManualAdd = () => {
      const hex = prompt("Enter Hex Color (e.g. #000000) or Name:");
      if(hex) onChange([...selected, hex]);
@@ -1608,11 +1617,7 @@ function SwatchSelector({ label, selected, swatches, onChange }) {
           {selected.map((item, idx) => (
              <div key={idx} className="relative group">
                 <SwatchDisplay color={item} size="small" />
-                <div className="absolute -top-3 left-1/2 -translate-x-1/2 flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity bg-white shadow-md rounded-full border border-zinc-200 overflow-hidden z-20 scale-75">
-                  <button type="button" onClick={()=>handleMove(idx, -1)} className="p-1 hover:bg-zinc-100"><ChevronLeft size={10}/></button>
-                  <button type="button" onClick={()=>handleRemove(idx)} className="p-1 hover:bg-zinc-100 text-red-500"><X size={10}/></button>
-                  <button type="button" onClick={()=>handleMove(idx, 1)} className="p-1 hover:bg-zinc-100"><ChevronRight size={10}/></button>
-                </div>
+                <button type="button" onClick={() => handleRemove(idx)} className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100"><X className="w-2 h-2"/></button>
              </div>
           ))}
           <button type="button" onClick={() => setIsOpen(true)} className="w-6 h-6 rounded-full border border-dashed border-zinc-400 flex items-center justify-center text-zinc-400 hover:border-zinc-900 hover:text-zinc-900"><Plus className="w-3 h-3"/></button>
@@ -1625,6 +1630,7 @@ function SwatchSelector({ label, selected, swatches, onChange }) {
                 <button onClick={() => setIsOpen(false)}><X className="w-4 h-4 text-zinc-400 hover:text-black"/></button>
              </div>
              
+             {/* Category Tabs */}
              <div className="flex gap-1 overflow-x-auto pb-2 mb-2 custom-scrollbar">
                 <button type="button" onClick={()=>setActiveTab('ALL')} className={`px-2 py-1 rounded text-[10px] font-bold whitespace-nowrap ${activeTab==='ALL'?'bg-black text-white':'bg-zinc-100'}`}>ALL</button>
                 {SWATCH_CATEGORIES.map(c => (
