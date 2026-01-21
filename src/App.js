@@ -7,7 +7,8 @@ import {
   Copy, ChevronRight, Activity, ShieldAlert, FileJson, Calendar,
   ArrowLeft, ArrowRight, ArrowUp, ArrowDown, Layers, Star,
   Trophy, Heart, Link as LinkIcon, Paperclip, PieChart, Clock,
-  Share2, Download, Maximize2, LayoutGrid, Zap, GripHorizontal, ImageIcon as ImgIcon
+  Share2, Download, Maximize2, LayoutGrid, Zap, GripHorizontal, ImageIcon as ImgIcon,
+  ChevronsUp
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { 
@@ -34,8 +35,8 @@ const YOUR_FIREBASE_CONFIG = {
 // ----------------------------------------------------------------------
 // 상수 및 설정
 // ----------------------------------------------------------------------
-const APP_VERSION = "v2.5.0"; // Mobile Compact & Image Generation
-const BUILD_DATE = "2024.06.03";
+const APP_VERSION = "v2.7.0"; // Mobile Scroll & Layout Fix
+const BUILD_DATE = "2024.06.05";
 const ADMIN_PASSWORD = "adminlcg1"; 
 
 // Firebase 초기화
@@ -93,6 +94,7 @@ export default function App() {
   const [editingProduct, setEditingProduct] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [showScrollTop, setShowScrollTop] = useState(false);
   
   const [isAdmin, setIsAdmin] = useState(false);
   const [showAdminDashboard, setShowAdminDashboard] = useState(false);
@@ -100,7 +102,26 @@ export default function App() {
   const [toast, setToast] = useState(null);
   const [favorites, setFavorites] = useState([]);
 
-  // URL Query Parameter Check
+  // Scroll Handler
+  const mainContentRef = useRef(null);
+  useEffect(() => {
+    const handleScroll = () => {
+      if (mainContentRef.current.scrollTop > 300) {
+        setShowScrollTop(true);
+      } else {
+        setShowScrollTop(false);
+      }
+    };
+    const div = mainContentRef.current;
+    if (div) div.addEventListener('scroll', handleScroll);
+    return () => div && div.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  const scrollToTop = () => {
+    mainContentRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  // URL Query Parameter
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const sharedId = params.get('id');
@@ -283,7 +304,6 @@ export default function App() {
   const handleSaveProduct = async (productData) => {
     const docId = productData.id ? String(productData.id) : String(Date.now());
     const isEdit = !!productData.id && products.some(p => String(p.id) === docId);
-    
     const payload = {
       ...productData,
       id: docId,
@@ -448,16 +468,24 @@ export default function App() {
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto p-4 md:p-8 custom-scrollbar relative">
+        <div 
+          ref={mainContentRef}
+          className="flex-1 overflow-y-auto p-4 md:p-8 custom-scrollbar relative"
+        >
           {activeCategory === 'DASHBOARD' && !searchTerm ? (
-            <DashboardView products={products} favorites={favorites} setActiveCategory={setActiveCategory} setSelectedProduct={setSelectedProduct} />
+            <DashboardView 
+              products={products} 
+              favorites={favorites} 
+              setActiveCategory={setActiveCategory} 
+              setSelectedProduct={setSelectedProduct} 
+            />
           ) : (
             <>
               {isLoading && products.length === 0 ? (
-                <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
+                <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-6">
                    {[1,2,3,4].map(n => (
-                     <div key={n} className="bg-white rounded-2xl p-4 h-[300px] animate-pulse border border-zinc-100">
-                        <div className="bg-zinc-100 h-40 rounded-xl mb-4"></div>
+                     <div key={n} className="bg-white rounded-2xl p-4 h-[250px] md:h-[300px] animate-pulse border border-zinc-100">
+                        <div className="bg-zinc-100 h-32 md:h-40 rounded-xl mb-4"></div>
                         <div className="bg-zinc-100 h-4 w-2/3 rounded mb-2"></div>
                         <div className="bg-zinc-100 h-3 w-1/2 rounded"></div>
                      </div>
@@ -465,9 +493,9 @@ export default function App() {
                 </div>
               ) : (
                 <>
-                  <div className="mb-6 md:mb-8 flex items-end justify-between px-1">
+                  <div className="mb-4 md:mb-8 flex items-end justify-between px-1">
                     <div>
-                      <h2 className="text-2xl md:text-3xl font-extrabold text-zinc-900 tracking-tight">
+                      <h2 className="text-xl md:text-3xl font-extrabold text-zinc-900 tracking-tight">
                         {activeCategory === 'MY_PICK' ? 'MY PICK' : CATEGORIES.find(c => c.id === activeCategory)?.label || activeCategory}
                       </h2>
                       <p className="text-zinc-500 text-xs md:text-sm mt-1 font-medium">
@@ -476,14 +504,16 @@ export default function App() {
                       </p>
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-8 pb-20">
+                  
+                  {/* List Grid: Compact Gap for Mobile */}
+                  <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-8 pb-20">
                     {processedProducts.map((product, idx) => (
                       <ProductCard key={product.id} product={product} onClick={() => setSelectedProduct(product)} isAdmin={isAdmin} showMoveControls={isAdmin && sortOption === 'manual'} onMove={(dir) => handleMoveProduct(idx, dir)} isFavorite={favorites.includes(product.id)} onToggleFavorite={(e) => toggleFavorite(e, product.id)} />
                     ))}
                     {isAdmin && activeCategory !== 'MY_PICK' && activeCategory !== 'NEW' && (
-                      <button onClick={() => { setEditingProduct(null); setIsFormOpen(true); }} className="border-2 border-dashed border-zinc-200 rounded-2xl flex flex-col items-center justify-center min-h-[300px] text-zinc-400 hover:border-zinc-400 hover:text-zinc-600 hover:bg-zinc-50 transition-all group">
-                        <div className="w-12 h-12 rounded-full bg-zinc-100 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform"><Plus className="w-6 h-6" /></div>
-                        <span className="text-sm font-bold">Add Product</span>
+                      <button onClick={() => { setEditingProduct(null); setIsFormOpen(true); }} className="border-2 border-dashed border-zinc-200 rounded-2xl flex flex-col items-center justify-center min-h-[250px] md:min-h-[300px] text-zinc-400 hover:border-zinc-400 hover:text-zinc-600 hover:bg-zinc-50 transition-all group">
+                        <div className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-zinc-100 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform"><Plus className="w-6 h-6" /></div>
+                        <span className="text-xs md:text-sm font-bold">Add Product</span>
                       </button>
                     )}
                   </div>
@@ -496,6 +526,16 @@ export default function App() {
                 </>
               )}
             </>
+          )}
+          
+          {/* Scroll To Top Button */}
+          {showScrollTop && (
+            <button 
+              onClick={scrollToTop}
+              className="fixed bottom-6 right-6 md:bottom-10 md:right-10 w-10 h-10 md:w-12 md:h-12 bg-black/80 backdrop-blur-md text-white rounded-full shadow-lg flex items-center justify-center hover:bg-black hover:scale-110 transition-all z-40 animate-in fade-in slide-in-from-bottom-4"
+            >
+              <ChevronsUp className="w-6 h-6" />
+            </button>
           )}
         </div>
       </main>
@@ -534,10 +574,9 @@ export default function App() {
 }
 
 // ----------------------------------------------------------------------
-// Components
+// Dashboard View
 // ----------------------------------------------------------------------
-
-function DashboardView({ products, favorites, setActiveCategory }) {
+function DashboardView({ products, favorites, setActiveCategory, setSelectedProduct }) {
   const totalCount = products.length;
   const newCount = products.filter(p => p.isNew).length;
   const pickCount = favorites.length;
@@ -628,7 +667,11 @@ function DashboardView({ products, favorites, setActiveCategory }) {
            <h3 className="text-base md:text-lg font-bold text-zinc-900 mb-6 flex items-center"><Clock className="w-5 h-5 mr-2 text-zinc-400" /> Recent Updates</h3>
            <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-3">
              {recentUpdates.length > 0 ? recentUpdates.map(product => (
-               <div key={product.id} className="flex items-center p-3 rounded-xl border border-zinc-100 hover:border-zinc-300 hover:bg-zinc-50 cursor-pointer transition-all group">
+               <div 
+                 key={product.id} 
+                 onClick={() => setSelectedProduct(product)} 
+                 className="flex items-center p-3 rounded-xl border border-zinc-100 hover:border-zinc-300 hover:bg-zinc-50 cursor-pointer transition-all group"
+               >
                  <div className="w-10 h-10 md:w-12 md:h-12 bg-zinc-100 rounded-lg flex-shrink-0 flex items-center justify-center mr-3 md:mr-4 overflow-hidden border border-zinc-200">
                     {product.images?.[0] ? <img src={product.images[0]} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" alt="" /> : <ImageIcon className="w-5 h-5 text-zinc-300"/>}
                  </div>
@@ -653,43 +696,42 @@ function ProductCard({ product, onClick, showMoveControls, onMove, isFavorite, o
 
   return (
     <div onClick={onClick} className="bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer group border border-zinc-100 relative flex flex-col h-full">
-      <div className="relative h-48 md:h-64 bg-zinc-50 p-6 flex items-center justify-center overflow-hidden">
-        <div className="absolute top-4 left-4 flex flex-col gap-1.5 z-10 items-start">
-           {product.isNew && <span className="bg-black text-white text-[9px] font-extrabold px-2 py-1 rounded shadow-sm tracking-wide">NEW</span>}
-           {awardBadge && <span className="bg-yellow-400 text-yellow-900 text-[9px] font-bold px-2 py-1 rounded shadow-sm flex items-center"><Trophy className="w-2.5 h-2.5 mr-1" /> {awardBadge}</span>}
-           {materialBadge && !awardBadge && <span className="bg-white/90 backdrop-blur border border-zinc-200 text-zinc-600 text-[9px] font-bold px-2 py-1 rounded uppercase tracking-wide">{materialBadge}</span>}
+      <div className="relative h-32 md:h-64 bg-zinc-50 p-2 md:p-6 flex items-center justify-center overflow-hidden">
+        <div className="absolute top-2 left-2 md:top-4 md:left-4 flex flex-col gap-1 z-10 items-start">
+           {product.isNew && <span className="bg-black text-white text-[8px] md:text-[9px] font-extrabold px-1.5 py-0.5 md:px-2 md:py-1 rounded shadow-sm tracking-wide">NEW</span>}
+           {awardBadge && <span className="bg-yellow-400 text-yellow-900 text-[8px] md:text-[9px] font-bold px-1.5 py-0.5 md:px-2 md:py-1 rounded shadow-sm flex items-center"><Trophy className="w-2 h-2 md:w-2.5 md:h-2.5 mr-1" /> {awardBadge}</span>}
+           {materialBadge && !awardBadge && <span className="bg-white/90 backdrop-blur border border-zinc-200 text-zinc-600 text-[8px] md:text-[9px] font-bold px-1.5 py-0.5 md:px-2 md:py-1 rounded uppercase tracking-wide">{materialBadge}</span>}
         </div>
         
-        <button onClick={onToggleFavorite} className="absolute top-4 right-4 z-20 text-zinc-300 hover:text-yellow-400 hover:scale-110 transition-all"><Star className={`w-5 h-5 ${isFavorite ? 'text-yellow-400 fill-yellow-400' : ''}`} /></button>
+        <button onClick={onToggleFavorite} className="absolute top-2 right-2 md:top-4 md:right-4 z-20 text-zinc-300 hover:text-yellow-400 hover:scale-110 transition-all"><Star className={`w-4 h-4 md:w-5 md:h-5 ${isFavorite ? 'text-yellow-400 fill-yellow-400' : ''}`} /></button>
 
         <div className="w-full h-full flex items-center justify-center transition-transform duration-500 group-hover:scale-105">
-            {mainImage ? <img src={mainImage} alt={product.name} loading="lazy" className="w-full h-full object-contain mix-blend-multiply" /> : <div className="text-center opacity-30"><ImageIcon className="w-10 h-10 mx-auto mb-2 text-zinc-400" /></div>}
+            {mainImage ? <img src={mainImage} alt={product.name} loading="lazy" className="w-full h-full object-contain mix-blend-multiply" /> : <div className="text-center opacity-30"><ImageIcon className="w-8 h-8 md:w-10 md:h-10 mx-auto mb-2 text-zinc-400" /></div>}
         </div>
         
         {showMoveControls && (
-          <div className="absolute bottom-2 left-0 right-0 flex justify-center gap-2 z-20">
-             <button onClick={(e) => {e.stopPropagation(); onMove('left')}} className="p-1.5 bg-white/90 rounded-full shadow hover:bg-black hover:text-white text-zinc-700 transition-colors"><ArrowLeft className="w-4 h-4" /></button>
-             <button onClick={(e) => {e.stopPropagation(); onMove('right')}} className="p-1.5 bg-white/90 rounded-full shadow hover:bg-black hover:text-white text-zinc-700 transition-colors"><ArrowRight className="w-4 h-4" /></button>
+          <div className="absolute bottom-1 md:bottom-2 left-0 right-0 flex justify-center gap-2 z-20">
+             <button onClick={(e) => {e.stopPropagation(); onMove('left')}} className="p-1 md:p-1.5 bg-white/90 rounded-full shadow hover:bg-black hover:text-white text-zinc-700 transition-colors"><ArrowLeft className="w-3 h-3 md:w-4 md:h-4" /></button>
+             <button onClick={(e) => {e.stopPropagation(); onMove('right')}} className="p-1 md:p-1.5 bg-white/90 rounded-full shadow hover:bg-black hover:text-white text-zinc-700 transition-colors"><ArrowRight className="w-3 h-3 md:w-4 md:h-4" /></button>
           </div>
         )}
       </div>
 
-      <div className="p-5 flex-1 flex flex-col bg-white">
-        <div className="flex justify-between items-start mb-2">
-          <span className="text-[10px] font-bold text-zinc-400 bg-zinc-50 px-2 py-0.5 rounded uppercase tracking-wider">{product.category}</span>
+      <div className="p-3 md:p-5 flex-1 flex flex-col bg-white">
+        <div className="flex justify-between items-start mb-1 md:mb-2">
+          <span className="text-[9px] md:text-[10px] font-bold text-zinc-400 bg-zinc-50 px-1.5 py-0.5 rounded uppercase tracking-wider truncate max-w-[60px] md:max-w-none">{product.category}</span>
         </div>
-        <h3 className="text-lg font-extrabold text-zinc-900 mb-1 leading-tight group-hover:text-blue-600 transition-colors">{product.name}</h3>
-        {/* Designer hidden on Mobile */}
+        <h3 className="text-sm md:text-lg font-extrabold text-zinc-900 mb-1 leading-tight group-hover:text-blue-600 transition-colors line-clamp-1">{product.name}</h3>
         {product.designer && <p className="text-[11px] text-zinc-400 font-medium mb-3 hidden md:block">by {product.designer}</p>}
         
-        <div className="mt-auto pt-4 border-t border-zinc-50 space-y-2">
-          <div className="flex items-center gap-2">
-             <div className="flex -space-x-1.5">
-                {product.bodyColors?.slice(0, 4).map((c, i) => <div key={i} className="w-3.5 h-3.5 rounded-full border border-white shadow-sm ring-1 ring-zinc-100" style={{ backgroundColor: c }} />)}
+        <div className="mt-auto pt-2 md:pt-4 border-t border-zinc-50 space-y-2">
+          <div className="flex items-center gap-1 md:gap-2">
+             <div className="flex -space-x-1">
+                {product.bodyColors?.slice(0, 4).map((c, i) => <div key={i} className="w-2.5 h-2.5 md:w-3.5 md:h-3.5 rounded-full border border-white shadow-sm ring-1 ring-zinc-100" style={{ backgroundColor: c }} />)}
              </div>
-             {product.upholsteryColors?.length > 0 && <span className="text-zinc-200 text-[10px] mx-1">|</span>}
-             <div className="flex -space-x-1.5">
-                {product.upholsteryColors?.slice(0, 4).map((c, i) => <div key={i} className="w-3.5 h-3.5 rounded-sm border border-white shadow-sm ring-1 ring-zinc-100" style={{ backgroundColor: c }} />)}
+             {product.upholsteryColors?.length > 0 && <span className="text-zinc-200 text-[10px] mx-0.5">|</span>}
+             <div className="flex -space-x-1">
+                {product.upholsteryColors?.slice(0, 4).map((c, i) => <div key={i} className="w-2.5 h-2.5 md:w-3.5 md:h-3.5 rounded-sm border border-white shadow-sm ring-1 ring-zinc-100" style={{ backgroundColor: c }} />)}
              </div>
           </div>
         </div>
@@ -711,6 +753,7 @@ function ProductDetailModal({ product, onClose, onEdit, isAdmin, showToast, isFa
   const copyShareLink = () => { navigator.clipboard.writeText(`${window.location.origin}${window.location.pathname}?id=${product.id}`); showToast("Link copied"); };
   
   const handleShareImage = () => {
+    // ... Canvas Image Generation Logic (Same as v2.5.0) ...
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
@@ -719,43 +762,37 @@ function ProductDetailModal({ product, onClose, onEdit, isAdmin, showToast, isFa
     canvas.width = w;
     canvas.height = h;
 
-    // Background
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, w, h);
-
-    // Main Image
     const img = new Image();
+    img.crossOrigin = "Anonymous";
     img.onload = () => {
-      // Draw Image (Cover/Contain Logic simplified)
-      const ratio = Math.min(w / img.width, (h * 0.5) / img.height);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, w, h);
+      ctx.fillStyle = '#18181b';
+      ctx.fillRect(0, 0, w, 120);
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 40px sans-serif';
+      ctx.textAlign = 'left';
+      ctx.fillText("PATRA DESIGN LAB", 60, 75);
+      const ratio = Math.min((w - 120) / img.width, (h * 0.5) / img.height);
       const imgW = img.width * ratio;
       const imgH = img.height * ratio;
-      ctx.drawImage(img, (w - imgW) / 2, 80, imgW, imgH);
-
-      // Text Data
-      ctx.fillStyle = '#18181b';
-      ctx.font = 'bold 60px sans-serif';
+      ctx.drawImage(img, (w - imgW) / 2, 200, imgW, imgH);
       ctx.textAlign = 'center';
-      ctx.fillText(product.name, w/2, h * 0.6);
-
+      ctx.fillStyle = '#18181b';
+      ctx.font = 'bold 70px sans-serif';
+      ctx.fillText(product.name, w/2, h * 0.65);
       ctx.fillStyle = '#71717a';
       ctx.font = 'bold 30px sans-serif';
-      ctx.fillText(product.category.toUpperCase(), w/2, h * 0.55);
-
-      ctx.font = '30px sans-serif';
-      if(product.designer) ctx.fillText(`Designed by ${product.designer}`, w/2, h * 0.65);
-
-      // Specs
+      ctx.fillText(product.category.toUpperCase(), w/2, h * 0.6);
+      if(product.designer) { ctx.fillStyle = '#a1a1aa'; ctx.font = '30px sans-serif'; ctx.fillText(`Designed by ${product.designer}`, w/2, h * 0.69); }
+      ctx.fillStyle = '#f4f4f5';
+      ctx.fillRect(60, h * 0.73, w - 120, 300);
       ctx.fillStyle = '#3f3f46';
       ctx.font = '24px sans-serif';
-      const specLines = product.specs.split('\n');
-      let y = h * 0.72;
-      specLines.forEach(line => {
-        ctx.fillText(line, w/2, y);
-        y += 35;
-      });
-
-      // Export
+      ctx.textAlign = 'left';
+      const specLines = product.specs.split('\n').slice(0, 8);
+      let y = h * 0.77;
+      specLines.forEach(line => { ctx.fillText(line, 100, y); y += 35; });
       const dataUrl = canvas.toDataURL('image/png');
       const a = document.createElement('a');
       a.href = dataUrl;
@@ -763,13 +800,12 @@ function ProductDetailModal({ product, onClose, onEdit, isAdmin, showToast, isFa
       a.click();
       showToast("이미지가 저장되었습니다.");
     };
-    if(currentImage) img.src = currentImage; // Assuming Base64 or CORS-safe URL
+    if(currentImage) img.src = currentImage;
     else showToast("이미지가 없어 생성할 수 없습니다.", "error");
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-50 flex items-center justify-center p-0 md:p-4 animate-in fade-in duration-200 items-end md:items-center">
-      {/* Hidden Canvas for Image Generation */}
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-50 flex items-center justify-center p-0 md:p-4 animate-in fade-in duration-200">
       <canvas ref={canvasRef} style={{ display: 'none' }} />
 
       {isZoomed && currentImage && (
@@ -779,82 +815,102 @@ function ProductDetailModal({ product, onClose, onEdit, isAdmin, showToast, isFa
         </div>
       )}
 
-      {/* Modal Container */}
-      <div className="bg-white w-full md:w-full md:max-w-6xl max-h-[90vh] md:rounded-3xl rounded-t-3xl overflow-hidden shadow-2xl flex flex-col md:flex-row relative">
-        <button onClick={onClose} className="absolute top-5 right-5 p-2 bg-white/50 hover:bg-zinc-100 rounded-full z-10 transition-colors backdrop-blur"><X className="w-6 h-6 text-zinc-500" /></button>
+      {/* Modal Container: Full Scrollable on Mobile */}
+      <div className="bg-white w-full h-full md:h-[90vh] md:w-full md:max-w-6xl md:rounded-3xl overflow-hidden shadow-2xl flex flex-col md:flex-row relative">
+        <button onClick={onClose} className="fixed md:absolute top-4 right-4 md:top-5 md:right-5 p-2 bg-white/50 hover:bg-zinc-100 rounded-full z-[60] transition-colors backdrop-blur"><X className="w-6 h-6 text-zinc-900" /></button>
         
-        {/* Left: Visual */}
-        <div className="w-full md:w-1/2 bg-zinc-50 p-6 md:p-8 flex flex-col border-r border-zinc-100 relative h-[40vh] md:h-auto">
-          <div className="flex-1 w-full bg-white rounded-2xl flex items-center justify-center shadow-sm border border-zinc-100 overflow-hidden p-8 mb-4 relative group">
-             {currentImage ? (
-                <>
-                  <img src={currentImage} alt="Main" className="w-full h-full object-contain cursor-zoom-in mix-blend-multiply" onClick={() => setIsZoomed(true)} />
-                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity">
-                    <div className="bg-black/80 backdrop-blur text-white px-4 py-2 rounded-full text-xs font-bold flex items-center"><Maximize2 className="w-4 h-4 mr-2"/> ZOOM</div>
-                  </div>
-                </>
-             ) : <ImageIcon className="w-20 h-20 opacity-20 text-zinc-400" />}
-             <button onClick={onToggleFavorite} className="absolute top-4 left-4 p-3 bg-white rounded-full shadow-sm border border-zinc-100 hover:border-zinc-300 transition-all"><Star className={`w-5 h-5 ${isFavorite ? 'text-yellow-400 fill-yellow-400' : 'text-zinc-300'}`} /></button>
-          </div>
-          {images.length > 0 && (<div className="h-16 md:h-20 flex space-x-3 overflow-x-auto custom-scrollbar pb-2 px-1">{images.map((img, idx) => (<button key={idx} onClick={() => setCurrentImageIndex(idx)} className={`flex-shrink-0 w-16 h-16 md:w-20 h-20 rounded-xl overflow-hidden border-2 transition-all ${currentImageIndex === idx ? 'border-zinc-900 ring-2 ring-zinc-200' : 'border-transparent opacity-60 hover:opacity-100 bg-white'}`}><img src={img} alt={`Thumbnail ${idx}`} className="w-full h-full object-cover" /></button>))}</div>)}
-        </div>
-
-        {/* Right: Info */}
-        <div className="w-full md:w-1/2 p-5 md:p-12 overflow-y-auto bg-white custom-scrollbar h-[60vh] md:h-auto pb-20 md:pb-12">
-          {/* Mobile Drag Handle */}
-          <div className="w-12 h-1.5 bg-zinc-200 rounded-full mx-auto mb-6 md:hidden"></div>
-
-          <div className="mb-6 md:mb-10">
-            <div className="flex flex-wrap gap-2 mb-2">
-              <span className="inline-block px-2.5 py-0.5 bg-zinc-900 text-white text-[10px] font-extrabold rounded uppercase tracking-widest">{product.category}</span>
-              {product.awards?.map(award => (<span key={award} className="inline-flex items-center px-2.5 py-0.5 bg-yellow-400/20 text-yellow-700 border border-yellow-400/30 text-[10px] font-bold rounded uppercase tracking-wide"><Trophy className="w-3 h-3 mr-1" /> {award}</span>))}
-            </div>
-            <h2 className="text-3xl md:text-5xl font-black text-zinc-900 mb-1 tracking-tight">{product.name}</h2>
-            {product.designer && <p className="text-sm text-zinc-500 font-medium">Designed by <span className="text-zinc-900">{product.designer}</span></p>}
-          </div>
+        {/* Mobile: Single Scroll View / Desktop: Split View */}
+        <div className="flex-1 overflow-y-auto custom-scrollbar flex flex-col md:flex-row h-full">
           
-          <div className="space-y-6 md:space-y-10">
-            <div>
-              <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-3 flex items-center justify-between">
-                Specifications 
-                <button onClick={copyToClipboard} className="text-zinc-400 hover:text-zinc-900"><Copy className="w-4 h-4" /></button>
-              </h3>
-              <p className="text-sm text-zinc-600 leading-relaxed bg-zinc-50 p-4 md:p-6 rounded-2xl border border-zinc-100 whitespace-pre-wrap">{product.specs}</p>
+          {/* Left: Visual */}
+          <div className="w-full md:w-1/2 bg-zinc-50 p-6 md:p-8 flex flex-col border-b md:border-b-0 md:border-r border-zinc-100 md:sticky md:top-0">
+            {/* Mobile Drag Handle */}
+            <div className="w-12 h-1.5 bg-zinc-200 rounded-full mx-auto mb-6 md:hidden"></div>
+
+            <div className="flex-1 w-full bg-white rounded-2xl flex items-center justify-center shadow-sm border border-zinc-100 overflow-hidden p-8 mb-4 relative group min-h-[300px]">
+               {currentImage ? (
+                  <>
+                    <img src={currentImage} alt="Main" className="w-full h-full object-contain cursor-zoom-in mix-blend-multiply" onClick={() => setIsZoomed(true)} />
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="bg-black/80 backdrop-blur text-white px-4 py-2 rounded-full text-xs font-bold flex items-center"><Maximize2 className="w-4 h-4 mr-2"/> ZOOM</div>
+                    </div>
+                  </>
+               ) : <ImageIcon className="w-20 h-20 opacity-20 text-zinc-400" />}
+               <button onClick={onToggleFavorite} className="absolute top-4 left-4 p-3 bg-white rounded-full shadow-sm border border-zinc-100 hover:border-zinc-300 transition-all"><Star className={`w-5 h-5 ${isFavorite ? 'text-yellow-400 fill-yellow-400' : 'text-zinc-300'}`} /></button>
             </div>
             
-            {(product.features?.length > 0 || product.options?.length > 0) && (
-              <div>
-                <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-3">Features & Options</h3>
-                <div className="flex flex-wrap gap-2">
-                  {product.options?.map((opt, idx) => (<span key={idx} className="px-3 py-1.5 bg-blue-50 text-blue-600 border border-blue-100 rounded-lg text-xs font-bold">{opt}</span>))}
-                  {product.features?.map((ft, idx) => (<span key={idx} className="px-3 py-1.5 bg-zinc-100 text-zinc-600 rounded-lg text-xs font-medium flex items-center"><Check className="w-3 h-3 mr-1.5" /> {ft}</span>))}
-                </div>
-              </div>
-            )}
-
-            <div className="grid grid-cols-2 gap-4 md:gap-8">
-               <div><h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2">Body Color</h3><div className="flex flex-wrap gap-2">{product.bodyColors?.map((c, i) => (<div key={i} className="group relative"><div className="w-6 h-6 rounded-full border border-zinc-200 shadow-sm cursor-help" style={{ backgroundColor: c }} /><span className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 px-2 py-1 bg-black text-white text-[10px] rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10 pointer-events-none">{c}</span></div>))}</div></div>
-               <div><h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2">Upholstery</h3><div className="flex flex-wrap gap-2">{product.upholsteryColors?.map((c, i) => (<div key={i} className="group relative"><div className="w-6 h-6 rounded-md border border-zinc-200 shadow-sm cursor-help" style={{ backgroundColor: c }} /><span className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 px-2 py-1 bg-black text-white text-[10px] rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10 pointer-events-none">{c}</span></div>))}</div></div>
-            </div>
-
-            {(product.productLink || product.attachments?.length > 0) && (
-              <div className="pt-6 border-t border-zinc-100 flex flex-col gap-3">
-                 {product.productLink && <a href={product.productLink} target="_blank" rel="noreferrer" className="flex items-center text-sm font-bold text-zinc-900 hover:text-blue-600 transition-colors"><LinkIcon className="w-4 h-4 mr-2" /> Visit Product Website</a>}
-                 {product.attachments?.map((file, idx) => (
-                   <a key={idx} href={file.url} target="_blank" rel="noreferrer" className="flex items-center p-3 bg-zinc-50 border border-zinc-100 rounded-xl hover:border-zinc-300 hover:bg-white transition-all group">
-                     <div className="p-2 bg-white rounded-lg shadow-sm mr-3 group-hover:text-blue-500"><Paperclip className="w-4 h-4" /></div>
-                     <span className="text-sm font-medium text-zinc-600 group-hover:text-zinc-900">{file.name}</span>
-                   </a>
-                 ))}
+            {/* Thumbnails */}
+            {images.length > 0 && (
+              <div className="flex space-x-2 md:space-x-3 overflow-x-auto custom-scrollbar pb-1 px-1">
+                {images.map((img, idx) => (
+                  <button 
+                    key={idx} 
+                    onClick={() => setCurrentImageIndex(idx)} 
+                    className={`flex-shrink-0 w-10 h-10 md:w-20 md:h-20 rounded-lg md:rounded-xl overflow-hidden border-2 transition-all ${
+                      currentImageIndex === idx ? 'border-zinc-900 ring-2 ring-zinc-200' : 'border-transparent opacity-60 hover:opacity-100 bg-white'
+                    }`}
+                  >
+                    <img src={img} alt={`Thumbnail ${idx}`} className="w-full h-full object-cover" />
+                  </button>
+                ))}
               </div>
             )}
           </div>
-          
-          <div className="mt-8 md:mt-12 pt-6 border-t border-zinc-100 flex justify-between items-center">
-             <div className="flex gap-3">
-                <button onClick={handleShareImage} className="flex items-center px-5 py-2.5 bg-zinc-100 text-zinc-600 rounded-xl text-sm font-bold hover:bg-zinc-200 transition-colors"><ImgIcon className="w-4 h-4 mr-2" /> Share Image</button>
-             </div>
-             {isAdmin && (<button onClick={onEdit} className="flex items-center px-6 py-2.5 bg-zinc-900 text-white rounded-xl text-sm font-bold hover:bg-black hover:shadow-lg transition-all"><Edit2 className="w-4 h-4 mr-2" /> Edit</button>)}
+
+          {/* Right: Info */}
+          <div className="w-full md:w-1/2 p-6 md:p-12 bg-white pb-20 md:pb-12">
+            <div className="mb-6 md:mb-10">
+              <div className="flex flex-wrap gap-2 mb-2">
+                <span className="inline-block px-2.5 py-0.5 bg-zinc-900 text-white text-[10px] font-extrabold rounded uppercase tracking-widest">{product.category}</span>
+                {product.awards?.map(award => (<span key={award} className="inline-flex items-center px-2.5 py-0.5 bg-yellow-400/20 text-yellow-700 border border-yellow-400/30 text-[10px] font-bold rounded uppercase tracking-wide"><Trophy className="w-3 h-3 mr-1" /> {award}</span>))}
+              </div>
+              <h2 className="text-3xl md:text-5xl font-black text-zinc-900 mb-1 tracking-tight">{product.name}</h2>
+              {product.designer && <p className="text-sm text-zinc-500 font-medium">Designed by <span className="text-zinc-900">{product.designer}</span></p>}
+            </div>
+            
+            <div className="space-y-6 md:space-y-10">
+              <div>
+                <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-3 flex items-center justify-between">
+                  Specifications 
+                  <button onClick={copyToClipboard} className="text-zinc-400 hover:text-zinc-900"><Copy className="w-4 h-4" /></button>
+                </h3>
+                <p className="text-sm text-zinc-600 leading-relaxed bg-zinc-50 p-4 md:p-6 rounded-2xl border border-zinc-100 whitespace-pre-wrap">{product.specs}</p>
+              </div>
+              
+              {(product.features?.length > 0 || product.options?.length > 0) && (
+                <div>
+                  <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-3">Features & Options</h3>
+                  <div className="flex flex-wrap gap-2">
+                    {product.options?.map((opt, idx) => (<span key={idx} className="px-3 py-1.5 bg-blue-50 text-blue-600 border border-blue-100 rounded-lg text-xs font-bold">{opt}</span>))}
+                    {product.features?.map((ft, idx) => (<span key={idx} className="px-3 py-1.5 bg-zinc-100 text-zinc-600 rounded-lg text-xs font-medium flex items-center"><Check className="w-3 h-3 mr-1.5" /> {ft}</span>))}
+                  </div>
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-4 md:gap-8">
+                 <div><h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2">Body Color</h3><div className="flex flex-wrap gap-2">{product.bodyColors?.map((c, i) => (<div key={i} className="group relative"><div className="w-6 h-6 rounded-full border border-zinc-200 shadow-sm cursor-help" style={{ backgroundColor: c }} /><span className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 px-2 py-1 bg-black text-white text-[10px] rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10 pointer-events-none">{c}</span></div>))}</div></div>
+                 <div><h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2">Upholstery</h3><div className="flex flex-wrap gap-2">{product.upholsteryColors?.map((c, i) => (<div key={i} className="group relative"><div className="w-6 h-6 rounded-md border border-zinc-200 shadow-sm cursor-help" style={{ backgroundColor: c }} /><span className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 px-2 py-1 bg-black text-white text-[10px] rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10 pointer-events-none">{c}</span></div>))}</div></div>
+              </div>
+
+              {(product.productLink || product.attachments?.length > 0) && (
+                <div className="pt-6 border-t border-zinc-100 flex flex-col gap-3">
+                   {product.productLink && <a href={product.productLink} target="_blank" rel="noreferrer" className="flex items-center text-sm font-bold text-zinc-900 hover:text-blue-600 transition-colors"><LinkIcon className="w-4 h-4 mr-2" /> Visit Product Website</a>}
+                   {product.attachments?.map((file, idx) => (
+                     <a key={idx} href={file.url} target="_blank" rel="noreferrer" className="flex items-center p-3 bg-zinc-50 border border-zinc-100 rounded-xl hover:border-zinc-300 hover:bg-white transition-all group">
+                       <div className="p-2 bg-white rounded-lg shadow-sm mr-3 group-hover:text-blue-500"><Paperclip className="w-4 h-4" /></div>
+                       <span className="text-sm font-medium text-zinc-600 group-hover:text-zinc-900">{file.name}</span>
+                     </a>
+                   ))}
+                </div>
+              )}
+            </div>
+            
+            <div className="mt-8 md:mt-12 pt-6 border-t border-zinc-100 flex justify-between items-center">
+               <div className="flex gap-3">
+                  <button onClick={handleShareImage} className="flex items-center px-5 py-2.5 bg-zinc-100 text-zinc-600 rounded-xl text-sm font-bold hover:bg-zinc-200 transition-colors"><ImgIcon className="w-4 h-4 mr-2" /> Share Image</button>
+               </div>
+               {isAdmin && (<button onClick={onEdit} className="flex items-center px-6 py-2.5 bg-zinc-900 text-white rounded-xl text-sm font-bold hover:bg-black hover:shadow-lg transition-all"><Edit2 className="w-4 h-4 mr-2" /> Edit</button>)}
+            </div>
           </div>
         </div>
       </div>
@@ -862,6 +918,7 @@ function ProductDetailModal({ product, onClose, onEdit, isAdmin, showToast, isFa
   );
 }
 
+// ... ProductFormModal (No changes) ...
 function ProductFormModal({ categories, existingData, onClose, onSave, onDelete, isFirebaseAvailable, initialCategory }) {
   const isEditMode = !!existingData;
   const fileInputRef = useRef(null);
@@ -881,7 +938,6 @@ function ProductFormModal({ categories, existingData, onClose, onSave, onDelete,
     }
   }, [existingData]);
 
-  // ... (Image/Attachment Handlers same as before) ...
   const processImage = (file) => { return new Promise((resolve) => { const reader = new FileReader(); reader.onload = (e) => { const img = new Image(); img.onload = () => { const canvas = document.createElement('canvas'); const MAX_WIDTH = 800; let width = img.width; let height = img.height; if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; } canvas.width = width; canvas.height = height; const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0, width, height); resolve(canvas.toDataURL('image/jpeg', 0.7)); }; img.src = e.target.result; }; reader.readAsDataURL(file); }); };
   const handleImageUpload = async (e) => { const files = Array.from(e.target.files); if (files.length > 0) { setIsProcessingImage(true); const newUrls = []; for (const file of files) { try { newUrls.push(await processImage(file)); } catch (e) {} } setFormData(prev => ({ ...prev, images: [...prev.images, ...newUrls] })); setIsProcessingImage(false); } };
   const handleAttachmentUpload = (e) => { const files = Array.from(e.target.files); files.forEach(file => { if (file.size > 300*1024) return alert("Too large"); const reader = new FileReader(); reader.onload = (e) => setFormData(p => ({...p, attachments: [...p.attachments, {name: file.name, url: e.target.result}]})); reader.readAsDataURL(file); }); };
