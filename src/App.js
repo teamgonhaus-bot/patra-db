@@ -7,7 +7,7 @@ import {
   Copy, ChevronRight, Activity, ShieldAlert, FileJson, Calendar,
   ArrowLeft, ArrowRight, ArrowUp, ArrowDown, Layers, Star,
   Trophy, Heart, Link as LinkIcon, Paperclip, PieChart, Clock,
-  Share2, Download, Maximize2, LayoutGrid, Zap, GripHorizontal
+  Share2, Download, Maximize2, LayoutGrid, Zap, GripHorizontal, ImageIcon as ImgIcon
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { 
@@ -34,8 +34,8 @@ const YOUR_FIREBASE_CONFIG = {
 // ----------------------------------------------------------------------
 // 상수 및 설정
 // ----------------------------------------------------------------------
-const APP_VERSION = "v2.4.0"; // Mobile Dashboard Optimization
-const BUILD_DATE = "2024.06.02";
+const APP_VERSION = "v2.5.0"; // Mobile Compact & Image Generation
+const BUILD_DATE = "2024.06.03";
 const ADMIN_PASSWORD = "adminlcg1"; 
 
 // Firebase 초기화
@@ -64,7 +64,7 @@ try {
   console.warn("Firebase Init Failed. Falling back to Local Storage.", e);
 }
 
-// 카테고리 정의 (색상: 차트용)
+// 카테고리 정의
 const CATEGORIES = [
   { id: 'ALL', label: 'Total View', isSpecial: true, color: '#18181b' },
   { id: 'NEW', label: 'New Arrivals', isSpecial: true, color: '#ef4444' },
@@ -201,16 +201,17 @@ export default function App() {
     localStorage.setItem('patra_favorites', JSON.stringify(newFavs));
   };
 
-  // Log & Backup Logic (Same as before)
   const logActivity = async (action, productName, details = "") => {
     if (!isFirebaseAvailable || !db) return;
     try { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'logs'), { action, productName, details, timestamp: Date.now(), adminId: 'admin' }); } catch (e) { console.error(e); }
   };
+  
   const fetchLogs = async () => {
     if (!isFirebaseAvailable || !db) return;
     const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'logs'), orderBy('timestamp', 'desc'), limit(100));
     onSnapshot(q, (snapshot) => { setActivityLogs(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))); });
   };
+
   const handleFullBackup = async () => {
     const backupData = { version: APP_VERSION, date: new Date().toISOString(), products: products, logs: activityLogs };
     const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: "application/json" });
@@ -256,7 +257,6 @@ export default function App() {
   };
   const processedProducts = getProcessedProducts();
 
-  // Handle Move
   const handleMoveProduct = async (index, direction) => {
     if (!processedProducts || processedProducts.length <= 1) return;
     const targetIndex = direction === 'left' ? index - 1 : index + 1;
@@ -280,7 +280,6 @@ export default function App() {
     }
   };
 
-  // CRUD
   const handleSaveProduct = async (productData) => {
     const docId = productData.id ? String(productData.id) : String(Date.now());
     const isEdit = !!productData.id && products.some(p => String(p.id) === docId);
@@ -324,12 +323,11 @@ export default function App() {
 
   return (
     <div className="flex h-screen bg-zinc-50 font-sans text-zinc-900 overflow-hidden relative selection:bg-black selection:text-white">
-      
       {isMobileMenuOpen && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 md:hidden animate-in fade-in" onClick={() => setIsMobileMenuOpen(false)} />
       )}
 
-      {/* 사이드바 */}
+      {/* Sidebar */}
       <aside className={`
         fixed inset-y-0 left-0 z-50 w-72 bg-white/90 backdrop-blur-md border-r border-zinc-200 flex flex-col shadow-2xl md:shadow-none transition-transform duration-300 md:relative md:translate-x-0
         ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}
@@ -346,8 +344,6 @@ export default function App() {
         </div>
 
         <nav className="flex-1 overflow-y-auto py-6 px-4 space-y-1 custom-scrollbar">
-          
-          {/* Main & New Separate Section */}
           <div className="space-y-2 mb-8">
             {CATEGORIES.filter(c => c.isSpecial).map((cat) => (
               <button
@@ -402,12 +398,7 @@ export default function App() {
         </nav>
         
         <div className="p-4 border-t border-zinc-100 bg-zinc-50/50 space-y-3">
-           <button 
-             onClick={toggleAdminMode}
-             className={`w-full flex items-center justify-center px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${
-               isAdmin ? 'bg-zinc-900 text-white shadow-md' : 'bg-white border border-zinc-200 text-zinc-500 hover:bg-zinc-100'
-             }`}
-           >
+           <button onClick={toggleAdminMode} className={`w-full flex items-center justify-center px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${isAdmin ? 'bg-zinc-900 text-white shadow-md' : 'bg-white border border-zinc-200 text-zinc-500 hover:bg-zinc-100'}`}>
              {isAdmin ? <Unlock className="w-3 h-3 mr-2" /> : <Lock className="w-3 h-3 mr-2" />}
              {isAdmin ? "ADMIN MODE" : "VIEWER MODE"}
            </button>
@@ -422,23 +413,14 @@ export default function App() {
         </div>
       </aside>
 
-      {/* 메인 영역 */}
+      {/* Main Content */}
       <main className="flex-1 flex flex-col h-screen overflow-hidden relative">
         <header className="h-14 md:h-16 bg-white/80 backdrop-blur-md border-b border-zinc-100 flex items-center justify-between px-4 md:px-8 z-30 flex-shrink-0 sticky top-0 transition-all">
           <div className="flex items-center space-x-3 w-full md:w-auto flex-1 mr-4">
             <button onClick={() => setIsMobileMenuOpen(true)} className="md:hidden p-2 -ml-2 text-zinc-600 hover:bg-zinc-100 rounded-lg active:scale-95 transition-transform"><Menu className="w-6 h-6" /></button>
             <div className="relative w-full max-w-md group">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-zinc-400 w-4 h-4 group-focus-within:text-zinc-800 transition-colors" />
-              <input 
-                type="text" 
-                placeholder="Search..." 
-                value={searchTerm}
-                onChange={(e) => {
-                  setSearchTerm(e.target.value);
-                  if (activeCategory === 'DASHBOARD' && e.target.value) setActiveCategory('ALL');
-                }}
-                className="w-full pl-10 pr-4 py-2 bg-zinc-50/50 border border-transparent focus:bg-white focus:border-zinc-200 focus:ring-4 focus:ring-zinc-50 rounded-full text-sm transition-all outline-none"
-              />
+              <input type="text" placeholder="Search..." value={searchTerm} onChange={(e) => { setSearchTerm(e.target.value); if (activeCategory === 'DASHBOARD' && e.target.value) setActiveCategory('ALL'); }} className="w-full pl-10 pr-4 py-2 bg-zinc-50/50 border border-transparent focus:bg-white focus:border-zinc-200 focus:ring-4 focus:ring-zinc-50 rounded-full text-sm transition-all outline-none" />
             </div>
           </div>
 
@@ -446,7 +428,6 @@ export default function App() {
              <button onClick={() => setActiveCategory('MY_PICK')} className={`hidden md:flex p-2 rounded-full transition-all items-center space-x-1 ${activeCategory === 'MY_PICK' ? 'bg-yellow-100 text-yellow-600' : 'hover:bg-zinc-100 text-zinc-400 hover:text-zinc-600'}`} title="My Pick">
                 <Heart className={`w-5 h-5 ${activeCategory === 'MY_PICK' ? 'fill-yellow-500 text-yellow-500' : ''}`} />
              </button>
-
              <div className="flex items-center bg-zinc-100 rounded-lg p-1">
                 <select value={sortOption} onChange={(e) => setSortOption(e.target.value)} className="bg-transparent text-xs font-bold text-zinc-600 outline-none px-2 py-1 max-w-[80px] md:max-w-none cursor-pointer">
                   <option value="manual">Manual</option>
@@ -458,7 +439,6 @@ export default function App() {
                   {sortDirection === 'asc' ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />}
                 </button>
              </div>
-
             {isAdmin && (
               <button onClick={() => { setEditingProduct(null); setIsFormOpen(true); }} className="flex items-center justify-center w-8 h-8 md:w-auto md:h-auto md:px-4 md:py-2 bg-zinc-900 text-white rounded-full hover:bg-black transition-all shadow-lg hover:shadow-xl active:scale-95 flex-shrink-0">
                 <Plus className="w-4 h-4 md:mr-1.5" />
@@ -496,34 +476,17 @@ export default function App() {
                       </p>
                     </div>
                   </div>
-                  
                   <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-8 pb-20">
                     {processedProducts.map((product, idx) => (
-                      <ProductCard 
-                        key={product.id} 
-                        product={product} 
-                        onClick={() => setSelectedProduct(product)} 
-                        isAdmin={isAdmin}
-                        showMoveControls={isAdmin && sortOption === 'manual'}
-                        onMove={(dir) => handleMoveProduct(idx, dir)}
-                        isFavorite={favorites.includes(product.id)}
-                        onToggleFavorite={(e) => toggleFavorite(e, product.id)}
-                      />
+                      <ProductCard key={product.id} product={product} onClick={() => setSelectedProduct(product)} isAdmin={isAdmin} showMoveControls={isAdmin && sortOption === 'manual'} onMove={(dir) => handleMoveProduct(idx, dir)} isFavorite={favorites.includes(product.id)} onToggleFavorite={(e) => toggleFavorite(e, product.id)} />
                     ))}
-                    
                     {isAdmin && activeCategory !== 'MY_PICK' && activeCategory !== 'NEW' && (
-                      <button 
-                        onClick={() => { setEditingProduct(null); setIsFormOpen(true); }}
-                        className="border-2 border-dashed border-zinc-200 rounded-2xl flex flex-col items-center justify-center min-h-[300px] text-zinc-400 hover:border-zinc-400 hover:text-zinc-600 hover:bg-zinc-50 transition-all group"
-                      >
-                        <div className="w-12 h-12 rounded-full bg-zinc-100 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
-                          <Plus className="w-6 h-6" />
-                        </div>
+                      <button onClick={() => { setEditingProduct(null); setIsFormOpen(true); }} className="border-2 border-dashed border-zinc-200 rounded-2xl flex flex-col items-center justify-center min-h-[300px] text-zinc-400 hover:border-zinc-400 hover:text-zinc-600 hover:bg-zinc-50 transition-all group">
+                        <div className="w-12 h-12 rounded-full bg-zinc-100 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform"><Plus className="w-6 h-6" /></div>
                         <span className="text-sm font-bold">Add Product</span>
                       </button>
                     )}
                   </div>
-
                   {processedProducts.length === 0 && (
                      <div className="flex flex-col items-center justify-center py-32 text-zinc-300">
                         <CloudOff className="w-16 h-16 mb-4 opacity-50" />
@@ -545,11 +508,7 @@ export default function App() {
               <h3 className="text-lg font-bold flex items-center"><ShieldAlert className="w-5 h-5 mr-2" /> Admin Console</h3>
               <button onClick={() => setShowAdminDashboard(false)}><X className="w-5 h-5 text-zinc-400 hover:text-white transition-colors" /></button>
             </div>
-            {/* ... Admin Dashboard Content ... */}
-            <div className="flex-1 flex flex-col items-center justify-center p-10 text-zinc-400">
-               <Activity className="w-10 h-10 mb-2"/>
-               <p>Dashboard functionality is maintained in background.</p>
-            </div>
+            <div className="flex-1 flex flex-col items-center justify-center p-10 text-zinc-400"><Activity className="w-10 h-10 mb-2"/><p>Dashboard active.</p></div>
           </div>
         </div>
       )}
@@ -564,36 +523,21 @@ export default function App() {
 
       {/* Modals */}
       {selectedProduct && (
-        <ProductDetailModal 
-          product={selectedProduct} 
-          onClose={() => setSelectedProduct(null)} 
-          onEdit={() => { setEditingProduct(selectedProduct); setIsFormOpen(true); }}
-          isAdmin={isAdmin}
-          showToast={showToast}
-          isFavorite={favorites.includes(selectedProduct.id)}
-          onToggleFavorite={(e) => toggleFavorite(e, selectedProduct.id)}
-        />
+        <ProductDetailModal product={selectedProduct} onClose={() => setSelectedProduct(null)} onEdit={() => { setEditingProduct(selectedProduct); setIsFormOpen(true); }} isAdmin={isAdmin} showToast={showToast} isFavorite={favorites.includes(selectedProduct.id)} onToggleFavorite={(e) => toggleFavorite(e, selectedProduct.id)} />
       )}
 
       {isFormOpen && (
-        <ProductFormModal 
-          categories={CATEGORIES.filter(c => !c.isSpecial)}
-          initialCategory={activeCategory} 
-          existingData={editingProduct}
-          onClose={() => { setIsFormOpen(false); setEditingProduct(null); }}
-          onSave={handleSaveProduct}
-          onDelete={handleDeleteProduct}
-          isFirebaseAvailable={isFirebaseAvailable}
-        />
+        <ProductFormModal categories={CATEGORIES.filter(c => !c.isSpecial)} initialCategory={activeCategory} existingData={editingProduct} onClose={() => { setIsFormOpen(false); setEditingProduct(null); }} onSave={handleSaveProduct} onDelete={handleDeleteProduct} isFirebaseAvailable={isFirebaseAvailable} />
       )}
     </div>
   );
 }
 
 // ----------------------------------------------------------------------
-// Dashboard View (Mobile Optimized Bento Grid)
+// Components
 // ----------------------------------------------------------------------
-function DashboardView({ products, favorites, setActiveCategory, setSelectedProduct }) {
+
+function DashboardView({ products, favorites, setActiveCategory }) {
   const totalCount = products.length;
   const newCount = products.filter(p => p.isNew).length;
   const pickCount = favorites.length;
@@ -623,9 +567,7 @@ function DashboardView({ products, favorites, setActiveCategory, setSelectedProd
       : '#f4f4f5'
   };
 
-  const recentUpdates = [...products]
-    .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
-    .slice(0, 5);
+  const recentUpdates = [...products].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)).slice(0, 5);
 
   return (
     <div className="max-w-6xl mx-auto space-y-6 md:space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20">
@@ -634,7 +576,6 @@ function DashboardView({ products, favorites, setActiveCategory, setSelectedProd
         <p className="text-sm md:text-base text-zinc-500 mt-1 font-medium">Welcome to Patra Design Database</p>
       </div>
 
-      {/* Summary Cards (Mobile: 1 Row, Compact / Desktop: Spacious) */}
       <div className="grid grid-cols-3 gap-3 md:gap-6">
         <div onClick={() => setActiveCategory('ALL')} className="bg-white p-3 md:p-6 rounded-xl md:rounded-2xl border border-zinc-100 shadow-sm hover:shadow-md cursor-pointer group flex flex-col justify-center items-center md:items-start text-center md:text-left h-24 md:h-32">
           <div className="hidden md:flex justify-between w-full mb-2">
@@ -660,7 +601,6 @@ function DashboardView({ products, favorites, setActiveCategory, setSelectedProd
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Pie Chart: Compact on Mobile */}
         <div className="bg-white p-6 md:p-8 rounded-2xl border border-zinc-100 shadow-sm flex flex-col justify-center min-h-[auto] md:min-h-[360px]">
           <h3 className="text-base md:text-lg font-bold text-zinc-900 mb-6 flex items-center"><PieChart className="w-5 h-5 mr-2 text-zinc-400" /> Category Distribution</h3>
           {totalStandardProducts > 0 ? (
@@ -684,12 +624,11 @@ function DashboardView({ products, favorites, setActiveCategory, setSelectedProd
           ) : <div className="text-center text-zinc-300 text-sm">No data available</div>}
         </div>
 
-        {/* Recent Updates */}
         <div className="bg-white p-6 md:p-8 rounded-2xl border border-zinc-100 shadow-sm flex flex-col min-h-[auto] md:min-h-[360px]">
            <h3 className="text-base md:text-lg font-bold text-zinc-900 mb-6 flex items-center"><Clock className="w-5 h-5 mr-2 text-zinc-400" /> Recent Updates</h3>
            <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-3">
              {recentUpdates.length > 0 ? recentUpdates.map(product => (
-               <div key={product.id} onClick={() => setSelectedProduct(product)} className="flex items-center p-3 rounded-xl border border-zinc-100 hover:border-zinc-300 hover:bg-zinc-50 cursor-pointer transition-all group">
+               <div key={product.id} className="flex items-center p-3 rounded-xl border border-zinc-100 hover:border-zinc-300 hover:bg-zinc-50 cursor-pointer transition-all group">
                  <div className="w-10 h-10 md:w-12 md:h-12 bg-zinc-100 rounded-lg flex-shrink-0 flex items-center justify-center mr-3 md:mr-4 overflow-hidden border border-zinc-200">
                     {product.images?.[0] ? <img src={product.images[0]} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" alt="" /> : <ImageIcon className="w-5 h-5 text-zinc-300"/>}
                  </div>
@@ -707,10 +646,6 @@ function DashboardView({ products, favorites, setActiveCategory, setSelectedProd
   );
 }
 
-// ----------------------------------------------------------------------
-// Sub Components (Refined Design)
-// ----------------------------------------------------------------------
-
 function ProductCard({ product, onClick, showMoveControls, onMove, isFavorite, onToggleFavorite }) {
   const mainImage = product.images && product.images.length > 0 ? product.images[0] : null;
   const materialBadge = product.materials?.[0];
@@ -719,26 +654,18 @@ function ProductCard({ product, onClick, showMoveControls, onMove, isFavorite, o
   return (
     <div onClick={onClick} className="bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer group border border-zinc-100 relative flex flex-col h-full">
       <div className="relative h-48 md:h-64 bg-zinc-50 p-6 flex items-center justify-center overflow-hidden">
-        {/* Badges Container */}
         <div className="absolute top-4 left-4 flex flex-col gap-1.5 z-10 items-start">
            {product.isNew && <span className="bg-black text-white text-[9px] font-extrabold px-2 py-1 rounded shadow-sm tracking-wide">NEW</span>}
            {awardBadge && <span className="bg-yellow-400 text-yellow-900 text-[9px] font-bold px-2 py-1 rounded shadow-sm flex items-center"><Trophy className="w-2.5 h-2.5 mr-1" /> {awardBadge}</span>}
            {materialBadge && !awardBadge && <span className="bg-white/90 backdrop-blur border border-zinc-200 text-zinc-600 text-[9px] font-bold px-2 py-1 rounded uppercase tracking-wide">{materialBadge}</span>}
         </div>
         
-        <button onClick={onToggleFavorite} className="absolute top-4 right-4 z-20 text-zinc-300 hover:text-yellow-400 hover:scale-110 transition-all">
-          <Star className={`w-5 h-5 ${isFavorite ? 'text-yellow-400 fill-yellow-400' : ''}`} />
-        </button>
+        <button onClick={onToggleFavorite} className="absolute top-4 right-4 z-20 text-zinc-300 hover:text-yellow-400 hover:scale-110 transition-all"><Star className={`w-5 h-5 ${isFavorite ? 'text-yellow-400 fill-yellow-400' : ''}`} /></button>
 
         <div className="w-full h-full flex items-center justify-center transition-transform duration-500 group-hover:scale-105">
             {mainImage ? <img src={mainImage} alt={product.name} loading="lazy" className="w-full h-full object-contain mix-blend-multiply" /> : <div className="text-center opacity-30"><ImageIcon className="w-10 h-10 mx-auto mb-2 text-zinc-400" /></div>}
         </div>
         
-        <div className="absolute bottom-3 right-4 flex gap-1.5 z-10 opacity-0 group-hover:opacity-100 transition-all translate-y-2 group-hover:translate-y-0">
-           {product.productLink && <div className="p-1.5 bg-white rounded-full shadow-md text-zinc-500 hover:text-blue-600"><LinkIcon className="w-3.5 h-3.5" /></div>}
-           {product.attachments?.length > 0 && <div className="p-1.5 bg-white rounded-full shadow-md text-zinc-500 hover:text-blue-600"><Paperclip className="w-3.5 h-3.5" /></div>}
-        </div>
-
         {showMoveControls && (
           <div className="absolute bottom-2 left-0 right-0 flex justify-center gap-2 z-20">
              <button onClick={(e) => {e.stopPropagation(); onMove('left')}} className="p-1.5 bg-white/90 rounded-full shadow hover:bg-black hover:text-white text-zinc-700 transition-colors"><ArrowLeft className="w-4 h-4" /></button>
@@ -752,11 +679,10 @@ function ProductCard({ product, onClick, showMoveControls, onMove, isFavorite, o
           <span className="text-[10px] font-bold text-zinc-400 bg-zinc-50 px-2 py-0.5 rounded uppercase tracking-wider">{product.category}</span>
         </div>
         <h3 className="text-lg font-extrabold text-zinc-900 mb-1 leading-tight group-hover:text-blue-600 transition-colors">{product.name}</h3>
-        {/* 모바일에서는 디자이너 이름 숨김 (hidden md:block) */}
+        {/* Designer hidden on Mobile */}
         {product.designer && <p className="text-[11px] text-zinc-400 font-medium mb-3 hidden md:block">by {product.designer}</p>}
         
         <div className="mt-auto pt-4 border-t border-zinc-50 space-y-2">
-          {/* Colors */}
           <div className="flex items-center gap-2">
              <div className="flex -space-x-1.5">
                 {product.bodyColors?.slice(0, 4).map((c, i) => <div key={i} className="w-3.5 h-3.5 rounded-full border border-white shadow-sm ring-1 ring-zinc-100" style={{ backgroundColor: c }} />)}
@@ -775,19 +701,77 @@ function ProductCard({ product, onClick, showMoveControls, onMove, isFavorite, o
 function ProductDetailModal({ product, onClose, onEdit, isAdmin, showToast, isFavorite, onToggleFavorite }) {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [isZoomed, setIsZoomed] = useState(false);
+  const canvasRef = useRef(null);
+
   if (!product) return null;
   const images = product.images || [];
   const currentImage = images.length > 0 ? images[currentImageIndex] : null;
   
   const copyToClipboard = () => { navigator.clipboard.writeText(`[${product.name}]\n${product.specs}`); showToast("Copied to clipboard"); };
   const copyShareLink = () => { navigator.clipboard.writeText(`${window.location.origin}${window.location.pathname}?id=${product.id}`); showToast("Link copied"); };
-  const handleDownloadCard = () => {
-    // ... HTML Download Logic ...
-    showToast("Card downloaded");
+  
+  const handleShareImage = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const w = 1080;
+    const h = 1350;
+    canvas.width = w;
+    canvas.height = h;
+
+    // Background
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, w, h);
+
+    // Main Image
+    const img = new Image();
+    img.onload = () => {
+      // Draw Image (Cover/Contain Logic simplified)
+      const ratio = Math.min(w / img.width, (h * 0.5) / img.height);
+      const imgW = img.width * ratio;
+      const imgH = img.height * ratio;
+      ctx.drawImage(img, (w - imgW) / 2, 80, imgW, imgH);
+
+      // Text Data
+      ctx.fillStyle = '#18181b';
+      ctx.font = 'bold 60px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(product.name, w/2, h * 0.6);
+
+      ctx.fillStyle = '#71717a';
+      ctx.font = 'bold 30px sans-serif';
+      ctx.fillText(product.category.toUpperCase(), w/2, h * 0.55);
+
+      ctx.font = '30px sans-serif';
+      if(product.designer) ctx.fillText(`Designed by ${product.designer}`, w/2, h * 0.65);
+
+      // Specs
+      ctx.fillStyle = '#3f3f46';
+      ctx.font = '24px sans-serif';
+      const specLines = product.specs.split('\n');
+      let y = h * 0.72;
+      specLines.forEach(line => {
+        ctx.fillText(line, w/2, y);
+        y += 35;
+      });
+
+      // Export
+      const dataUrl = canvas.toDataURL('image/png');
+      const a = document.createElement('a');
+      a.href = dataUrl;
+      a.download = `${product.name}-card.png`;
+      a.click();
+      showToast("이미지가 저장되었습니다.");
+    };
+    if(currentImage) img.src = currentImage; // Assuming Base64 or CORS-safe URL
+    else showToast("이미지가 없어 생성할 수 없습니다.", "error");
   };
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-50 flex items-center justify-center p-0 md:p-4 animate-in fade-in duration-200 items-end md:items-center">
+      {/* Hidden Canvas for Image Generation */}
+      <canvas ref={canvasRef} style={{ display: 'none' }} />
+
       {isZoomed && currentImage && (
         <div className="fixed inset-0 z-[70] bg-black/95 flex items-center justify-center p-8 cursor-zoom-out" onClick={() => setIsZoomed(false)}>
            <img src={currentImage} className="max-w-full max-h-full object-contain" alt="Zoomed" />
@@ -816,32 +800,31 @@ function ProductDetailModal({ product, onClose, onEdit, isAdmin, showToast, isFa
         </div>
 
         {/* Right: Info */}
-        <div className="w-full md:w-1/2 p-6 md:p-12 overflow-y-auto bg-white custom-scrollbar h-[60vh] md:h-auto pb-20 md:pb-12">
+        <div className="w-full md:w-1/2 p-5 md:p-12 overflow-y-auto bg-white custom-scrollbar h-[60vh] md:h-auto pb-20 md:pb-12">
           {/* Mobile Drag Handle */}
           <div className="w-12 h-1.5 bg-zinc-200 rounded-full mx-auto mb-6 md:hidden"></div>
 
-          <div className="mb-8 md:mb-10">
-            <div className="flex flex-wrap gap-2 mb-4">
-              <span className="inline-block px-3 py-1 bg-zinc-900 text-white text-[10px] font-extrabold rounded uppercase tracking-widest">{product.category}</span>
-              {product.awards?.map(award => (<span key={award} className="inline-flex items-center px-3 py-1 bg-yellow-400/20 text-yellow-700 border border-yellow-400/30 text-[10px] font-bold rounded uppercase tracking-wide"><Trophy className="w-3 h-3 mr-1" /> {award}</span>))}
+          <div className="mb-6 md:mb-10">
+            <div className="flex flex-wrap gap-2 mb-2">
+              <span className="inline-block px-2.5 py-0.5 bg-zinc-900 text-white text-[10px] font-extrabold rounded uppercase tracking-widest">{product.category}</span>
+              {product.awards?.map(award => (<span key={award} className="inline-flex items-center px-2.5 py-0.5 bg-yellow-400/20 text-yellow-700 border border-yellow-400/30 text-[10px] font-bold rounded uppercase tracking-wide"><Trophy className="w-3 h-3 mr-1" /> {award}</span>))}
             </div>
-            <h2 className="text-3xl md:text-5xl font-black text-zinc-900 mb-2 tracking-tight">{product.name}</h2>
-            {/* 디자이너 정보: 모바일에서도 상세에서는 항상 보임 */}
+            <h2 className="text-3xl md:text-5xl font-black text-zinc-900 mb-1 tracking-tight">{product.name}</h2>
             {product.designer && <p className="text-sm text-zinc-500 font-medium">Designed by <span className="text-zinc-900">{product.designer}</span></p>}
           </div>
           
-          <div className="space-y-8 md:space-y-10">
+          <div className="space-y-6 md:space-y-10">
             <div>
-              <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-4 flex items-center justify-between">
+              <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-3 flex items-center justify-between">
                 Specifications 
                 <button onClick={copyToClipboard} className="text-zinc-400 hover:text-zinc-900"><Copy className="w-4 h-4" /></button>
               </h3>
-              <p className="text-sm text-zinc-600 leading-relaxed bg-zinc-50 p-6 rounded-2xl border border-zinc-100 whitespace-pre-wrap">{product.specs}</p>
+              <p className="text-sm text-zinc-600 leading-relaxed bg-zinc-50 p-4 md:p-6 rounded-2xl border border-zinc-100 whitespace-pre-wrap">{product.specs}</p>
             </div>
             
             {(product.features?.length > 0 || product.options?.length > 0) && (
               <div>
-                <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-4">Features & Options</h3>
+                <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-3">Features & Options</h3>
                 <div className="flex flex-wrap gap-2">
                   {product.options?.map((opt, idx) => (<span key={idx} className="px-3 py-1.5 bg-blue-50 text-blue-600 border border-blue-100 rounded-lg text-xs font-bold">{opt}</span>))}
                   {product.features?.map((ft, idx) => (<span key={idx} className="px-3 py-1.5 bg-zinc-100 text-zinc-600 rounded-lg text-xs font-medium flex items-center"><Check className="w-3 h-3 mr-1.5" /> {ft}</span>))}
@@ -849,9 +832,9 @@ function ProductDetailModal({ product, onClose, onEdit, isAdmin, showToast, isFa
               </div>
             )}
 
-            <div className="grid grid-cols-2 gap-8">
-               <div><h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-3">Body Colors</h3><div className="flex flex-wrap gap-3">{product.bodyColors?.map((c, i) => (<div key={i} className="group relative"><div className="w-6 h-6 rounded-full border border-zinc-200 shadow-sm cursor-help" style={{ backgroundColor: c }} /><span className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 px-2 py-1 bg-black text-white text-[10px] rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10 pointer-events-none">{c}</span></div>))}</div></div>
-               <div><h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-3">Upholstery</h3><div className="flex flex-wrap gap-3">{product.upholsteryColors?.map((c, i) => (<div key={i} className="group relative"><div className="w-6 h-6 rounded-md border border-zinc-200 shadow-sm cursor-help" style={{ backgroundColor: c }} /><span className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 px-2 py-1 bg-black text-white text-[10px] rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10 pointer-events-none">{c}</span></div>))}</div></div>
+            <div className="grid grid-cols-2 gap-4 md:gap-8">
+               <div><h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2">Body Color</h3><div className="flex flex-wrap gap-2">{product.bodyColors?.map((c, i) => (<div key={i} className="group relative"><div className="w-6 h-6 rounded-full border border-zinc-200 shadow-sm cursor-help" style={{ backgroundColor: c }} /><span className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 px-2 py-1 bg-black text-white text-[10px] rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10 pointer-events-none">{c}</span></div>))}</div></div>
+               <div><h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2">Upholstery</h3><div className="flex flex-wrap gap-2">{product.upholsteryColors?.map((c, i) => (<div key={i} className="group relative"><div className="w-6 h-6 rounded-md border border-zinc-200 shadow-sm cursor-help" style={{ backgroundColor: c }} /><span className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 px-2 py-1 bg-black text-white text-[10px] rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10 pointer-events-none">{c}</span></div>))}</div></div>
             </div>
 
             {(product.productLink || product.attachments?.length > 0) && (
@@ -867,9 +850,9 @@ function ProductDetailModal({ product, onClose, onEdit, isAdmin, showToast, isFa
             )}
           </div>
           
-          <div className="mt-12 pt-6 border-t border-zinc-100 flex justify-between items-center">
+          <div className="mt-8 md:mt-12 pt-6 border-t border-zinc-100 flex justify-between items-center">
              <div className="flex gap-3">
-                <button onClick={copyShareLink} className="flex items-center px-5 py-2.5 bg-zinc-100 text-zinc-600 rounded-xl text-sm font-bold hover:bg-zinc-200 transition-colors"><Share2 className="w-4 h-4 mr-2" /> Share</button>
+                <button onClick={handleShareImage} className="flex items-center px-5 py-2.5 bg-zinc-100 text-zinc-600 rounded-xl text-sm font-bold hover:bg-zinc-200 transition-colors"><ImgIcon className="w-4 h-4 mr-2" /> Share Image</button>
              </div>
              {isAdmin && (<button onClick={onEdit} className="flex items-center px-6 py-2.5 bg-zinc-900 text-white rounded-xl text-sm font-bold hover:bg-black hover:shadow-lg transition-all"><Edit2 className="w-4 h-4 mr-2" /> Edit</button>)}
           </div>
@@ -879,7 +862,6 @@ function ProductDetailModal({ product, onClose, onEdit, isAdmin, showToast, isFa
   );
 }
 
-// ProductFormModal (No Logic Change, Just Style Consistency)
 function ProductFormModal({ categories, existingData, onClose, onSave, onDelete, isFirebaseAvailable, initialCategory }) {
   const isEditMode = !!existingData;
   const fileInputRef = useRef(null);
@@ -899,6 +881,7 @@ function ProductFormModal({ categories, existingData, onClose, onSave, onDelete,
     }
   }, [existingData]);
 
+  // ... (Image/Attachment Handlers same as before) ...
   const processImage = (file) => { return new Promise((resolve) => { const reader = new FileReader(); reader.onload = (e) => { const img = new Image(); img.onload = () => { const canvas = document.createElement('canvas'); const MAX_WIDTH = 800; let width = img.width; let height = img.height; if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; } canvas.width = width; canvas.height = height; const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0, width, height); resolve(canvas.toDataURL('image/jpeg', 0.7)); }; img.src = e.target.result; }; reader.readAsDataURL(file); }); };
   const handleImageUpload = async (e) => { const files = Array.from(e.target.files); if (files.length > 0) { setIsProcessingImage(true); const newUrls = []; for (const file of files) { try { newUrls.push(await processImage(file)); } catch (e) {} } setFormData(prev => ({ ...prev, images: [...prev.images, ...newUrls] })); setIsProcessingImage(false); } };
   const handleAttachmentUpload = (e) => { const files = Array.from(e.target.files); files.forEach(file => { if (file.size > 300*1024) return alert("Too large"); const reader = new FileReader(); reader.onload = (e) => setFormData(p => ({...p, attachments: [...p.attachments, {name: file.name, url: e.target.result}]})); reader.readAsDataURL(file); }); };
@@ -930,17 +913,30 @@ function ProductFormModal({ categories, existingData, onClose, onSave, onDelete,
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-8 space-y-6">
           <div className="bg-zinc-50 p-6 rounded-xl border border-zinc-200">
              <div className="flex justify-between mb-4"><span className="font-bold text-sm">Images</span><div className="space-x-2"><button type="button" onClick={() => fileInputRef.current.click()} className="text-xs bg-white border px-3 py-1 rounded-lg font-medium hover:bg-zinc-100">Upload</button></div><input ref={fileInputRef} type="file" multiple className="hidden" onChange={handleImageUpload} accept="image/*"/></div>
-             <div className="grid grid-cols-5 gap-3">{formData.images.map((img, i) => (<div key={i} className="relative aspect-square bg-white rounded-lg border overflow-hidden group"><img src={img} className="w-full h-full object-cover" /><button type="button" onClick={()=>removeImage(i)} className="absolute top-1 right-1 bg-red-500 text-white p-1 rounded-full opacity-0 group-hover:opacity-100"><X className="w-3 h-3"/></button>{i===0 && <span className="absolute bottom-1 left-1 bg-black text-white text-[9px] px-1 rounded">MAIN</span>}{i!==0 && <button type="button" onClick={()=>setMainImage(i)} className="absolute bottom-1 left-1 bg-white text-black text-[9px] px-1 rounded opacity-0 group-hover:opacity-100">Set Main</button>}</div>))}</div>
+             {/* Mobile Responsive Grid for Images */}
+             <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3">
+               {formData.images.map((img, i) => (
+                 <div key={i} className="relative aspect-square bg-white rounded-lg border overflow-hidden group">
+                   <img src={img} className="w-full h-full object-cover" />
+                   <button type="button" onClick={()=>removeImage(i)} className="absolute top-1 right-1 bg-red-500 text-white p-1 rounded-full opacity-0 group-hover:opacity-100"><X className="w-3 h-3"/></button>
+                   {i===0 && <span className="absolute bottom-1 left-1 bg-black text-white text-[9px] px-1 rounded">MAIN</span>}
+                   {i!==0 && <button type="button" onClick={()=>setMainImage(i)} className="absolute bottom-1 left-1 bg-white text-black text-[9px] px-1 rounded opacity-0 group-hover:opacity-100">Set Main</button>}
+                 </div>
+               ))}
+             </div>
           </div>
+          {/* ... (Rest of the form same as before) ... */}
           <div className="grid grid-cols-2 gap-6">
              <div><label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Name</label><input required className="w-full border p-2 rounded-lg" value={formData.name} onChange={e=>setFormData({...formData, name: e.target.value})}/></div>
              <div><label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Category</label><select className="w-full border p-2 rounded-lg" value={formData.category} onChange={e=>setFormData({...formData, category: e.target.value})}>{categories.map(c=><option key={c.id} value={c.id}>{c.label}</option>)}</select></div>
           </div>
+          {/* ... */}
           <div className="grid grid-cols-2 gap-6">
              <div><label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Launch Date</label><input type="date" className="w-full border p-2 rounded-lg" value={formData.launchDate} onChange={e=>setFormData({...formData, launchDate: e.target.value})}/></div>
              <div><label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Designer</label><input className="w-full border p-2 rounded-lg" value={formData.designer} onChange={e=>setFormData({...formData, designer: e.target.value})}/></div>
           </div>
           <div><label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Specs</label><textarea required rows={2} className="w-full border p-2 rounded-lg" value={formData.specs} onChange={e=>setFormData({...formData, specs: e.target.value})}/></div>
+          {/* ... */}
           <div className="grid grid-cols-2 gap-6">
              <div><label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Options (comma)</label><input className="w-full border p-2 rounded-lg" value={formData.optionsString} onChange={e=>setFormData({...formData, optionsString: e.target.value})}/></div>
              <div><label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Features (comma)</label><input className="w-full border p-2 rounded-lg" value={formData.featuresString} onChange={e=>setFormData({...formData, featuresString: e.target.value})}/></div>
