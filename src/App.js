@@ -10,7 +10,7 @@ import {
   Share2, Download, Maximize2, LayoutGrid, Zap, GripHorizontal, ImageIcon as ImgIcon,
   ChevronsUp, Camera, ImagePlus, Sofa, Briefcase, Users, Home as HomeIcon, MapPin,
   Edit3, Grid, MoreVertical, MousePointer2, CheckSquare, XCircle, Printer, List, Eye,
-  PlayCircle, BarChart3
+  PlayCircle, BarChart3, CornerUpLeft
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { 
@@ -36,7 +36,7 @@ const YOUR_FIREBASE_CONFIG = {
 // ----------------------------------------------------------------------
 // 상수 및 설정
 // ----------------------------------------------------------------------
-const APP_VERSION = "v0.5.8-update"; 
+const APP_VERSION = "v0.5.9-update"; 
 const BUILD_DATE = "2026.01.21";
 const ADMIN_PASSWORD = "adminlcg1"; 
 
@@ -143,14 +143,16 @@ export default function App() {
     mainContentRef.current.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // Browser Back Button Handling
+  // Browser Back Button & URL Handling
   useEffect(() => {
     const handlePopState = (event) => {
       if (selectedProduct) {
         setSelectedProduct(null);
-        window.history.pushState(null, '', window.location.pathname); 
+        // Clean URL while keeping in app
+        window.history.replaceState(null, '', window.location.pathname);
       } else if (activeCategory !== 'DASHBOARD') {
         setActiveCategory('DASHBOARD');
+        window.history.replaceState(null, '', window.location.pathname);
       }
     };
     window.addEventListener('popstate', handlePopState);
@@ -159,9 +161,19 @@ export default function App() {
 
   useEffect(() => {
     if (selectedProduct) {
-      window.history.pushState({ modal: true }, '', `?id=${selectedProduct.id}`);
+      const url = new URL(window.location);
+      url.searchParams.set('id', selectedProduct.id);
+      window.history.pushState({ modal: true }, '', url);
     }
   }, [selectedProduct]);
+
+  // Handle Home Click (Reset URL)
+  const handleHomeClick = () => {
+    setActiveCategory('DASHBOARD');
+    setIsMobileMenuOpen(false);
+    // Reset URL to root
+    window.history.pushState({}, '', window.location.pathname);
+  };
 
   // URL Query Parameter
   useEffect(() => {
@@ -197,7 +209,7 @@ export default function App() {
     if (savedFavs) setFavorites(JSON.parse(savedFavs));
   }, []);
 
-  // Data Sync (Products & Settings & ALL Spaces for Scenes)
+  // Data Sync
   useEffect(() => {
     if (isFirebaseAvailable && user && db) {
       const qProducts = collection(db, 'artifacts', appId, 'public', 'data', 'products');
@@ -275,7 +287,7 @@ export default function App() {
     });
   };
 
-  // Image & Data Handlers (Standard functions same as previous)
+  // Image & Data Handlers
   const handleBannerUpload = async (e) => { if (!isAdmin) return; const file = e.target.files[0]; if (!file) return; try { const resizedImage = await processImage(file); const newData = { ...bannerData, url: resizedImage }; if (isFirebaseAvailable && db) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'banner'), newData, { merge: true }); else { localStorage.setItem('patra_banner_data', JSON.stringify(newData)); setBannerData(newData); } showToast("메인 배너가 업데이트되었습니다."); } catch (error) { showToast("이미지 처리 실패", "error"); } };
   const handleBannerTextChange = (key, value) => { if (!isAdmin) return; setBannerData(prev => ({ ...prev, [key]: value })); };
   const saveBannerText = async () => { if (isFirebaseAvailable && db) { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'banner'), bannerData, { merge: true }); showToast("배너 문구가 저장되었습니다."); } };
@@ -313,7 +325,6 @@ export default function App() {
     return filtered;
   };
   const processedProducts = getProcessedProducts();
-  
   const handleMoveProduct = async (index, direction) => { /* ... */ if (!processedProducts || processedProducts.length <= 1) return; const targetIndex = direction === 'left' ? index - 1 : index + 1; if (targetIndex < 0 || targetIndex >= processedProducts.length) return; const currentItem = processedProducts[index]; const swapItem = processedProducts[targetIndex]; const currentOrder = currentItem.orderIndex !== undefined ? currentItem.orderIndex : currentItem.createdAt; const swapOrder = swapItem.orderIndex !== undefined ? swapItem.orderIndex : swapItem.createdAt; if (isFirebaseAvailable && db) { try { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'products', currentItem.id), { orderIndex: swapOrder }, { merge: true }); await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'products', swapItem.id), { orderIndex: currentOrder }, { merge: true }); } catch (e) { showToast("순서 변경 실패", "error"); } } else { const newProducts = [...products]; const p1 = newProducts.find(p => p.id === currentItem.id); const p2 = newProducts.find(p => p.id === swapItem.id); if (p1 && p2) { p1.orderIndex = swapOrder; p2.orderIndex = currentOrder; saveToLocalStorage(newProducts); } } };
 
   return (
@@ -322,7 +333,7 @@ export default function App() {
       
       {/* Sidebar - Collapsible Sections */}
       <aside className={`fixed inset-y-0 left-0 z-50 w-72 bg-white/90 backdrop-blur-md border-r border-zinc-200 flex flex-col shadow-2xl md:shadow-none transition-transform duration-300 md:relative md:translate-x-0 print:hidden ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-        <div className="p-6 border-b border-zinc-100 flex items-center justify-between cursor-pointer group" onClick={() => { setActiveCategory('DASHBOARD'); setIsMobileMenuOpen(false); }}>
+        <div className="p-6 border-b border-zinc-100 flex items-center justify-between cursor-pointer group" onClick={handleHomeClick}>
           <div className="flex flex-col">
              <div className="flex items-center space-x-1">
                 <span className="text-2xl font-black tracking-tighter text-zinc-900 group-hover:scale-105 transition-transform origin-left">PATRA</span>
@@ -336,30 +347,14 @@ export default function App() {
             {CATEGORIES.filter(c => c.isSpecial).map((cat) => (<button key={cat.id} onClick={() => { setActiveCategory(cat.id); setIsMobileMenuOpen(false); }} className={`w-full text-left px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 flex items-center justify-between group border ${activeCategory === cat.id ? 'bg-zinc-900 text-white shadow-lg border-zinc-900' : 'bg-white text-zinc-600 border-zinc-100 hover:bg-zinc-50 hover:border-zinc-300'}`}><div className="flex items-center">{cat.id === 'ALL' && <LayoutGrid className="w-4 h-4 mr-3 opacity-70" />}{cat.id === 'NEW' && <Zap className="w-4 h-4 mr-3 opacity-70" />}<span className="font-bold tracking-tight">{cat.label}</span></div>{cat.id === 'NEW' && <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse ml-auto"></span>}</button>))}
           </div>
           
-          {/* Collapsible SPACES */}
           <div className="py-2">
-             <button onClick={() => setSidebarState(p => ({...p, spaces: !p.spaces}))} className="w-full flex items-center justify-between text-[10px] font-bold text-zinc-400 mb-2 px-3 tracking-widest uppercase hover:text-zinc-600 transition-colors">
-               <span>SPACES</span>
-               {sidebarState.spaces ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-             </button>
-             {sidebarState.spaces && (
-               <div className="space-y-1 animate-in slide-in-from-top-2 duration-200">
-                  {SPACES.map((space) => (<button key={space.id} onClick={() => { setActiveCategory(space.id); setIsMobileMenuOpen(false); }} className={`w-full text-left px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 flex items-center justify-between group ${activeCategory === space.id ? 'bg-zinc-800 text-white font-bold' : 'text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900'}`}><div className="flex items-center"><space.icon className={`w-3.5 h-3.5 mr-3 ${activeCategory === space.id ? 'text-white' : 'text-zinc-400'}`} />{space.label}</div>{activeCategory === space.id && <div className="w-1.5 h-1.5 rounded-full bg-green-500"></div>}</button>))}
-               </div>
-             )}
+             <button onClick={() => setSidebarState(p => ({...p, spaces: !p.spaces}))} className="w-full flex items-center justify-between text-[10px] font-bold text-zinc-400 mb-2 px-3 tracking-widest uppercase hover:text-zinc-600 transition-colors"><span>SPACES</span>{sidebarState.spaces ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}</button>
+             {sidebarState.spaces && (<div className="space-y-1 animate-in slide-in-from-top-2 duration-200">{SPACES.map((space) => (<button key={space.id} onClick={() => { setActiveCategory(space.id); setIsMobileMenuOpen(false); }} className={`w-full text-left px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 flex items-center justify-between group ${activeCategory === space.id ? 'bg-zinc-800 text-white font-bold' : 'text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900'}`}><div className="flex items-center"><space.icon className={`w-3.5 h-3.5 mr-3 ${activeCategory === space.id ? 'text-white' : 'text-zinc-400'}`} />{space.label}</div>{activeCategory === space.id && <div className="w-1.5 h-1.5 rounded-full bg-green-500"></div>}</button>))}</div>)}
           </div>
           
-          {/* Collapsible COLLECTIONS */}
           <div className="py-2 border-t border-zinc-100">
-             <button onClick={() => setSidebarState(p => ({...p, collections: !p.collections}))} className="w-full flex items-center justify-between text-[10px] font-bold text-zinc-400 mb-2 px-3 tracking-widest uppercase hover:text-zinc-600 transition-colors">
-                <div className="flex items-center"><span>COLLECTIONS</span>{isFirebaseAvailable ? <Cloud className="w-3 h-3 ml-2 text-green-500" /> : <CloudOff className="w-3 h-3 ml-2 text-zinc-300" />}</div>
-                {sidebarState.collections ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-             </button>
-             {sidebarState.collections && (
-               <div className="space-y-0.5 animate-in slide-in-from-top-2 duration-200">
-                  {CATEGORIES.filter(c => !c.isSpecial).map((cat) => (<button key={cat.id} onClick={() => { setActiveCategory(cat.id); setIsMobileMenuOpen(false); }} className={`w-full text-left px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center justify-between group ${activeCategory === cat.id ? 'bg-zinc-100 text-zinc-900 font-bold' : 'text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900'}`}>{cat.label}</button>))}
-               </div>
-             )}
+             <button onClick={() => setSidebarState(p => ({...p, collections: !p.collections}))} className="w-full flex items-center justify-between text-[10px] font-bold text-zinc-400 mb-2 px-3 tracking-widest uppercase hover:text-zinc-600 transition-colors"><div className="flex items-center"><span>COLLECTIONS</span>{isFirebaseAvailable ? <Cloud className="w-3 h-3 ml-2 text-green-500" /> : <CloudOff className="w-3 h-3 ml-2 text-zinc-300" />}</div>{sidebarState.collections ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}</button>
+             {sidebarState.collections && (<div className="space-y-0.5 animate-in slide-in-from-top-2 duration-200">{CATEGORIES.filter(c => !c.isSpecial).map((cat) => (<button key={cat.id} onClick={() => { setActiveCategory(cat.id); setIsMobileMenuOpen(false); }} className={`w-full text-left px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center justify-between group ${activeCategory === cat.id ? 'bg-zinc-100 text-zinc-900 font-bold' : 'text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900'}`}>{cat.label}</button>))}</div>)}
           </div>
 
           <div className="pt-2"><button onClick={() => { setActiveCategory('MY_PICK'); setIsMobileMenuOpen(false); }} className={`w-full text-left px-4 py-3 rounded-xl text-sm font-bold transition-all duration-200 flex items-center space-x-3 group border ${activeCategory === 'MY_PICK' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' : 'text-zinc-400 border-transparent hover:bg-zinc-50 hover:text-zinc-600'}`}><Heart className={`w-4 h-4 ${activeCategory === 'MY_PICK' ? 'fill-yellow-500 text-yellow-500' : ''}`} /><span>My Pick ({favorites.length})</span></button></div>
@@ -531,171 +526,108 @@ export default function App() {
 }
 
 // ----------------------------------------------------------------------
-// Components: Space & Dashboard & Product
+// Specialized Components
 // ----------------------------------------------------------------------
 
-function SpaceDetailView({ space, spaceContent, isAdmin, onBannerUpload, onEditInfo, onManageProducts, onAddScene, onViewScene, productCount }) {
-  const banner = spaceContent.banner;
-  const description = spaceContent.description || "이 공간에 대한 설명이 없습니다.";
-  const trend = spaceContent.trend || "";
-  const scenes = spaceContent.scenes || [];
-  const copySpaceLink = () => { navigator.clipboard.writeText(`${window.location.origin}${window.location.pathname}?space=${space.id}`); window.alert("공간 공유 링크가 복사되었습니다."); };
+function PieChartComponent({ data, total }) {
+  const [hoveredIndex, setHoveredIndex] = useState(null);
+  let cumulativePercent = 0;
+
+  const getCoordinatesForPercent = (percent) => {
+    const x = Math.cos(2 * Math.PI * percent);
+    const y = Math.sin(2 * Math.PI * percent);
+    return [x, y];
+  };
 
   return (
-    <div className="mb-12 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className="relative rounded-3xl overflow-hidden h-72 md:h-96 shadow-lg group mb-8 bg-zinc-900 print:hidden">
-        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent z-10"></div>
-        {banner ? <img src={banner} className="w-full h-full object-cover transition-transform duration-1000" alt="Space Banner" /> : <div className="w-full h-full flex items-center justify-center opacity-30"><span className="text-white text-4xl font-bold uppercase">{space.label}</span></div>}
-        <div className="absolute bottom-8 left-8 md:bottom-12 md:left-12 z-20 text-white max-w-3xl">
-           <div className="flex items-center space-x-3 mb-3"><div className="p-2 bg-white/20 backdrop-blur-md rounded-xl">{React.createElement(space.icon, { className: "w-6 h-6" })}</div><span className="text-sm font-bold uppercase tracking-widest opacity-90">Space Curation</span></div>
-           <h2 className="text-4xl md:text-6xl font-black mb-4 tracking-tight leading-tight">{space.label}</h2>
-           <p className="text-zinc-200 text-sm md:text-lg leading-relaxed font-light">{description}</p>
-           {trend && (<div className="mt-6 pl-4 border-l-2 border-indigo-500"><p className="text-indigo-300 text-xs font-bold uppercase mb-1">Design Trend</p><p className="text-zinc-300 text-sm italic">"{trend}"</p></div>)}
-        </div>
-        <div className="absolute top-6 right-6 z-30 flex space-x-3">
-           <button onClick={copySpaceLink} className="p-2.5 bg-white/20 backdrop-blur rounded-full text-white hover:bg-white hover:text-black transition-all"><Share2 className="w-5 h-5" /></button>
-           {isAdmin && (<><label className="p-2.5 bg-black/40 backdrop-blur rounded-full text-white hover:bg-white hover:text-black transition-all cursor-pointer"><Camera className="w-5 h-5" /><input type="file" className="hidden" accept="image/*" onChange={onBannerUpload} /></label><button onClick={onEditInfo} className="p-2.5 bg-black/40 backdrop-blur rounded-full text-white hover:bg-white hover:text-black transition-all"><Edit3 className="w-5 h-5" /></button></>)}
-        </div>
-      </div>
-      <div className="mb-12 print:hidden">
-        <div className="flex items-center justify-between mb-6"><h3 className="text-2xl font-extrabold text-zinc-900 flex items-center"><ImageIcon className="w-6 h-6 mr-2 text-indigo-500" /> Space Scenes</h3>{isAdmin && (<button onClick={onAddScene} className="flex items-center text-sm font-bold bg-zinc-900 text-white px-4 py-2 rounded-lg hover:bg-black transition-colors shadow-lg"><Plus className="w-4 h-4 mr-2" /> Add Scene</button>)}</div>
-        {scenes.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {scenes.map((scene) => (
-              <div key={scene.id} onClick={() => onViewScene(scene)} className="group relative aspect-[4/3] rounded-2xl overflow-hidden bg-zinc-100 shadow-md hover:shadow-xl transition-all cursor-pointer">
-                <img src={scene.image} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" alt={scene.title} />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-80 group-hover:opacity-100 transition-opacity"></div>
-                {/* Badge for Product Count */}
-                {scene.productIds && scene.productIds.length > 0 && <div className="absolute top-4 right-4 bg-black/60 backdrop-blur text-white text-[10px] font-bold px-2 py-1 rounded-lg flex items-center"><Tag className="w-3 h-3 mr-1" /> {scene.productIds.length} Products</div>}
-                <div className="absolute bottom-5 left-5 right-5 text-white transform translate-y-2 group-hover:translate-y-0 transition-transform">
-                  <h4 className="text-xl font-bold mb-1 truncate">{scene.title}</h4>
-                  <p className="text-xs text-zinc-300 line-clamp-1">{scene.description}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (<div className="text-center py-12 bg-zinc-50 rounded-2xl border border-dashed border-zinc-200 text-zinc-400"><ImageIcon className="w-12 h-12 mx-auto mb-3 opacity-20" /><p className="text-sm">등록된 공간 장면이 없습니다.</p></div>)}
-      </div>
-      <div className="flex items-center justify-between mb-6 border-t border-zinc-100 pt-12 print:border-none print:pt-0">
-         <h3 className="text-xl font-bold text-zinc-900 flex items-center"><Tag className="w-5 h-5 mr-2 text-zinc-400" /> All Curated Products <span className="ml-2 text-sm font-medium text-zinc-400 bg-zinc-100 px-2 py-0.5 rounded-full">{productCount}</span></h3>
-         {isAdmin && (<button onClick={onManageProducts} className="flex items-center text-sm font-bold text-zinc-500 hover:text-zinc-900 bg-white border border-zinc-200 px-4 py-2 rounded-lg hover:border-zinc-400 transition-colors"><Settings className="w-4 h-4 mr-2" /> Manage List</button>)}
-      </div>
-    </div>
-  );
-}
+    <div className="relative w-full h-full flex items-center justify-center">
+      <svg viewBox="-1 -1 2 2" className="w-full h-full transform -rotate-90">
+        {data.map((item, idx) => {
+          const startPercent = cumulativePercent;
+          const slicePercent = item.count / total;
+          cumulativePercent += slicePercent;
+          const endPercent = cumulativePercent;
 
-function SpaceSceneModal({ scene, products, allProducts, isAdmin, onClose, onEdit, onProductToggle, onNavigateProduct }) {
-  // ... (Keeping logic same, focusing on layout changes mostly handled by global CSS/structure) ...
-  const [currentImageIndex, setCurrentImageIndex] = useState(0);
-  const images = scene.images ? [scene.image, ...scene.images] : [scene.image];
-  const [isProductManagerOpen, setProductManagerOpen] = useState(false);
-  const [productFilter, setProductFilter] = useState('');
+          const [startX, startY] = getCoordinatesForPercent(startPercent);
+          const [endX, endY] = getCoordinatesForPercent(endPercent);
+          const largeArcFlag = slicePercent > 0.5 ? 1 : 0;
 
-  return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[60] flex items-center justify-center p-0 md:p-6 animate-in zoom-in-95 duration-200 print:hidden">
-      <div className="bg-white w-full h-full md:h-[90vh] md:max-w-6xl md:rounded-3xl overflow-hidden shadow-2xl flex flex-col md:flex-row relative">
-         <button onClick={onClose} className="absolute top-4 right-4 z-50 p-2 bg-black/20 text-white hover:bg-black/50 rounded-full backdrop-blur"><X className="w-6 h-6"/></button>
-         <div className="w-full md:w-2/3 bg-black relative flex flex-col justify-center h-[40vh] md:h-full">
-            <img src={images[currentImageIndex]} className="w-full h-full object-contain" alt="Scene" />
-            {images.length > 1 && (<div className="absolute bottom-4 left-0 right-0 flex justify-center space-x-2 px-4">{images.map((_, idx) => (<button key={idx} onClick={() => setCurrentImageIndex(idx)} className={`w-2 h-2 rounded-full transition-all ${currentImageIndex === idx ? 'bg-white w-6' : 'bg-white/40 hover:bg-white/80'}`} />))}</div>)}
-         </div>
-         <div className="w-full md:w-1/3 bg-white flex flex-col border-l border-zinc-100 h-[60vh] md:h-full relative">
-            <div className="p-6 md:p-8 border-b border-zinc-50">
-               <div className="flex justify-between items-start mb-4"><div><h2 className="text-2xl md:text-3xl font-black text-zinc-900 mb-2">{scene.title}</h2><p className="text-zinc-500 text-sm leading-relaxed">{scene.description}</p></div>{isAdmin && <button onClick={onEdit} className="p-2 text-zinc-400 hover:text-zinc-900"><Edit3 className="w-5 h-5"/></button>}</div>
+          // Highlight logic
+          const isLargest = slicePercent === Math.max(...data.map(d => d.count/total));
+          const isHovered = hoveredIndex === idx;
+          const radius = isHovered || isLargest ? 0.95 : 0.85; // Scale up largest or hovered
+
+          // Path command for donut slice
+          // Move to outer start, Arc to outer end, Line to inner end, Arc to inner start
+          // Simplified: Using thick strokes for donut effect is easier in SVG, but paths allow precise interaction
+          // Let's use simple thick stroke circle segments
+          return null; // Logic shift below for simpler implementation
+        })}
+        
+        {/* Re-implementing with Stroke Dasharray for cleaner Donut */}
+        {data.map((item, idx) => {
+           const percent = item.count / total;
+           const dashArray = 2 * Math.PI * 0.4; // Circumference of r=0.4
+           const dashOffset = dashArray * (1 - percent); // Show only this slice's length
+           
+           // We need cumulative rotation
+           const startRotation = (cumulativePercent - percent) * 360; 
+           
+           const isLargest = percent === Math.max(...data.map(d => d.count/total));
+           const strokeWidth = isLargest ? 0.25 : 0.2; // Thicker for largest
+           const radius = 0.4; // Base radius
+
+           // Label Position Calculation (only for > 10%)
+           const midAngle = (startRotation + (percent * 360) / 2) * (Math.PI / 180);
+           const labelR = 0.4; // Text sits on the ring
+           // Fix rotation for text (counter-rotate the text group or calculate xy)
+           // Actually simpler: SVG Text at transformed coordinates
+           
+           return (
+             <React.Fragment key={item.id}>
+                <circle
+                  r={radius}
+                  cx="0" cy="0"
+                  fill="transparent"
+                  stroke={item.color}
+                  strokeWidth={strokeWidth}
+                  strokeDasharray={`${dashArray * percent} ${dashArray * (1 - percent)}`}
+                  transform={`rotate(${startRotation} 0 0)`}
+                  className="transition-all duration-300 hover:opacity-80"
+                  onMouseEnter={() => setHoveredIndex(idx)}
+                  onMouseLeave={() => setHoveredIndex(null)}
+                />
+             </React.Fragment>
+           );
+        })}
+      </svg>
+      {/* Label Overlay - positioned absolutely to avoid complex SVG text rotation logic */}
+      {data.map((item, idx) => {
+         // Re-calculate angles for labels
+         let prevPercent = 0;
+         for(let i=0; i<idx; i++) prevPercent += data[i].count/total;
+         const percent = item.count/total;
+         const midPercent = prevPercent + percent/2;
+         const angleRad = (midPercent * 2 * Math.PI) - (Math.PI / 2); // -90deg for start at top
+         
+         const r = 0.65; // Distance from center
+         const x = 50 + (r * 50 * Math.cos(angleRad));
+         const y = 50 + (r * 50 * Math.sin(angleRad));
+         
+         if (percent < 0.1) return null; // Don't label small slices directly
+
+         return (
+            <div key={`label-${item.id}`} className="absolute text-[8px] md:text-[10px] font-bold text-white flex flex-col items-center leading-none pointer-events-none drop-shadow-md" style={{ left: `${x}%`, top: `${y}%`, transform: 'translate(-50%, -50%)' }}>
+               <span>{item.label}</span>
+               <span className="opacity-80">{Math.round(percent*100)}%</span>
             </div>
-            <div className="flex-1 overflow-y-auto p-6 md:p-8 custom-scrollbar bg-zinc-50/50">
-               <div className="flex justify-between items-center mb-4"><h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Tagged Products</h3>{isAdmin && <button onClick={() => setProductManagerOpen(!isProductManagerOpen)} className="text-xs font-bold text-indigo-600 hover:text-indigo-800">+ Add Tag</button>}</div>
-               {isAdmin && isProductManagerOpen && (
-                 <div className="mb-4 bg-white p-3 rounded-xl border border-indigo-100 shadow-sm animate-in slide-in-from-top-2">
-                    <input type="text" placeholder="Search to tag..." className="w-full text-xs p-2 bg-zinc-50 rounded-lg border border-zinc-200 mb-2 outline-none focus:border-indigo-500" value={productFilter} onChange={(e) => setProductFilter(e.target.value)} />
-                    <div className="max-h-32 overflow-y-auto space-y-1 custom-scrollbar">{allProducts.filter(p => p.name.toLowerCase().includes(productFilter.toLowerCase())).map(p => { const isTagged = scene.productIds?.includes(p.id); return (<div key={p.id} onClick={() => onProductToggle(p.id, !isTagged)} className={`flex items-center p-1.5 rounded cursor-pointer ${isTagged ? 'bg-indigo-50 text-indigo-700' : 'hover:bg-zinc-50'}`}><div className={`w-3 h-3 border rounded mr-2 flex items-center justify-center ${isTagged ? 'bg-indigo-500 border-indigo-500' : 'border-zinc-300'}`}>{isTagged && <Check className="w-2 h-2 text-white"/>}</div><span className="text-xs truncate">{p.name}</span></div>) })}</div>
-                 </div>
-               )}
-               <div className="space-y-3">{products.length > 0 ? products.map(product => (<div key={product.id} onClick={() => onNavigateProduct(product)} className="flex items-center p-3 bg-white rounded-xl border border-zinc-100 shadow-sm hover:border-zinc-300 transition-all cursor-pointer group"><div className="w-12 h-12 bg-zinc-50 rounded-lg flex-shrink-0 flex items-center justify-center mr-3 overflow-hidden">{product.images?.[0] ? <img src={product.images[0]} className="w-full h-full object-cover" /> : <ImageIcon className="w-5 h-5 text-zinc-300"/>}</div><div className="flex-1 min-w-0"><h4 className="text-sm font-bold text-zinc-900 truncate group-hover:text-blue-600">{product.name}</h4><p className="text-xs text-zinc-500">{product.category}</p></div><ChevronRight className="w-4 h-4 text-zinc-300 group-hover:text-zinc-600"/></div>)) : (<div className="text-center py-8 text-zinc-400 text-xs">연관된 제품이 없습니다.</div>)}</div>
-            </div>
-         </div>
-      </div>
-    </div>
-  );
-}
-
-function SceneEditModal({ initialData, allProducts, onClose, onSave, onDelete }) {
-  const [data, setData] = useState({ id: null, title: '', description: '', image: null, images: [], productIds: [] });
-  const [filter, setFilter] = useState('');
-  const mainInputRef = useRef(null);
-  const galleryInputRef = useRef(null);
-  
-  useEffect(() => {
-    if(initialData && !initialData.isNew) {
-      setData({ 
-        id: initialData.id, title: initialData.title || '', description: initialData.description || '', image: initialData.image || null, images: initialData.images || [], productIds: initialData.productIds || [] 
-      });
-    }
-  }, [initialData]);
-
-  const processImage = (file) => { return new Promise((resolve) => { const reader = new FileReader(); reader.onload = (e) => { const img = new Image(); img.onload = () => { const canvas = document.createElement('canvas'); const MAX_WIDTH = 1200; let width = img.width; let height = img.height; if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; } canvas.width = width; canvas.height = height; const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0, width, height); resolve(canvas.toDataURL('image/jpeg', 0.8)); }; img.src = e.target.result; }; reader.readAsDataURL(file); }); };
-  const handleMainImage = async (e) => { const file = e.target.files[0]; if (file) { const imageUrl = await processImage(file); setData(prev => ({ ...prev, image: imageUrl })); } };
-  const handleGalleryUpload = async (e) => { const files = Array.from(e.target.files); if(files.length > 0) { const newUrls = []; for(const file of files) { try { newUrls.push(await processImage(file)); } catch(e) {} } setData(prev => ({ ...prev, images: [...prev.images, ...newUrls] })); } };
-  const toggleProduct = (pid) => { setData(prev => { const ids = prev.productIds || []; return ids.includes(pid) ? { ...prev, productIds: ids.filter(id => id !== pid) } : { ...prev, productIds: [...ids, pid] }; }); };
-
-  return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[80] flex items-center justify-center p-4">
-      <div className="bg-white w-full max-w-2xl rounded-2xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
-         <div className="px-6 py-4 border-b border-zinc-100 flex justify-between items-center bg-white z-10">
-            <h3 className="text-lg font-bold text-zinc-900">{initialData.isNew ? 'New Scene' : 'Edit Scene'}</h3>
-            <button onClick={onClose}><X className="w-5 h-5 text-zinc-400"/></button>
-         </div>
-         <div className="flex-1 overflow-y-auto p-6 space-y-8 bg-zinc-50">
-            <div className="space-y-4">
-              <div><label className="block text-xs font-bold text-zinc-500 uppercase mb-2">Main Image</label><div onClick={() => mainInputRef.current.click()} className="w-full h-48 bg-white rounded-xl flex items-center justify-center cursor-pointer border border-dashed border-zinc-300 overflow-hidden relative hover:border-zinc-400 transition-colors shadow-sm">{data.image ? <img src={data.image} className="w-full h-full object-cover" /> : <div className="flex flex-col items-center text-zinc-400"><ImagePlus className="w-8 h-8 mb-2"/><span className="text-xs">Upload Main</span></div>}</div><input type="file" ref={mainInputRef} className="hidden" accept="image/*" onChange={handleMainImage} /></div>
-              <div>
-                 <div className="flex justify-between items-center mb-2"><label className="block text-xs font-bold text-zinc-500 uppercase">Additional Images</label><button type="button" onClick={() => galleryInputRef.current.click()} className="text-[10px] bg-white border px-2 py-1 rounded hover:bg-zinc-100">+ Add</button><input type="file" ref={galleryInputRef} multiple className="hidden" accept="image/*" onChange={handleGalleryUpload} /></div>
-                 {data.images.length > 0 && <div className="grid grid-cols-5 gap-2">{data.images.map((img, i) => (<div key={i} className="relative aspect-square rounded-lg overflow-hidden group border border-zinc-200"><img src={img} className="w-full h-full object-cover" /><button onClick={() => setData(prev => ({...prev, images: prev.images.filter((_, idx) => idx !== i)}))} className="absolute top-0.5 right-0.5 bg-red-500 text-white p-0.5 rounded-full opacity-0 group-hover:opacity-100"><X className="w-3 h-3"/></button></div>))}</div>}
-              </div>
-              <div className="grid grid-cols-1 gap-4">
-                <div><label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Title</label><input className="w-full border border-zinc-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-zinc-900 outline-none" value={data.title} onChange={e=>setData({...data, title: e.target.value})} placeholder="e.g. Modern Office Lounge" /></div>
-                <div><label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Description</label><textarea className="w-full border border-zinc-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-zinc-900 outline-none" rows={2} value={data.description} onChange={e=>setData({...data, description: e.target.value})} placeholder="Short description..." /></div>
-              </div>
-            </div>
-            <div className="pt-6 border-t border-zinc-200">
-               <div className="flex justify-between items-end mb-3"><div><h4 className="text-sm font-bold text-zinc-900">Related Products</h4><p className="text-[10px] text-zinc-500">Select products visible in this scene</p></div><span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded-full">{data.productIds.length} selected</span></div>
-               <div className="bg-white rounded-xl border border-zinc-200 overflow-hidden shadow-sm">
-                  <div className="p-2 border-b border-zinc-100 bg-zinc-50/50"><div className="flex items-center bg-white border border-zinc-200 rounded-lg px-2"><Search className="w-4 h-4 text-zinc-400 mr-2"/><input className="w-full py-2 text-xs outline-none bg-transparent" placeholder="Search product name..." value={filter} onChange={e => setFilter(e.target.value)} /></div></div>
-                  <div className="h-48 overflow-y-auto p-2 space-y-1 custom-scrollbar">{allProducts.filter(p => p.name.toLowerCase().includes(filter.toLowerCase())).map(p => { const isSelected = data.productIds.includes(p.id); return (<div key={p.id} onClick={() => toggleProduct(p.id)} className={`flex items-center p-2 rounded-lg cursor-pointer transition-colors ${isSelected ? 'bg-indigo-50 border border-indigo-100' : 'hover:bg-zinc-50 border border-transparent'}`}><div className={`w-4 h-4 rounded border flex items-center justify-center mr-3 flex-shrink-0 ${isSelected ? 'bg-indigo-500 border-indigo-500' : 'bg-white border-zinc-300'}`}>{isSelected && <Check className="w-3 h-3 text-white"/>}</div>{p.images?.[0] && <img src={p.images[0]} className="w-8 h-8 rounded object-cover mr-3 bg-zinc-100" />}<div className="min-w-0"><div className={`text-xs font-bold truncate ${isSelected ? 'text-indigo-900' : 'text-zinc-700'}`}>{p.name}</div><div className="text-[10px] text-zinc-400 truncate">{p.category}</div></div></div>) })}</div>
-               </div>
-            </div>
-         </div>
-         <div className="px-6 py-4 border-t border-zinc-100 bg-white flex justify-between items-center z-10">
-            {!initialData.isNew ? <button onClick={()=>onDelete(data.id)} className="text-red-500 text-xs font-bold flex items-center hover:bg-red-50 px-2 py-1 rounded"><Trash2 className="w-3.5 h-3.5 mr-1"/> Delete Scene</button> : <div></div>}
-            <div className="flex space-x-3"><button onClick={onClose} className="px-4 py-2 border border-zinc-300 text-zinc-600 rounded-lg text-sm font-bold hover:bg-zinc-50">Cancel</button><button onClick={()=>onSave(data)} className="px-6 py-2 bg-zinc-900 text-white rounded-lg text-sm font-bold hover:bg-black shadow-md">Save Scene</button></div>
-         </div>
-      </div>
-    </div>
-  );
-}
-
-function SpaceInfoEditModal({ spaceId, currentData = {}, onClose, onSave }) {
-  const [data, setData] = useState({ description: '', trend: '' });
-  useEffect(() => { setData({ description: currentData.description || '', trend: currentData.trend || '' }); }, [currentData]);
-  return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[80] flex items-center justify-center p-4">
-      <div className="bg-white w-full max-w-lg rounded-2xl overflow-hidden shadow-2xl">
-        <div className="px-6 py-4 border-b border-zinc-100 flex justify-between items-center"><h3 className="text-lg font-bold text-zinc-900">Edit Space Info</h3><button onClick={onClose}><X className="w-5 h-5 text-zinc-400" /></button></div>
-        <div className="p-6 space-y-4"><div><label className="block text-xs font-bold text-zinc-500 uppercase mb-2">Description</label><textarea className="w-full border border-zinc-300 rounded-xl p-3 text-sm focus:ring-2 focus:ring-zinc-900 outline-none" rows={4} value={data.description} onChange={(e) => setData({...data, description: e.target.value})} /></div><div><label className="block text-xs font-bold text-zinc-500 uppercase mb-2">Design Trend Keywords</label><input type="text" className="w-full border border-zinc-300 rounded-xl p-3 text-sm focus:ring-2 focus:ring-zinc-900 outline-none" value={data.trend} onChange={(e) => setData({...data, trend: e.target.value})} placeholder="e.g. Minimalist, Eco-friendly, Open Plan" /></div></div>
-        <div className="px-6 py-4 border-t border-zinc-100 bg-zinc-50 flex justify-end"><button onClick={() => onSave(data)} className="px-6 py-2 bg-zinc-900 text-white rounded-xl text-sm font-bold hover:bg-black shadow-lg">Save Changes</button></div>
-      </div>
-    </div>
-  );
-}
-
-function SpaceProductManager({ spaceId, products, onClose, onToggle }) {
-  const [filter, setFilter] = useState('');
-  return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[80] flex items-center justify-center p-4">
-      <div className="bg-white w-full max-w-3xl rounded-2xl overflow-hidden shadow-2xl flex flex-col max-h-[85vh]">
-        <div className="px-6 py-4 border-b border-zinc-100 flex justify-between items-center bg-indigo-50"><div><h3 className="text-lg font-bold text-indigo-900">Manage Products</h3><p className="text-xs text-indigo-600">Select products to display in {spaceId}</p></div><button onClick={onClose}><X className="w-5 h-5 text-indigo-400" /></button></div>
-        <div className="p-4 border-b border-zinc-100"><input type="text" placeholder="Filter products..." className="w-full px-4 py-2 bg-zinc-50 rounded-lg border border-zinc-200 text-sm focus:outline-none focus:border-indigo-500" value={filter} onChange={(e) => setFilter(e.target.value)} /></div>
-        <div className="flex-1 overflow-y-auto p-4 grid grid-cols-1 md:grid-cols-2 gap-3 custom-scrollbar">{products.filter(p => p.name.toLowerCase().includes(filter.toLowerCase())).map(product => { const isAdded = product.spaces && product.spaces.includes(spaceId); return (<div key={product.id} className={`flex items-center p-3 rounded-xl border cursor-pointer transition-all ${isAdded ? 'border-indigo-500 bg-indigo-50' : 'border-zinc-200 hover:border-zinc-300'}`} onClick={() => onToggle(product.id, !isAdded)}><div className={`w-5 h-5 rounded border flex items-center justify-center mr-3 ${isAdded ? 'bg-indigo-500 border-indigo-500' : 'bg-white border-zinc-300'}`}>{isAdded && <Check className="w-3.5 h-3.5 text-white" />}</div>{product.images?.[0] && <img src={product.images[0]} className="w-10 h-10 rounded-lg object-cover mr-3" />}<div><div className="text-sm font-bold text-zinc-900">{product.name}</div><div className="text-xs text-zinc-500">{product.category}</div></div></div>); })}</div>
+         );
+      })}
+      
+      {/* Center Total */}
+      <div className="absolute inset-0 flex items-center justify-center flex-col pointer-events-none">
+         <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-widest">TOTAL</span>
+         <span className="text-3xl font-black text-zinc-900">{total}</span>
       </div>
     </div>
   );
@@ -706,15 +638,9 @@ function DashboardView({ products, favorites, setActiveCategory, setSelectedProd
   const categoryCounts = []; let totalStandardProducts = 0;
   CATEGORIES.filter(c => !c.isSpecial).forEach(c => { const count = products.filter(p => p.category === c.id).length; if (count > 0) { categoryCounts.push({ ...c, count }); totalStandardProducts += count; } });
   
+  // Refined Color Palette
   const donutColors = ['#2563eb', '#0891b2', '#7c3aed', '#db2777', '#059669', '#d97706', '#ea580c', '#475569', '#9ca3af'];
-  let currentAngle = 0; 
-  const gradientParts = categoryCounts.map((item, idx) => { 
-     const start = currentAngle; 
-     const percentage = (item.count / totalStandardProducts) * 100; 
-     currentAngle += percentage; 
-     return `${donutColors[idx % donutColors.length]} ${start}% ${currentAngle}%`; 
-  });
-  const chartStyle = { background: totalStandardProducts > 0 ? `conic-gradient(${gradientParts.join(', ')})` : '#f4f4f5' };
+  const chartData = categoryCounts.map((item, idx) => ({ ...item, color: donutColors[idx % donutColors.length] }));
   
   const recentUpdates = [...products].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)).slice(0, 6);
   const fileInputRef = useRef(null);
@@ -722,7 +648,7 @@ function DashboardView({ products, favorites, setActiveCategory, setSelectedProd
   return (
     <div className="max-w-7xl mx-auto space-y-6 md:space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20 print:hidden">
       
-      {/* Banner Section */}
+      {/* Banner */}
       <div className="relative w-full h-48 md:h-80 rounded-3xl overflow-hidden shadow-lg border border-zinc-200 group bg-zinc-900">
          <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/40 to-transparent z-10"></div>
          {bannerData.url ? <img src={bannerData.url} alt="Dashboard Banner" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" /> : <div className="w-full h-full flex items-center justify-center opacity-20"><img src="/api/placeholder/1200/400" className="w-full h-full object-cover grayscale" alt="Pattern" /></div>}
@@ -742,80 +668,74 @@ function DashboardView({ products, favorites, setActiveCategory, setSelectedProd
          {isAdmin && (<><button onClick={() => fileInputRef.current.click()} className="absolute top-4 right-4 z-30 p-2 bg-white/20 backdrop-blur rounded-full text-white hover:bg-white hover:text-black transition-all opacity-0 group-hover:opacity-100" title="Change Banner Image"><Camera className="w-5 h-5" /></button><input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={onBannerUpload} /></>)}
       </div>
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div onClick={() => setActiveCategory('ALL')} className="bg-white p-5 rounded-2xl border border-zinc-100 shadow-sm hover:shadow-md cursor-pointer group flex items-center justify-between transition-all">
-          <div className="flex items-center space-x-4">
-             <div className="p-3 bg-zinc-100 rounded-xl group-hover:bg-zinc-900 group-hover:text-white transition-colors text-zinc-500"><LayoutGrid className="w-6 h-6" /></div>
+      {/* Summary Cards - Mobile Grid Optimized */}
+      <div className="grid grid-cols-3 gap-3 md:gap-4">
+        <div onClick={() => setActiveCategory('ALL')} className="bg-white p-3 md:p-5 rounded-xl md:rounded-2xl border border-zinc-100 shadow-sm hover:shadow-md cursor-pointer group flex flex-col md:flex-row items-center md:justify-between transition-all text-center md:text-left">
+          <div className="flex flex-col md:flex-row items-center md:space-x-4">
+             <div className="p-2 md:p-3 bg-zinc-100 rounded-xl group-hover:bg-zinc-900 group-hover:text-white transition-colors text-zinc-500 mb-1 md:mb-0"><LayoutGrid className="w-5 h-5 md:w-6 md:h-6" /></div>
              <div className="flex flex-col">
-                <span className="text-xs font-bold text-zinc-400 uppercase tracking-wide">Total Products</span>
-                <span className="text-lg md:text-2xl font-black text-zinc-900">{totalCount}</span>
+                <span className="text-[10px] md:text-xs font-bold text-zinc-400 uppercase tracking-wide">Total</span>
+                <span className="text-lg md:text-2xl font-black text-zinc-900 leading-tight">{totalCount}</span>
              </div>
           </div>
-          <ChevronRight className="w-5 h-5 text-zinc-300 group-hover:text-zinc-600" />
+          <ChevronRight className="w-5 h-5 text-zinc-300 group-hover:text-zinc-600 hidden md:block" />
         </div>
-        <div onClick={() => setActiveCategory('NEW')} className="bg-white p-5 rounded-2xl border border-zinc-100 shadow-sm hover:shadow-md cursor-pointer group flex items-center justify-between transition-all">
-          <div className="flex items-center space-x-4">
-             <div className="p-3 bg-red-50 rounded-xl text-red-500 group-hover:bg-red-500 group-hover:text-white transition-colors"><Zap className="w-6 h-6" /></div>
+        <div onClick={() => setActiveCategory('NEW')} className="bg-white p-3 md:p-5 rounded-xl md:rounded-2xl border border-zinc-100 shadow-sm hover:shadow-md cursor-pointer group flex flex-col md:flex-row items-center md:justify-between transition-all text-center md:text-left">
+          <div className="flex flex-col md:flex-row items-center md:space-x-4">
+             <div className="p-2 md:p-3 bg-red-50 rounded-xl text-red-500 group-hover:bg-red-500 group-hover:text-white transition-colors mb-1 md:mb-0"><Zap className="w-5 h-5 md:w-6 md:h-6" /></div>
              <div className="flex flex-col">
-                <span className="text-xs font-bold text-red-400 uppercase tracking-wide">New Arrivals</span>
-                <span className="text-lg md:text-2xl font-black text-zinc-900">{newCount}</span>
+                <span className="text-[10px] md:text-xs font-bold text-red-400 uppercase tracking-wide">New</span>
+                <span className="text-lg md:text-2xl font-black text-zinc-900 leading-tight">{newCount}</span>
              </div>
           </div>
-          <ChevronRight className="w-5 h-5 text-zinc-300 group-hover:text-zinc-600" />
+          <ChevronRight className="w-5 h-5 text-zinc-300 group-hover:text-zinc-600 hidden md:block" />
         </div>
-        <div onClick={() => setActiveCategory('MY_PICK')} className="bg-white p-5 rounded-2xl border border-zinc-100 shadow-sm hover:shadow-md cursor-pointer group flex items-center justify-between transition-all">
-          <div className="flex items-center space-x-4">
-             <div className="p-3 bg-yellow-50 rounded-xl text-yellow-500 group-hover:bg-yellow-400 group-hover:text-white transition-colors"><Heart className="w-6 h-6 fill-current" /></div>
+        <div onClick={() => setActiveCategory('MY_PICK')} className="bg-white p-3 md:p-5 rounded-xl md:rounded-2xl border border-zinc-100 shadow-sm hover:shadow-md cursor-pointer group flex flex-col md:flex-row items-center md:justify-between transition-all text-center md:text-left">
+          <div className="flex flex-col md:flex-row items-center md:space-x-4">
+             <div className="p-2 md:p-3 bg-yellow-50 rounded-xl text-yellow-500 group-hover:bg-yellow-400 group-hover:text-white transition-colors mb-1 md:mb-0"><Heart className="w-5 h-5 md:w-6 md:h-6 fill-current" /></div>
              <div className="flex flex-col">
-                <span className="text-xs font-bold text-yellow-500 uppercase tracking-wide">My Pick</span>
-                <span className="text-lg md:text-2xl font-black text-zinc-900">{pickCount}</span>
+                <span className="text-[10px] md:text-xs font-bold text-yellow-500 uppercase tracking-wide">Pick</span>
+                <span className="text-lg md:text-2xl font-black text-zinc-900 leading-tight">{pickCount}</span>
              </div>
           </div>
-          <ChevronRight className="w-5 h-5 text-zinc-300 group-hover:text-zinc-600" />
+          <ChevronRight className="w-5 h-5 text-zinc-300 group-hover:text-zinc-600 hidden md:block" />
         </div>
       </div>
 
       {/* Wide Chart Section */}
       <div className="bg-white p-6 md:p-8 rounded-3xl border border-zinc-100 shadow-sm">
          <div className="flex items-center justify-between mb-8">
-            <h3 className="text-xl font-bold text-zinc-900 flex items-center"><PieChart className="w-6 h-6 mr-3 text-zinc-400" /> Category Distribution</h3>
-            <span className="text-xs font-medium text-zinc-400 bg-zinc-50 px-3 py-1 rounded-full">{totalStandardProducts} categorized items</span>
+            <h3 className="text-xl font-bold text-zinc-900 flex items-center"><PieChart className="w-6 h-6 mr-3 text-zinc-400" /> Category Contribution</h3>
+            <span className="text-xs font-medium text-zinc-400 bg-zinc-50 px-3 py-1 rounded-full">{totalStandardProducts} items</span>
          </div>
          
          {totalStandardProducts > 0 ? (
            <div className="flex flex-col lg:flex-row gap-10 items-center">
-              {/* Large Donut Chart */}
-              <div className="relative w-56 h-56 md:w-64 md:h-64 flex-shrink-0">
-                 <div className="w-full h-full rounded-full shadow-inner" style={chartStyle}></div>
-                 <div className="absolute inset-8 bg-white rounded-full flex items-center justify-center flex-col shadow-sm">
-                    <span className="text-xs text-zinc-400 uppercase font-bold tracking-widest mb-1">TOTAL</span>
-                    <span className="text-4xl font-black text-zinc-900 tracking-tight">{totalStandardProducts}</span>
-                 </div>
+              {/* SVG Donut Chart */}
+              <div className="relative w-64 h-64 md:w-72 md:h-72 flex-shrink-0">
+                 <PieChartComponent data={chartData} total={totalStandardProducts} />
               </div>
               
-              {/* Data Grid with Visual Bars */}
+              {/* Interactive Data Grid */}
               <div className="flex-1 w-full grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-4">
-                 {categoryCounts.map((item, idx) => {
+                 {chartData.map((item) => {
                     const percent = Math.round((item.count/totalStandardProducts)*100);
-                    const color = donutColors[idx % donutColors.length];
                     return (
-                       <div key={item.id} className="flex flex-col group p-2 rounded-lg hover:bg-zinc-50 transition-colors">
+                       <button key={item.id} onClick={() => setActiveCategory(item.id)} className="flex flex-col group p-2 rounded-lg hover:bg-zinc-50 transition-colors text-left">
                           <div className="flex items-center justify-between mb-1.5">
                              <div className="flex items-center">
-                                <div className="w-3 h-3 rounded-full mr-2.5" style={{ backgroundColor: color }}></div>
-                                <span className="text-sm font-bold text-zinc-700">{item.label}</span>
+                                <div className="w-3 h-3 rounded-full mr-2.5 shadow-sm" style={{ backgroundColor: item.color }}></div>
+                                <span className="text-sm font-bold text-zinc-700 group-hover:text-zinc-900">{item.label}</span>
                              </div>
                              <div className="flex items-baseline space-x-1">
                                 <span className="text-sm font-black text-zinc-900">{item.count}</span>
                                 <span className="text-[10px] text-zinc-400 font-medium">({percent}%)</span>
                              </div>
                           </div>
-                          {/* Progress Bar Visual */}
                           <div className="w-full h-1.5 bg-zinc-100 rounded-full overflow-hidden">
-                             <div className="h-full rounded-full" style={{ width: `${percent}%`, backgroundColor: color }}></div>
+                             <div className="h-full rounded-full" style={{ width: `${percent}%`, backgroundColor: item.color }}></div>
                           </div>
-                       </div>
+                       </button>
                     );
                  })}
               </div>
@@ -856,6 +776,219 @@ function DashboardView({ products, favorites, setActiveCategory, setSelectedProd
   );
 }
 
+function ProductDetailModal({ product, spaceContents, onClose, onEdit, isAdmin, showToast, isFavorite, onToggleFavorite, onNavigateSpace, onNavigateScene }) {
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const [isZoomed, setIsZoomed] = useState(false);
+  const canvasRef = useRef(null);
+  
+  if (!product) return null;
+  const images = product.images || [];
+  const currentImage = images.length > 0 ? images[currentImageIndex] : null;
+  const contentImages = product.contentImages || [];
+  
+  // Find Related
+  const relatedSpaces = SPACES.filter(s => product.spaces && product.spaces.includes(s.id));
+  const relatedScenes = [];
+  if (spaceContents) {
+    Object.keys(spaceContents).forEach(spaceId => {
+       const content = spaceContents[spaceId];
+       if (content && content.scenes) {
+          content.scenes.forEach(scene => {
+             if (scene.productIds && scene.productIds.includes(product.id)) relatedScenes.push({ ...scene, spaceId });
+          });
+       }
+    });
+  }
+
+  const copyToClipboard = () => { navigator.clipboard.writeText(`[${product.name}]\n${product.specs}`); showToast("Copied to clipboard"); };
+  
+  // Canvas Wrap Text Helper
+  const wrapText = (ctx, text, x, y, maxWidth, lineHeight) => {
+     if(!text) return y;
+     const words = text.split(' ');
+     let line = '';
+     for(let n = 0; n < words.length; n++) {
+       const testLine = line + words[n] + ' ';
+       const metrics = ctx.measureText(testLine);
+       const testWidth = metrics.width;
+       if (testWidth > maxWidth && n > 0) {
+         ctx.fillText(line, x, y);
+         line = words[n] + ' ';
+         y += lineHeight;
+       } else {
+         line = testLine;
+       }
+     }
+     ctx.fillText(line, x, y);
+     return y + lineHeight;
+  };
+
+  const handleShareImage = () => {
+    const canvas = canvasRef.current; if (!canvas) return; const ctx = canvas.getContext('2d');
+    const w = 1080;
+    
+    // Calculate Height dynamically
+    ctx.font = '26px sans-serif'; // Set font to measure
+    const specLinesHeight = (product.specs.split('\n').length + 5) * 40; // Approx
+    // To be precise, we'd double pass, but simple extension works for now
+    const baseHeight = 1400 + specLinesHeight + (product.features?.length || 0) * 50;
+    
+    canvas.width = w; canvas.height = baseHeight; 
+    const img = new Image(); img.crossOrigin = "Anonymous";
+    img.onload = () => {
+      ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, w, baseHeight);
+      ctx.fillStyle = '#18181b'; ctx.fillRect(0, 0, w, 140);
+      ctx.fillStyle = '#ffffff'; ctx.font = 'bold 40px sans-serif'; ctx.textAlign = 'left'; ctx.fillText("PATRA DESIGN LAB", 60, 85);
+      
+      const ratio = Math.min((w - 120) / img.width, 600 / img.height);
+      const imgW = img.width * ratio; const imgH = img.height * ratio;
+      ctx.drawImage(img, (w - imgW) / 2, 200, imgW, imgH);
+      
+      let cursorY = 200 + imgH + 80;
+      ctx.textAlign = 'center'; ctx.fillStyle = '#18181b'; ctx.font = 'bold 70px sans-serif'; 
+      ctx.fillText(product.name, w/2, cursorY);
+      cursorY += 60;
+      
+      ctx.fillStyle = '#71717a'; ctx.font = 'bold 30px sans-serif'; 
+      ctx.fillText(product.category.toUpperCase(), w/2, cursorY);
+      cursorY += 50;
+
+      if(product.designer) {
+        ctx.fillStyle = '#a1a1aa'; ctx.font = '30px sans-serif'; 
+        ctx.fillText(`Designed by ${product.designer}`, w/2, cursorY);
+        cursorY += 80;
+      } else { cursorY += 40; }
+
+      ctx.textAlign = 'left';
+      ctx.fillStyle = '#f4f4f5'; ctx.fillRect(60, cursorY, w - 120, baseHeight - cursorY - 60);
+      cursorY += 60;
+      ctx.fillStyle = '#3f3f46'; ctx.font = 'bold 30px sans-serif';
+      ctx.fillText("SPECIFICATIONS", 100, cursorY);
+      cursorY += 50;
+      
+      ctx.font = '26px sans-serif'; ctx.fillStyle = '#52525b';
+      const specText = product.specs.split('\n');
+      specText.forEach(line => { 
+         // Use simple wrapping for very long lines in specs
+         cursorY = wrapText(ctx, line, 100, cursorY, w - 200, 40);
+      });
+      cursorY += 40;
+
+      if (product.features?.length > 0 || product.options?.length > 0) {
+         ctx.fillStyle = '#3f3f46'; ctx.font = 'bold 30px sans-serif';
+         ctx.fillText("FEATURES & OPTIONS", 100, cursorY);
+         cursorY += 50;
+         ctx.font = '26px sans-serif'; ctx.fillStyle = '#52525b';
+         const allFeatures = [...(product.options||[]), ...(product.features||[])];
+         allFeatures.forEach(f => { cursorY = wrapText(ctx, `• ${f}`, 100, cursorY, w - 200, 40); });
+      }
+
+      const dataUrl = canvas.toDataURL('image/png'); const a = document.createElement('a'); a.href = dataUrl; a.download = `${product.name}-card.png`; a.click(); showToast("이미지가 저장되었습니다.");
+    };
+    if(currentImage) img.src = currentImage; else showToast("이미지가 없어 생성할 수 없습니다.", "error");
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-50 flex items-center justify-center p-0 md:p-4 animate-in fade-in duration-200 print:fixed print:inset-0 print:z-[100] print:bg-white print:h-auto print:overflow-visible">
+      <canvas ref={canvasRef} style={{ display: 'none' }} />
+      {isZoomed && currentImage && (<div className="fixed inset-0 z-[70] bg-black/95 flex items-center justify-center p-8 cursor-zoom-out print:hidden" onClick={() => setIsZoomed(false)}><img src={currentImage} className="max-w-full max-h-full object-contain" alt="Zoomed" /><button className="absolute top-6 right-6 text-white/50 hover:text-white"><X className="w-10 h-10" /></button></div>)}
+      <div className="bg-white w-full h-full md:h-[90vh] md:w-full md:max-w-6xl md:rounded-3xl overflow-hidden shadow-2xl flex flex-col md:flex-row relative print:h-auto print:overflow-visible print:shadow-none print:rounded-none">
+        <button onClick={onClose} className="hidden md:flex absolute top-5 right-5 p-2 bg-white/50 hover:bg-zinc-100 rounded-full z-[60] transition-colors backdrop-blur print:hidden"><X className="w-6 h-6 text-zinc-900" /></button>
+        
+        {/* Mobile Sticky Header */}
+        <div className="md:hidden flex items-center justify-between p-4 border-b border-zinc-100 bg-white sticky top-0 z-50 print:hidden">
+           <button onClick={onClose} className="p-2 -ml-2"><ArrowLeft className="w-6 h-6"/></button>
+           <span className="font-bold text-sm truncate max-w-[200px]">{product.name}</span>
+           <div className="flex gap-2">
+              <button onClick={onToggleFavorite}><Star className={`w-6 h-6 ${isFavorite ? 'text-yellow-400 fill-yellow-400' : 'text-zinc-300'}`}/></button>
+           </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto custom-scrollbar flex flex-col md:flex-row h-full pb-safe print:overflow-visible print:h-auto">
+          <div className="w-full md:w-1/2 bg-zinc-50 p-6 md:p-8 flex flex-col border-b md:border-b-0 md:border-r border-zinc-100 md:sticky md:top-0 print:static print:bg-white print:border-none">
+            <div className="flex-1 w-full bg-white rounded-2xl flex items-center justify-center shadow-sm border border-zinc-100 overflow-hidden p-8 mb-4 relative group min-h-[300px] print:shadow-none print:border-zinc-200">
+               {currentImage ? (<><img src={currentImage} alt="Main" className="w-full h-full object-contain cursor-zoom-in mix-blend-multiply" onClick={() => setIsZoomed(true)} /><div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity print:hidden"><div className="bg-black/80 backdrop-blur text-white px-4 py-2 rounded-full text-xs font-bold flex items-center"><Maximize2 className="w-4 h-4 mr-2"/> ZOOM</div></div></>) : <ImageIcon className="w-20 h-20 opacity-20 text-zinc-400" />}
+               <button onClick={onToggleFavorite} className="absolute top-4 left-4 p-3 bg-white rounded-full shadow-sm border border-zinc-100 hover:border-zinc-300 transition-all hidden md:flex print:hidden"><Star className={`w-5 h-5 ${isFavorite ? 'text-yellow-400 fill-yellow-400' : 'text-zinc-300'}`} /></button>
+            </div>
+            {images.length > 0 && (<div className="flex space-x-2 md:space-x-3 overflow-x-auto custom-scrollbar pb-1 px-1 print:hidden">{images.map((img, idx) => (<button key={idx} onClick={() => setCurrentImageIndex(idx)} className={`flex-shrink-0 w-10 h-10 md:w-20 md:h-20 rounded-lg md:rounded-xl overflow-hidden border-2 transition-all ${currentImageIndex === idx ? 'border-zinc-900 ring-2 ring-zinc-200' : 'border-transparent opacity-60 hover:opacity-100 bg-white'}`}><img src={img} alt={`Thumbnail ${idx}`} className="w-full h-full object-cover" /></button>))}</div>)}
+          </div>
+          <div className="w-full md:w-1/2 p-6 md:p-12 bg-white pb-32 md:pb-12 print:pb-0">
+            <div className="mb-6 md:mb-10">
+              <div className="flex flex-wrap gap-2 mb-2"><span className="inline-block px-2.5 py-0.5 bg-zinc-900 text-white text-[10px] font-extrabold rounded uppercase tracking-widest">{product.category}</span>{product.awards?.map(award => (<span key={award} className="inline-flex items-center px-2.5 py-0.5 bg-yellow-400/20 text-yellow-700 border border-yellow-400/30 text-[10px] font-bold rounded uppercase tracking-wide"><Trophy className="w-3 h-3 mr-1" /> {award}</span>))}</div>
+              <h2 className="text-3xl md:text-5xl font-black text-zinc-900 mb-1 tracking-tight">{product.name}</h2>
+              {product.designer && <p className="text-sm text-zinc-500 font-medium">Designed by <span className="text-zinc-900">{product.designer}</span></p>}
+            </div>
+            <div className="space-y-6 md:space-y-10">
+              <div><h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-3 flex items-center justify-between">Specifications <button onClick={copyToClipboard} className="text-zinc-400 hover:text-zinc-900 print:hidden"><Copy className="w-4 h-4" /></button></h3><p className="text-sm text-zinc-600 leading-relaxed bg-zinc-50 p-4 md:p-6 rounded-2xl border border-zinc-100 whitespace-pre-wrap print:bg-transparent print:border-none print:p-0">{product.specs}</p></div>
+              {(product.features?.length > 0 || product.options?.length > 0) && (<div><h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-3">Features & Options</h3><div className="flex flex-wrap gap-2">{product.options?.map((opt, idx) => (<span key={idx} className="px-3 py-1.5 bg-blue-50 text-blue-600 border border-blue-100 rounded-lg text-xs font-bold print:border-gray-300 print:text-black">{opt}</span>))}{product.features?.map((ft, idx) => (<span key={idx} className="px-3 py-1.5 bg-zinc-100 text-zinc-600 rounded-lg text-xs font-medium flex items-center print:bg-transparent"><Check className="w-3 h-3 mr-1.5" /> {ft}</span>))}</div></div>)}
+              <div className="grid grid-cols-2 gap-4 md:gap-8">
+                 <div><h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2">Body Color</h3><div className="flex flex-wrap gap-2">{product.bodyColors?.map((c, i) => (<div key={i} className="group relative"><div className="w-6 h-6 rounded-full border border-zinc-200 shadow-sm cursor-help print:border-gray-400" style={{ backgroundColor: c }} /><span className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 px-2 py-1 bg-black text-white text-[10px] rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10 pointer-events-none print:hidden">{c}</span></div>))}</div></div>
+                 <div><h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2">Upholstery</h3><div className="flex flex-wrap gap-2">{product.upholsteryColors?.map((c, i) => (<div key={i} className="group relative"><div className="w-6 h-6 rounded-md border border-zinc-200 shadow-sm cursor-help print:border-gray-400" style={{ backgroundColor: c }} /><span className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 px-2 py-1 bg-black text-white text-[10px] rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10 pointer-events-none print:hidden">{c}</span></div>))}</div></div>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-8 border-t border-zinc-100 print:hidden">
+                {relatedSpaces.length > 0 && (
+                  <div>
+                    <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-3">Related Spaces</h3>
+                    <div className="space-y-2">
+                      {relatedSpaces.map(space => (
+                        <button key={space.id} onClick={() => onNavigateSpace(space.id)} className="w-full flex items-center p-3 bg-zinc-50 hover:bg-zinc-100 rounded-xl transition-all text-left border border-transparent hover:border-zinc-200 group">
+                          <div className="p-2 bg-white rounded-lg shadow-sm mr-3 text-zinc-400 group-hover:text-black transition-colors"><space.icon className="w-4 h-4" /></div>
+                          <span className="text-sm font-bold text-zinc-700">{space.label}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {relatedScenes.length > 0 && (
+                   <div>
+                      <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-3">Related Scenes</h3>
+                      <div className="space-y-2">
+                         {relatedScenes.map(scene => (
+                            <button key={scene.id} onClick={() => onNavigateScene(scene)} className="w-full flex items-center p-2 bg-white border border-zinc-200 hover:border-zinc-400 rounded-xl transition-all text-left shadow-sm group">
+                               <div className="w-10 h-10 bg-zinc-100 rounded-lg overflow-hidden mr-3 flex-shrink-0">
+                                  <img src={scene.image} className="w-full h-full object-cover group-hover:scale-110 transition-transform" alt="Scene"/>
+                               </div>
+                               <div className="min-w-0">
+                                  <div className="text-xs font-bold text-zinc-900 truncate">{scene.title}</div>
+                                  <div className="text-[10px] text-zinc-500 truncate flex items-center"><ImageIcon className="w-3 h-3 mr-1"/> View Scene</div>
+                               </div>
+                            </button>
+                         ))}
+                      </div>
+                   </div>
+                )}
+              </div>
+
+              {contentImages.length > 0 && (<div className="pt-8 border-t border-zinc-100 space-y-4"><h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Detail View</h3><div className="flex flex-col gap-4">{contentImages.map((img, idx) => (<img key={idx} src={img} alt={`Detail ${idx+1}`} className="w-full h-auto rounded-xl border border-zinc-100 print:border-none" />))}</div></div>)}
+            </div>
+            
+            <div className="hidden md:flex mt-12 pt-6 border-t border-zinc-100 justify-between items-center pb-8 print:hidden">
+              <div className="flex gap-3">
+                 <button onClick={handleShareImage} className="flex items-center px-5 py-2.5 bg-zinc-100 text-zinc-600 rounded-xl text-sm font-bold hover:bg-zinc-200 transition-colors shadow-sm"><ImgIcon className="w-4 h-4 mr-2" /> Share Image</button>
+                 <button onClick={() => window.print()} className="flex items-center px-5 py-2.5 bg-zinc-100 text-zinc-600 rounded-xl text-sm font-bold hover:bg-zinc-200 transition-colors shadow-sm"><Printer className="w-4 h-4 mr-2" /> Print PDF</button>
+              </div>
+              {isAdmin && (<button onClick={onEdit} className="flex items-center px-6 py-2.5 bg-zinc-900 text-white rounded-xl text-sm font-bold hover:bg-black hover:shadow-lg transition-all"><Edit2 className="w-4 h-4 mr-2" /> Edit</button>)}
+            </div>
+          </div>
+        </div>
+        
+        {/* Mobile Sticky Bottom Bar (Safe Area) */}
+        <div className="md:hidden absolute bottom-0 left-0 right-0 bg-white/95 backdrop-blur border-t border-zinc-100 p-4 pb-6 flex justify-between items-center z-50 shadow-[0_-4px_10px_-1px_rgba(0,0,0,0.1)] print:hidden">
+           <div className="flex gap-3">
+             <button onClick={handleShareImage} className="flex flex-col items-center justify-center w-12 h-12 bg-zinc-50 rounded-xl text-zinc-600 active:scale-95 transition-transform"><ImgIcon className="w-5 h-5"/></button>
+             <button onClick={() => window.print()} className="flex flex-col items-center justify-center w-12 h-12 bg-zinc-50 rounded-xl text-zinc-600 active:scale-95 transition-transform"><Printer className="w-5 h-5"/></button>
+           </div>
+           {isAdmin && <button onClick={onEdit} className="flex-1 ml-4 flex items-center justify-center h-12 bg-zinc-900 text-white rounded-xl text-sm font-bold shadow-lg active:scale-95 transition-transform">Edit Product</button>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ... (ProductCard, SpaceDetailView, SpaceSceneModal, SceneEditModal, SpaceInfoEditModal, SpaceProductManager, ProductFormModal remain same as previous version) ...
+// (Since I need to provide full safe code, I will include them below to ensure no missing parts)
+
 function ProductCard({ product, onClick, showMoveControls, onMove, isFavorite, onToggleFavorite }) {
   const mainImage = product.images && product.images.length > 0 ? product.images[0] : null;
   const awardBadge = product.awards?.[0];
@@ -863,7 +996,6 @@ function ProductCard({ product, onClick, showMoveControls, onMove, isFavorite, o
   return (
     <div onClick={onClick} className="bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer group border border-zinc-100 relative flex flex-col h-full print:break-inside-avoid print:shadow-none print:border-zinc-200">
       <div className="relative h-32 md:h-64 bg-zinc-50 p-2 md:p-6 flex items-center justify-center overflow-hidden">
-        {/* Improved Badge Layout: Flex Row to prevent shifting */}
         <div className="absolute top-2 left-2 md:top-4 md:left-4 flex flex-wrap gap-1.5 z-10 items-start max-w-[80%]">
            {product.isNew && <span className="bg-black text-white text-[8px] md:text-[9px] font-extrabold px-1.5 py-0.5 md:px-2 md:py-1 rounded shadow-sm tracking-wide">NEW</span>}
            {awardBadge && <span className="bg-yellow-400 text-yellow-900 text-[8px] md:text-[9px] font-bold px-1.5 py-0.5 md:px-2 md:py-1 rounded shadow-sm flex items-center whitespace-nowrap"><Trophy className="w-2 h-2 md:w-2.5 md:h-2.5 mr-1" /> {awardBadge}</span>}
@@ -878,7 +1010,6 @@ function ProductCard({ product, onClick, showMoveControls, onMove, isFavorite, o
              <button onClick={(e) => {e.stopPropagation(); onMove('right')}} className="p-1 md:p-1.5 bg-white/90 rounded-full shadow hover:bg-black hover:text-white text-zinc-700 transition-colors"><ArrowRight className="w-3 h-3 md:w-4 md:h-4" /></button>
           </div>
         )}
-        {/* Related Spaces Badges in Card */}
         {product.spaces && product.spaces.length > 0 && (
           <div className="absolute bottom-2 left-2 flex flex-wrap gap-1 z-10 opacity-0 group-hover:opacity-100 transition-opacity duration-300 print:opacity-100">
              {product.spaces.slice(0, 2).map(sid => {
@@ -903,185 +1034,6 @@ function ProductCard({ product, onClick, showMoveControls, onMove, isFavorite, o
              <div className="flex -space-x-1">
                 {product.upholsteryColors?.slice(0, 4).map((c, i) => <div key={i} className="w-2.5 h-2.5 md:w-3.5 md:h-3.5 rounded-sm border border-white shadow-sm ring-1 ring-zinc-100" style={{ backgroundColor: c }} />)}
              </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ProductDetailModal({ product, spaceContents, onClose, onEdit, isAdmin, showToast, isFavorite, onToggleFavorite, onNavigateSpace, onNavigateScene }) {
-  const [currentImageIndex, setCurrentImageIndex] = useState(0);
-  const [isZoomed, setIsZoomed] = useState(false);
-  const canvasRef = useRef(null);
-  if (!product) return null;
-  const images = product.images || [];
-  const currentImage = images.length > 0 ? images[currentImageIndex] : null;
-  const contentImages = product.contentImages || [];
-  
-  // Find Related Spaces & Scenes
-  const relatedSpaces = SPACES.filter(s => product.spaces && product.spaces.includes(s.id));
-  
-  const relatedScenes = [];
-  if (spaceContents) {
-    Object.keys(spaceContents).forEach(spaceId => {
-       const content = spaceContents[spaceId];
-       if (content && content.scenes) {
-          content.scenes.forEach(scene => {
-             if (scene.productIds && scene.productIds.includes(product.id)) {
-                relatedScenes.push({ ...scene, spaceId });
-             }
-          });
-       }
-    });
-  }
-
-  const copyToClipboard = () => { navigator.clipboard.writeText(`[${product.name}]\n${product.specs}`); showToast("Copied to clipboard"); };
-  
-  const handleShareImage = () => {
-    const canvas = canvasRef.current; if (!canvas) return; const ctx = canvas.getContext('2d');
-    const w = 1080;
-    const baseHeight = 1350;
-    const specLines = product.specs.split('\n').length;
-    const featureCount = (product.features?.length || 0) + (product.options?.length || 0);
-    const estimatedExtraHeight = (specLines * 40) + (featureCount * 50);
-    const h = baseHeight + Math.max(0, estimatedExtraHeight - 400); 
-    
-    canvas.width = w; canvas.height = h; const img = new Image(); img.crossOrigin = "Anonymous";
-    img.onload = () => {
-      ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, w, h);
-      ctx.fillStyle = '#18181b'; ctx.fillRect(0, 0, w, 140);
-      ctx.fillStyle = '#ffffff'; ctx.font = 'bold 40px sans-serif'; ctx.textAlign = 'left'; ctx.fillText("PATRA DESIGN LAB", 60, 85);
-      
-      const ratio = Math.min((w - 120) / img.width, 600 / img.height);
-      const imgW = img.width * ratio; const imgH = img.height * ratio;
-      ctx.drawImage(img, (w - imgW) / 2, 200, imgW, imgH);
-      
-      let cursorY = 200 + imgH + 80;
-      ctx.textAlign = 'center'; ctx.fillStyle = '#18181b'; ctx.font = 'bold 70px sans-serif'; 
-      ctx.fillText(product.name, w/2, cursorY);
-      cursorY += 60;
-      
-      ctx.fillStyle = '#71717a'; ctx.font = 'bold 30px sans-serif'; 
-      ctx.fillText(product.category.toUpperCase(), w/2, cursorY);
-      cursorY += 50;
-
-      if(product.designer) {
-        ctx.fillStyle = '#a1a1aa'; ctx.font = '30px sans-serif'; 
-        ctx.fillText(`Designed by ${product.designer}`, w/2, cursorY);
-        cursorY += 80;
-      } else { cursorY += 40; }
-
-      ctx.textAlign = 'left';
-      ctx.fillStyle = '#f4f4f5'; ctx.fillRect(60, cursorY, w - 120, h - cursorY - 60);
-      cursorY += 60;
-      ctx.fillStyle = '#3f3f46'; ctx.font = 'bold 30px sans-serif';
-      ctx.fillText("SPECIFICATIONS", 100, cursorY);
-      cursorY += 50;
-      
-      ctx.font = '26px sans-serif'; ctx.fillStyle = '#52525b';
-      const specText = product.specs.split('\n');
-      specText.forEach(line => { ctx.fillText(line, 100, cursorY); cursorY += 40; });
-      cursorY += 40;
-
-      if (product.features?.length > 0 || product.options?.length > 0) {
-         ctx.fillStyle = '#3f3f46'; ctx.font = 'bold 30px sans-serif';
-         ctx.fillText("FEATURES & OPTIONS", 100, cursorY);
-         cursorY += 50;
-         ctx.font = '26px sans-serif'; ctx.fillStyle = '#52525b';
-         const allFeatures = [...(product.options||[]), ...(product.features||[])];
-         allFeatures.forEach(f => { ctx.fillText(`• ${f}`, 100, cursorY); cursorY += 40; });
-      }
-
-      const dataUrl = canvas.toDataURL('image/png'); const a = document.createElement('a'); a.href = dataUrl; a.download = `${product.name}-card.png`; a.click(); showToast("이미지가 저장되었습니다.");
-    };
-    if(currentImage) img.src = currentImage; else showToast("이미지가 없어 생성할 수 없습니다.", "error");
-  };
-
-  return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-50 flex items-center justify-center p-0 md:p-4 animate-in fade-in duration-200 print:hidden">
-      <canvas ref={canvasRef} style={{ display: 'none' }} />
-      {isZoomed && currentImage && (<div className="fixed inset-0 z-[70] bg-black/95 flex items-center justify-center p-8 cursor-zoom-out" onClick={() => setIsZoomed(false)}><img src={currentImage} className="max-w-full max-h-full object-contain" alt="Zoomed" /><button className="absolute top-6 right-6 text-white/50 hover:text-white"><X className="w-10 h-10" /></button></div>)}
-      <div className="bg-white w-full h-full md:h-[90vh] md:w-full md:max-w-6xl md:rounded-3xl overflow-hidden shadow-2xl flex flex-col md:flex-row relative">
-        <button onClick={onClose} className="hidden md:flex absolute top-5 right-5 p-2 bg-white/50 hover:bg-zinc-100 rounded-full z-[60] transition-colors backdrop-blur"><X className="w-6 h-6 text-zinc-900" /></button>
-        
-        {/* Mobile Sticky Header */}
-        <div className="md:hidden flex items-center justify-between p-4 border-b border-zinc-100 bg-white sticky top-0 z-50">
-           <button onClick={onClose} className="p-2 -ml-2"><ArrowLeft className="w-6 h-6"/></button>
-           <span className="font-bold text-sm truncate max-w-[200px]">{product.name}</span>
-           <div className="flex gap-2">
-              <button onClick={onToggleFavorite}><Star className={`w-6 h-6 ${isFavorite ? 'text-yellow-400 fill-yellow-400' : 'text-zinc-300'}`}/></button>
-           </div>
-        </div>
-
-        <div className="flex-1 overflow-y-auto custom-scrollbar flex flex-col md:flex-row h-full">
-          <div className="w-full md:w-1/2 bg-zinc-50 p-6 md:p-8 flex flex-col border-b md:border-b-0 md:border-r border-zinc-100 md:sticky md:top-0">
-            <div className="flex-1 w-full bg-white rounded-2xl flex items-center justify-center shadow-sm border border-zinc-100 overflow-hidden p-8 mb-4 relative group min-h-[300px]">
-               {currentImage ? (<><img src={currentImage} alt="Main" className="w-full h-full object-contain cursor-zoom-in mix-blend-multiply" onClick={() => setIsZoomed(true)} /><div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity"><div className="bg-black/80 backdrop-blur text-white px-4 py-2 rounded-full text-xs font-bold flex items-center"><Maximize2 className="w-4 h-4 mr-2"/> ZOOM</div></div></>) : <ImageIcon className="w-20 h-20 opacity-20 text-zinc-400" />}
-               <button onClick={onToggleFavorite} className="absolute top-4 left-4 p-3 bg-white rounded-full shadow-sm border border-zinc-100 hover:border-zinc-300 transition-all hidden md:flex"><Star className={`w-5 h-5 ${isFavorite ? 'text-yellow-400 fill-yellow-400' : 'text-zinc-300'}`} /></button>
-            </div>
-            {images.length > 0 && (<div className="flex space-x-2 md:space-x-3 overflow-x-auto custom-scrollbar pb-1 px-1">{images.map((img, idx) => (<button key={idx} onClick={() => setCurrentImageIndex(idx)} className={`flex-shrink-0 w-10 h-10 md:w-20 md:h-20 rounded-lg md:rounded-xl overflow-hidden border-2 transition-all ${currentImageIndex === idx ? 'border-zinc-900 ring-2 ring-zinc-200' : 'border-transparent opacity-60 hover:opacity-100 bg-white'}`}><img src={img} alt={`Thumbnail ${idx}`} className="w-full h-full object-cover" /></button>))}</div>)}
-          </div>
-          <div className="w-full md:w-1/2 p-6 md:p-12 bg-white pb-12">
-            <div className="mb-6 md:mb-10">
-              <div className="flex flex-wrap gap-2 mb-2"><span className="inline-block px-2.5 py-0.5 bg-zinc-900 text-white text-[10px] font-extrabold rounded uppercase tracking-widest">{product.category}</span>{product.awards?.map(award => (<span key={award} className="inline-flex items-center px-2.5 py-0.5 bg-yellow-400/20 text-yellow-700 border border-yellow-400/30 text-[10px] font-bold rounded uppercase tracking-wide"><Trophy className="w-3 h-3 mr-1" /> {award}</span>))}</div>
-              <h2 className="text-3xl md:text-5xl font-black text-zinc-900 mb-1 tracking-tight">{product.name}</h2>
-              {product.designer && <p className="text-sm text-zinc-500 font-medium">Designed by <span className="text-zinc-900">{product.designer}</span></p>}
-            </div>
-            <div className="space-y-6 md:space-y-10">
-              <div><h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-3 flex items-center justify-between">Specifications <button onClick={copyToClipboard} className="text-zinc-400 hover:text-zinc-900"><Copy className="w-4 h-4" /></button></h3><p className="text-sm text-zinc-600 leading-relaxed bg-zinc-50 p-4 md:p-6 rounded-2xl border border-zinc-100 whitespace-pre-wrap">{product.specs}</p></div>
-              {(product.features?.length > 0 || product.options?.length > 0) && (<div><h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-3">Features & Options</h3><div className="flex flex-wrap gap-2">{product.options?.map((opt, idx) => (<span key={idx} className="px-3 py-1.5 bg-blue-50 text-blue-600 border border-blue-100 rounded-lg text-xs font-bold">{opt}</span>))}{product.features?.map((ft, idx) => (<span key={idx} className="px-3 py-1.5 bg-zinc-100 text-zinc-600 rounded-lg text-xs font-medium flex items-center"><Check className="w-3 h-3 mr-1.5" /> {ft}</span>))}</div></div>)}
-              <div className="grid grid-cols-2 gap-4 md:gap-8">
-                 <div><h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2">Body Color</h3><div className="flex flex-wrap gap-2">{product.bodyColors?.map((c, i) => (<div key={i} className="group relative"><div className="w-6 h-6 rounded-full border border-zinc-200 shadow-sm cursor-help" style={{ backgroundColor: c }} /><span className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 px-2 py-1 bg-black text-white text-[10px] rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10 pointer-events-none">{c}</span></div>))}</div></div>
-                 <div><h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2">Upholstery</h3><div className="flex flex-wrap gap-2">{product.upholsteryColors?.map((c, i) => (<div key={i} className="group relative"><div className="w-6 h-6 rounded-md border border-zinc-200 shadow-sm cursor-help" style={{ backgroundColor: c }} /><span className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 px-2 py-1 bg-black text-white text-[10px] rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10 pointer-events-none">{c}</span></div>))}</div></div>
-              </div>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-8 border-t border-zinc-100">
-                {relatedSpaces.length > 0 && (
-                  <div>
-                    <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-3">Related Spaces</h3>
-                    <div className="space-y-2">
-                      {relatedSpaces.map(space => (
-                        <button key={space.id} onClick={() => onNavigateSpace(space.id)} className="w-full flex items-center p-3 bg-zinc-50 hover:bg-zinc-100 rounded-xl transition-all text-left border border-transparent hover:border-zinc-200 group">
-                          <div className="p-2 bg-white rounded-lg shadow-sm mr-3 text-zinc-400 group-hover:text-black transition-colors"><space.icon className="w-4 h-4" /></div>
-                          <span className="text-sm font-bold text-zinc-700">{space.label}</span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                
-                {relatedScenes.length > 0 && (
-                   <div>
-                      <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-3">Related Scenes</h3>
-                      <div className="space-y-2">
-                         {relatedScenes.map(scene => (
-                            <button key={scene.id} onClick={() => onNavigateScene(scene)} className="w-full flex items-center p-2 bg-white border border-zinc-200 hover:border-zinc-400 rounded-xl transition-all text-left shadow-sm group">
-                               <div className="w-10 h-10 bg-zinc-100 rounded-lg overflow-hidden mr-3 flex-shrink-0">
-                                  <img src={scene.image} className="w-full h-full object-cover group-hover:scale-110 transition-transform" alt="Scene"/>
-                               </div>
-                               <div className="min-w-0">
-                                  <div className="text-xs font-bold text-zinc-900 truncate">{scene.title}</div>
-                                  <div className="text-[10px] text-zinc-500 truncate flex items-center"><ImageIcon className="w-3 h-3 mr-1"/> View Scene</div>
-                               </div>
-                            </button>
-                         ))}
-                      </div>
-                   </div>
-                )}
-              </div>
-
-              {contentImages.length > 0 && (<div className="pt-8 border-t border-zinc-100 space-y-4"><h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Detail View</h3><div className="flex flex-col gap-4">{contentImages.map((img, idx) => (<img key={idx} src={img} alt={`Detail ${idx+1}`} className="w-full h-auto rounded-xl border border-zinc-100" />))}</div></div>)}
-            </div>
-            
-            {/* Action Bar - Mobile Safe (Bottom of Scroll) */}
-            <div className="mt-12 pt-6 border-t border-zinc-100 flex flex-col md:flex-row justify-between items-center gap-4">
-              <div className="flex w-full md:w-auto gap-3">
-                 <button onClick={handleShareImage} className="flex-1 md:flex-none flex items-center justify-center px-5 py-3 bg-zinc-100 text-zinc-600 rounded-xl text-sm font-bold hover:bg-zinc-200 transition-colors shadow-sm"><ImgIcon className="w-4 h-4 mr-2" /> Share</button>
-                 <button onClick={() => window.print()} className="flex-1 md:flex-none flex items-center justify-center px-5 py-3 bg-zinc-100 text-zinc-600 rounded-xl text-sm font-bold hover:bg-zinc-200 transition-colors shadow-sm"><Printer className="w-4 h-4 mr-2" /> PDF</button>
-              </div>
-              {isAdmin && (<button onClick={onEdit} className="w-full md:w-auto flex items-center justify-center px-6 py-3 bg-zinc-900 text-white rounded-xl text-sm font-bold hover:bg-black hover:shadow-lg transition-all"><Edit2 className="w-4 h-4 mr-2" /> Edit</button>)}
-            </div>
           </div>
         </div>
       </div>
@@ -1154,7 +1106,7 @@ function ProductFormModal({ categories, existingData, onClose, onSave, onDelete,
                {formData.images.map((img, i) => (<div key={i} className="relative aspect-square bg-white rounded-lg border overflow-hidden group"><img src={img} className="w-full h-full object-cover" /><button type="button" onClick={()=>removeImage(i)} className="absolute top-1 right-1 bg-red-500 text-white p-1 rounded-full opacity-0 group-hover:opacity-100"><X className="w-3 h-3"/></button>{i===0 && <span className="absolute bottom-1 left-1 bg-black text-white text-[9px] px-1 rounded">MAIN</span>}{i!==0 && <button type="button" onClick={()=>setMainImage(i)} className="absolute bottom-1 left-1 bg-white text-black text-[9px] px-1 rounded opacity-0 group-hover:opacity-100">Set Main</button>}</div>))}
              </div>
           </div>
-          {/* ... (Rest of form is standard) ... */}
+          {/* ... (Rest of form similar to previous version) ... */}
           <div className="bg-zinc-50 p-6 rounded-xl border border-zinc-200">
              <div className="flex justify-between mb-4"><span className="font-bold text-sm">Detailed Content Images (Vertical Scroll)</span><div className="space-x-2"><button type="button" onClick={() => contentInputRef.current.click()} className="text-xs bg-white border px-3 py-1 rounded-lg font-medium hover:bg-zinc-100">Upload</button></div><input ref={contentInputRef} type="file" multiple className="hidden" onChange={handleContentImageUpload} accept="image/*"/></div>
              <div className="grid grid-cols-3 sm:grid-cols-5 gap-3">
