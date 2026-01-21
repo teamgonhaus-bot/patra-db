@@ -9,8 +9,7 @@ import {
   Trophy, Heart, Link as LinkIcon, Paperclip, PieChart, Clock,
   Share2, Download, Maximize2, LayoutGrid, Zap, GripHorizontal, ImageIcon as ImgIcon,
   ChevronsUp, Camera, ImagePlus, Sofa, Briefcase, Users, Home as HomeIcon, MapPin,
-  Edit3, Grid, MoreVertical, MousePointer2, CheckSquare, XCircle, Printer, LayoutList,
-  ExternalLink
+  Edit3, Grid, MoreVertical, MousePointer2, CheckSquare, XCircle, Printer, LayoutList
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { 
@@ -37,7 +36,7 @@ const YOUR_FIREBASE_CONFIG = {
 // ----------------------------------------------------------------------
 // 상수 및 설정
 // ----------------------------------------------------------------------
-const APP_VERSION = "v0.5.6-Full"; // Complete Integrated Version
+const APP_VERSION = "v0.5.6-Complete"; // Full Features & Stability
 const BUILD_DATE = "2024.06.19";
 const ADMIN_PASSWORD = "adminlcg1"; 
 
@@ -98,7 +97,7 @@ export default function App() {
   
   const [sortOption, setSortOption] = useState('manual'); 
   const [sortDirection, setSortDirection] = useState('desc'); 
-  const [viewMode, setViewMode] = useState('grid'); // 'grid' | 'list' (My Pick)
+  const [viewMode, setViewMode] = useState('grid');
   
   const [selectedProduct, setSelectedProduct] = useState(null); 
   const [isFormOpen, setIsFormOpen] = useState(false); 
@@ -155,7 +154,6 @@ export default function App() {
     mainContentRef.current.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // URL Query Sync
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const sharedId = params.get('id');
@@ -175,7 +173,7 @@ export default function App() {
     }
   }, [products]);
 
-  // Auth
+  // Auth & Sync
   useEffect(() => {
     const initApp = async () => {
       if (isFirebaseAvailable && auth) {
@@ -194,7 +192,6 @@ export default function App() {
     if (savedFavs) setFavorites(JSON.parse(savedFavs));
   }, []);
 
-  // Data Sync
   useEffect(() => {
     if (isFirebaseAvailable && user && db) {
       const qProducts = collection(db, 'artifacts', appId, 'public', 'data', 'products');
@@ -213,7 +210,6 @@ export default function App() {
     }
   }, [user]);
 
-  // Space Content Sync
   useEffect(() => {
     if (!isFirebaseAvailable || !user || !db) return;
     if (!SPACES.find(s => s.id === activeCategory)) return;
@@ -558,9 +554,6 @@ export default function App() {
   );
 }
 
-// ----------------------------------------------------------------------
-// Space & Scene Components
-// ----------------------------------------------------------------------
 function SpaceDetailView({ space, spaceContent, isAdmin, onBannerUpload, onEditInfo, onManageProducts, onAddScene, onViewScene, productCount }) {
   const banner = spaceContent.banner;
   const description = spaceContent.description || "이 공간에 대한 설명이 없습니다.";
@@ -723,7 +716,6 @@ function SpaceProductManager({ spaceId, products, onClose, onToggle }) {
   );
 }
 
-// ... DashboardView, ProductCard (Unchanged) ...
 function DashboardView({ products, favorites, setActiveCategory, setSelectedProduct, isAdmin, bannerData, onBannerUpload, onBannerTextChange, onSaveBannerText }) {
   const totalCount = products.length; const newCount = products.filter(p => p.isNew).length; const pickCount = favorites.length;
   const categoryCounts = []; let totalStandardProducts = 0;
@@ -880,66 +872,35 @@ function ProductDetailModal({ product, onClose, onEdit, isAdmin, showToast, isFa
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-50 flex items-center justify-center p-0 md:p-4 animate-in fade-in duration-200 no-print-overlay">
       <canvas ref={canvasRef} style={{ display: 'none' }} />
-      {/* Zoom Overlay (Omitted for brevity, same as v0.5.5) */}
-      
-      {/* Modal Container */}
+      {isZoomed && currentImage && (<div className="fixed inset-0 z-[70] bg-black/95 flex items-center justify-center p-8 cursor-zoom-out" onClick={() => setIsZoomed(false)}><img src={currentImage} className="max-w-full max-h-full object-contain" alt="Zoomed" /><button className="absolute top-6 right-6 text-white/50 hover:text-white"><X className="w-10 h-10" /></button></div>)}
       <div className="bg-white w-full h-full md:h-[95vh] md:w-full md:max-w-6xl md:rounded-3xl overflow-hidden shadow-2xl flex flex-col md:flex-row relative print-area">
-        {/* Back Button */}
         <button onClick={onClose} className="absolute top-4 left-4 z-50 p-2 bg-white/80 rounded-full shadow-sm hover:bg-zinc-100 transition-colors flex items-center text-sm font-bold md:hidden no-print">
            <ArrowLeft className="w-5 h-5 mr-1"/> Back
         </button>
         <button onClick={onClose} className="fixed md:absolute top-4 right-4 md:top-5 md:right-5 p-2 bg-white/50 hover:bg-zinc-100 rounded-full z-[60] transition-colors backdrop-blur no-print"><X className="w-6 h-6 text-zinc-900" /></button>
-        
         <div className="flex-1 overflow-y-auto custom-scrollbar flex flex-col md:flex-row h-full">
-          {/* Left: Visual */}
           <div className="w-full md:w-1/2 bg-zinc-50 p-6 md:p-8 flex flex-col border-b md:border-b-0 md:border-r border-zinc-100 md:sticky md:top-0 h-auto md:h-full">
             <div className="flex-1 w-full bg-white rounded-2xl flex items-center justify-center shadow-sm border border-zinc-100 overflow-hidden p-8 mb-4 relative group min-h-[300px]">
                {currentImage ? <img src={currentImage} className="w-full h-full object-contain" /> : <ImageIcon className="w-20 h-20 opacity-20 text-zinc-400" />}
             </div>
-            {/* Thumbnails */}
             {images.length > 0 && (<div className="flex space-x-2 no-print overflow-x-auto pb-2">{images.map((img, idx) => (<button key={idx} onClick={() => setCurrentImageIndex(idx)} className={`w-16 h-16 rounded border ${currentImageIndex===idx?'border-black':'border-transparent'}`}><img src={img} className="w-full h-full object-cover"/></button>))}</div>)}
           </div>
-
-          {/* Right: Info */}
           <div className="w-full md:w-1/2 p-6 md:p-12 bg-white pb-20 md:pb-12">
             <div className="mb-6 md:mb-10">
               <span className="inline-block px-2.5 py-0.5 bg-zinc-900 text-white text-[10px] font-extrabold rounded uppercase tracking-widest mb-2">{product.category}</span>
               <h2 className="text-4xl font-black text-zinc-900 mb-1">{product.name}</h2>
               {product.designer && <p className="text-sm text-zinc-500 font-medium">Designed by {product.designer}</p>}
             </div>
-            
             <div className="space-y-8">
                <div><h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-3">Specs</h3><p className="text-sm text-zinc-700 whitespace-pre-wrap leading-relaxed">{product.specs}</p></div>
-               
-               {/* Content Images */}
-               {contentImages.length > 0 && (
-                 <div className="space-y-4 pt-4 border-t border-zinc-100">
-                    <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Details</h3>
-                    <div className="flex flex-col gap-4">
-                      {contentImages.map((img, i) => <img key={i} src={img} className="w-full rounded-lg" />)}
-                    </div>
-                 </div>
-               )}
-
-               {/* Related Spaces (Reverse Link) */}
+               {contentImages.length > 0 && (<div className="space-y-4 pt-4 border-t border-zinc-100"><h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Details</h3><div className="flex flex-col gap-4">{contentImages.map((img, i) => <img key={i} src={img} className="w-full rounded-lg" />)}</div></div>)}
                {product.spaces && product.spaces.length > 0 && (
                  <div className="pt-6 border-t border-zinc-100 no-print">
                     <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-3">Related Spaces</h3>
-                    <div className="flex flex-wrap gap-2">
-                      {product.spaces.map(spaceId => {
-                        const space = SPACES.find(s => s.id === spaceId);
-                        return space ? (
-                          <button key={spaceId} onClick={() => navigateToSpace(spaceId)} className="flex items-center px-3 py-2 bg-zinc-50 border border-zinc-200 rounded-lg hover:bg-zinc-100 transition-colors">
-                             {React.createElement(space.icon, { className: "w-4 h-4 mr-2 text-zinc-500" })}
-                             <span className="text-xs font-bold text-zinc-700">{space.label}</span>
-                          </button>
-                        ) : null;
-                      })}
-                    </div>
+                    <div className="flex flex-wrap gap-2">{product.spaces.map(spaceId => { const space = SPACES.find(s => s.id === spaceId); return space ? (<button key={spaceId} onClick={() => navigateToSpace(spaceId)} className="flex items-center px-3 py-2 bg-zinc-50 border border-zinc-200 rounded-lg hover:bg-zinc-100 transition-colors">{React.createElement(space.icon, { className: "w-4 h-4 mr-2 text-zinc-500" })}<span className="text-xs font-bold text-zinc-700">{space.label}</span></button>) : null; })}</div>
                  </div>
                )}
             </div>
-
             <div className="mt-12 pt-6 border-t border-zinc-100 flex gap-3 no-print">
                <button onClick={handleShareImage} className="flex-1 py-3 bg-zinc-900 text-white rounded-xl text-sm font-bold hover:bg-black transition-colors flex items-center justify-center"><ImgIcon className="w-4 h-4 mr-2"/> Save Image</button>
                <button onClick={handlePrint} className="flex-1 py-3 bg-white border border-zinc-200 text-zinc-700 rounded-xl text-sm font-bold hover:bg-zinc-50 transition-colors flex items-center justify-center"><Printer className="w-4 h-4 mr-2"/> Print / PDF</button>
@@ -951,4 +912,95 @@ function ProductDetailModal({ product, onClose, onEdit, isAdmin, showToast, isFa
   );
 }
 
-function ProductFormModal({ categories, existingData, onClose, onSave, onDelete }) { const [formData, setFormData] = useState(existingData || {name:'', category:'EXECUTIVE', images:[], specs:''}); const handleSubmit = (e) => { e.preventDefault(); onSave(formData); }; return (<div className="fixed inset-0 bg-black/50 z-[70] flex items-center justify-center"><div className="bg-white p-6 rounded-2xl w-full max-w-xl"><h3 className="font-bold mb-4">Edit Product</h3><input value={formData.name} onChange={e=>setFormData({...formData, name:e.target.value})} className="border p-2 w-full mb-2" placeholder="Name"/><button onClick={handleSubmit} className="bg-black text-white px-4 py-2 rounded w-full">Save</button><button onClick={onClose} className="mt-2 w-full text-sm">Cancel</button></div></div>); }
+function ProductFormModal({ categories, existingData, onClose, onSave, onDelete, isFirebaseAvailable, initialCategory }) {
+  const isEditMode = !!existingData;
+  const fileInputRef = useRef(null);
+  const contentInputRef = useRef(null);
+  const defaultCategory = (initialCategory && !['ALL','NEW','MY_PICK','DASHBOARD'].includes(initialCategory) && !SPACES.find(s=>s.id===initialCategory)) ? initialCategory : 'EXECUTIVE';
+  const [formData, setFormData] = useState({ 
+    id: null, name: '', category: defaultCategory, specs: '', designer: '',
+    featuresString: '', optionsString: '', materialsString: '',
+    bodyColorsString: '', upholsteryColorsString: '', awardsString: '',
+    productLink: '', isNew: false, launchDate: new Date().toISOString().split('T')[0],
+    images: [], attachments: [], contentImages: [], spaces: []
+  });
+  const [isProcessingImage, setIsProcessingImage] = useState(false);
+
+  useEffect(() => {
+    if (existingData) {
+      setFormData({ 
+        id: existingData.id, name: existingData.name, category: existingData.category, specs: existingData.specs, designer: existingData.designer || '',
+        featuresString: existingData.features?.join(', ') || '', optionsString: existingData.options?.join(', ') || '', materialsString: existingData.materials?.join(', ') || '',
+        bodyColorsString: existingData.bodyColors?.join(', ') || '', upholsteryColorsString: existingData.upholsteryColors?.join(', ') || '', awardsString: existingData.awards?.join(', ') || '',
+        productLink: existingData.productLink || '', isNew: existingData.isNew, launchDate: existingData.launchDate || new Date().toISOString().split('T')[0],
+        images: existingData.images || [], attachments: existingData.attachments || [], contentImages: existingData.contentImages || [],
+        spaces: existingData.spaces || []
+      });
+    }
+  }, [existingData]);
+
+  const processImage = (file) => { return new Promise((resolve) => { const reader = new FileReader(); reader.onload = (e) => { const img = new Image(); img.onload = () => { const canvas = document.createElement('canvas'); const MAX_WIDTH = 1000; let width = img.width; let height = img.height; if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; } canvas.width = width; canvas.height = height; const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0, width, height); resolve(canvas.toDataURL('image/jpeg', 0.8)); }; img.src = e.target.result; }; reader.readAsDataURL(file); }); };
+  const handleImageUpload = async (e) => { const files = Array.from(e.target.files); if (files.length > 0) { setIsProcessingImage(true); const newUrls = []; for (const file of files) { try { newUrls.push(await processImage(file)); } catch (e) {} } setFormData(prev => ({ ...prev, images: [...prev.images, ...newUrls] })); setIsProcessingImage(false); } };
+  const handleContentImageUpload = async (e) => { const files = Array.from(e.target.files); if (files.length > 0) { setIsProcessingImage(true); const newUrls = []; for (const file of files) { try { newUrls.push(await processImage(file)); } catch (e) {} } setFormData(prev => ({ ...prev, contentImages: [...prev.contentImages, ...newUrls] })); setIsProcessingImage(false); } };
+  const handleAttachmentUpload = (e) => { const files = Array.from(e.target.files); files.forEach(file => { if (file.size > 300*1024) return window.alert("Too large"); const reader = new FileReader(); reader.onload = (e) => setFormData(p => ({...p, attachments: [...p.attachments, {name: file.name, url: e.target.result}]})); reader.readAsDataURL(file); }); };
+  const handleAddLinkAttachment = () => { const url = window.prompt("URL:"); const name = window.prompt("Name:"); if(url && name) setFormData(p => ({...p, attachments: [...p.attachments, {name, url}]})); };
+  const removeImage = (i) => setFormData(p => ({...p, images: p.images.filter((_, idx) => idx !== i)}));
+  const removeContentImage = (i) => setFormData(p => ({...p, contentImages: p.contentImages.filter((_, idx) => idx !== i)}));
+  const setMainImage = (i) => setFormData(p => { const imgs = [...p.images]; const [m] = imgs.splice(i, 1); imgs.unshift(m); return {...p, images: imgs}; });
+  const removeAttachment = (i) => setFormData(p => ({...p, attachments: p.attachments.filter((_, idx) => idx !== i)}));
+  const toggleSpace = (spaceId) => { setFormData(prev => { const currentSpaces = prev.spaces || []; if (currentSpaces.includes(spaceId)) { return { ...prev, spaces: currentSpaces.filter(id => id !== spaceId) }; } else { return { ...prev, spaces: [...currentSpaces, spaceId] }; } }); };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    onSave({ 
+      ...formData,
+      features: formData.featuresString.split(',').map(s=>s.trim()).filter(Boolean),
+      options: formData.optionsString.split(',').map(s=>s.trim()).filter(Boolean),
+      materials: formData.materialsString.split(',').map(s=>s.trim()).filter(Boolean),
+      bodyColors: formData.bodyColorsString.split(',').map(s=>s.trim()).filter(Boolean),
+      upholsteryColors: formData.upholsteryColorsString.split(',').map(s=>s.trim()).filter(Boolean),
+      awards: formData.awardsString.split(',').map(s=>s.trim()).filter(Boolean),
+    });
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[70] flex items-center justify-center p-4">
+      <div className="bg-white w-full max-w-3xl rounded-2xl overflow-hidden shadow-2xl flex flex-col max-h-[95vh] animate-in slide-in-from-bottom-4 duration-200">
+        <div className="px-8 py-5 border-b border-zinc-100 flex justify-between items-center">
+          <h2 className="text-xl font-bold text-zinc-900">{isEditMode ? 'Edit Product' : 'New Product'}</h2>
+          <button onClick={onClose}><X className="w-6 h-6 text-zinc-400 hover:text-zinc-900" /></button>
+        </div>
+        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-8 space-y-6">
+          <div className="bg-zinc-50 p-6 rounded-xl border border-zinc-200">
+             <div className="flex justify-between mb-4"><span className="font-bold text-sm">Product Images (Main)</span><div className="space-x-2"><button type="button" onClick={() => fileInputRef.current.click()} className="text-xs bg-white border px-3 py-1 rounded-lg font-medium hover:bg-zinc-100">Upload</button></div><input ref={fileInputRef} type="file" multiple className="hidden" onChange={handleImageUpload} accept="image/*"/></div>
+             <div className="grid grid-cols-3 sm:grid-cols-5 gap-3">
+               {formData.images.map((img, i) => (<div key={i} className="relative aspect-square bg-white rounded-lg border overflow-hidden group"><img src={img} className="w-full h-full object-cover" /><button type="button" onClick={()=>removeImage(i)} className="absolute top-1 right-1 bg-red-500 text-white p-1 rounded-full opacity-0 group-hover:opacity-100"><X className="w-3 h-3"/></button>{i===0 && <span className="absolute bottom-1 left-1 bg-black text-white text-[9px] px-1 rounded">MAIN</span>}{i!==0 && <button type="button" onClick={()=>setMainImage(i)} className="absolute bottom-1 left-1 bg-white text-black text-[9px] px-1 rounded opacity-0 group-hover:opacity-100">Set Main</button>}</div>))}
+             </div>
+          </div>
+          <div className="bg-zinc-50 p-6 rounded-xl border border-zinc-200">
+             <div className="flex justify-between mb-4"><span className="font-bold text-sm">Detailed Content Images (Vertical Scroll)</span><div className="space-x-2"><button type="button" onClick={() => contentInputRef.current.click()} className="text-xs bg-white border px-3 py-1 rounded-lg font-medium hover:bg-zinc-100">Upload</button></div><input ref={contentInputRef} type="file" multiple className="hidden" onChange={handleContentImageUpload} accept="image/*"/></div>
+             <div className="grid grid-cols-3 sm:grid-cols-5 gap-3">
+               {formData.contentImages.map((img, i) => (<div key={i} className="relative aspect-[3/4] bg-white rounded-lg border overflow-hidden group"><img src={img} className="w-full h-full object-cover" /><button type="button" onClick={()=>removeContentImage(i)} className="absolute top-1 right-1 bg-red-500 text-white p-1 rounded-full opacity-0 group-hover:opacity-100"><X className="w-3 h-3"/></button></div>))}
+             </div>
+          </div>
+          <div className="mb-4"><label className="block text-xs font-bold text-zinc-500 uppercase mb-2">Related Spaces</label><div className="flex flex-wrap gap-2">{SPACES.map(space => (<button key={space.id} type="button" onClick={() => toggleSpace(space.id)} className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-colors flex items-center ${formData.spaces.includes(space.id) ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-500 border-zinc-200 hover:border-zinc-400'}`}>{formData.spaces.includes(space.id) && <Check className="w-3 h-3 mr-1.5" />}{space.label}</button>))}</div></div>
+          <div className="grid grid-cols-2 gap-6"><div><label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Name</label><input required className="w-full border p-2 rounded-lg" value={formData.name} onChange={e=>setFormData({...formData, name: e.target.value})}/></div><div><label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Category</label><select className="w-full border p-2 rounded-lg" value={formData.category} onChange={e=>setFormData({...formData, category: e.target.value})}>{categories.map(c=><option key={c.id} value={c.id}>{c.label}</option>)}</select></div></div>
+          <div className="grid grid-cols-2 gap-6"><div><label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Launch Date</label><input type="date" className="w-full border p-2 rounded-lg" value={formData.launchDate} onChange={e=>setFormData({...formData, launchDate: e.target.value})}/></div><div><label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Designer</label><input className="w-full border p-2 rounded-lg" value={formData.designer} onChange={e=>setFormData({...formData, designer: e.target.value})}/></div></div>
+          <div><label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Specs</label><textarea required rows={2} className="w-full border p-2 rounded-lg" value={formData.specs} onChange={e=>setFormData({...formData, specs: e.target.value})}/></div>
+          <div className="grid grid-cols-2 gap-6"><div><label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Options (comma)</label><input className="w-full border p-2 rounded-lg" value={formData.optionsString} onChange={e=>setFormData({...formData, optionsString: e.target.value})}/></div><div><label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Features (comma)</label><input className="w-full border p-2 rounded-lg" value={formData.featuresString} onChange={e=>setFormData({...formData, featuresString: e.target.value})}/></div></div>
+          <div className="grid grid-cols-2 gap-6"><div><label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Materials (comma)</label><input className="w-full border p-2 rounded-lg" value={formData.materialsString} onChange={e=>setFormData({...formData, materialsString: e.target.value})}/></div><div><label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Awards (comma)</label><input className="w-full border p-2 rounded-lg" value={formData.awardsString} onChange={e=>setFormData({...formData, awardsString: e.target.value})}/></div></div>
+          <div className="grid grid-cols-2 gap-6 bg-zinc-50 p-4 rounded-xl border border-zinc-100"><div><label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Body Colors</label><input className="w-full border p-2 rounded-lg" placeholder="Black, #fff..." value={formData.bodyColorsString} onChange={e=>setFormData({...formData, bodyColorsString: e.target.value})}/></div><div><label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Upholstery Colors</label><input className="w-full border p-2 rounded-lg" placeholder="Red, Blue..." value={formData.upholsteryColorsString} onChange={e=>setFormData({...formData, upholsteryColorsString: e.target.value})}/></div></div>
+          <div className="space-y-4"><div><label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Link</label><input className="w-full border p-2 rounded-lg" placeholder="https://..." value={formData.productLink} onChange={e=>setFormData({...formData, productLink: e.target.value})}/></div><div className="flex justify-between"><label className="block text-xs font-bold text-zinc-500 uppercase">Attachments</label><div className="space-x-2"><button type="button" onClick={()=>document.getElementById('doc-upload').click()} className="text-xs border px-2 py-1 rounded bg-white">File</button><button type="button" onClick={handleAddLinkAttachment} className="text-xs border px-2 py-1 rounded bg-white">Link</button></div><input id="doc-upload" type="file" multiple className="hidden" onChange={handleAttachmentUpload}/></div><div className="space-y-1">{formData.attachments.map((f, i)=><div key={i} className="flex justify-between text-xs bg-zinc-50 p-2 rounded"><span>{f.name}</span><button type="button" onClick={()=>removeAttachment(i)} className="text-red-500"><X className="w-3 h-3"/></button></div>)}</div></div>
+          <div className="flex items-center space-x-2"><input type="checkbox" checked={formData.isNew} onChange={e=>setFormData({...formData, isNew: e.target.checked})}/><label className="text-sm font-bold">Mark as New Arrival</label></div>
+        </form>
+        <div className="px-8 py-5 border-t border-zinc-100 bg-zinc-50 flex justify-between">
+           {isEditMode && <button type="button" onClick={()=>onDelete(formData.id, formData.name)} className="text-red-500 font-bold text-sm flex items-center"><Trash2 className="w-4 h-4 mr-2"/> Delete</button>}
+           <div className="flex space-x-3 ml-auto">
+              <button type="button" onClick={onClose} className="px-5 py-2.5 border rounded-xl text-sm font-bold hover:bg-white">Cancel</button>
+              <button onClick={handleSubmit} disabled={isProcessingImage} className="px-6 py-2.5 bg-zinc-900 text-white rounded-xl text-sm font-bold hover:bg-black shadow-lg disabled:opacity-50">{isProcessingImage ? 'Processing...' : 'Save Product'}</button>
+           </div>
+        </div>
+      </div>
+    </div>
+  );
+}
