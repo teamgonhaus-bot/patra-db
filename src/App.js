@@ -36,8 +36,8 @@ const YOUR_FIREBASE_CONFIG = {
 // ----------------------------------------------------------------------
 // 상수 및 설정
 // ----------------------------------------------------------------------
-const APP_VERSION = "v2.8.0"; // Banner Edit & Mobile List Optimization
-const BUILD_DATE = "2024.06.11";
+const APP_VERSION = "v0.6.1"; // Bug Fix: Scope & Dashboard
+const BUILD_DATE = "2024.06.10";
 const ADMIN_PASSWORD = "adminlcg1"; 
 
 // Firebase 초기화
@@ -70,7 +70,6 @@ try {
 const CATEGORIES = [
   { id: 'ALL', label: 'Total View', isSpecial: true, color: '#18181b' },
   { id: 'NEW', label: 'New Arrivals', isSpecial: true, color: '#ef4444' },
-  // Collections
   { id: 'EXECUTIVE', label: 'Executive', color: '#2563eb' },
   { id: 'TASK', label: 'Task', color: '#0891b2' },
   { id: 'CONFERENCE', label: 'Conference', color: '#7c3aed' },
@@ -95,10 +94,10 @@ export default function App() {
   const [products, setProducts] = useState([]);
   const [activeCategory, setActiveCategory] = useState('DASHBOARD');
   const [searchTerm, setSearchTerm] = useState('');
-  
   const [sortOption, setSortOption] = useState('manual'); 
   const [sortDirection, setSortDirection] = useState('desc'); 
   
+  // UI States
   const [selectedProduct, setSelectedProduct] = useState(null); 
   const [isFormOpen, setIsFormOpen] = useState(false); 
   const [editingProduct, setEditingProduct] = useState(null);
@@ -106,17 +105,16 @@ export default function App() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [showScrollTop, setShowScrollTop] = useState(false);
   
+  // Admin & Data
   const [isAdmin, setIsAdmin] = useState(false);
   const [showAdminDashboard, setShowAdminDashboard] = useState(false);
   const [activityLogs, setActivityLogs] = useState([]);
   const [toast, setToast] = useState(null);
   const [favorites, setFavorites] = useState([]);
   
-  // Banner & Space Data States
+  // Banner & Space Data
   const [bannerData, setBannerData] = useState({ url: null, title: 'Design Lab DB', subtitle: 'Integrated Product Database & Archives' });
-  const [spaceSettings, setSpaceSettings] = useState({}); // { OFFICE: { banner, desc, images:[] } }
-  
-  // Space Edit Modals
+  const [spaceSettings, setSpaceSettings] = useState({});
   const [editingSpaceId, setEditingSpaceId] = useState(null);
   const [managingSpaceProductsId, setManagingSpaceProductsId] = useState(null);
 
@@ -213,190 +211,31 @@ export default function App() {
     }
   }, [user]);
 
+  // Helpers
   const loadFromLocalStorage = () => {
     const saved = localStorage.getItem('patra_products');
     setProducts(saved ? JSON.parse(saved) : []);
     setIsLoading(false);
   };
-  
   const saveToLocalStorage = (newProducts) => {
     localStorage.setItem('patra_products', JSON.stringify(newProducts));
     setProducts(newProducts);
   };
-
   const showToast = (message, type = 'success') => {
     setToast({ message, type });
     setTimeout(() => setToast(null), 3000);
   };
 
-  const toggleAdminMode = () => {
-    if (isAdmin) {
-      setIsAdmin(false);
-      setShowAdminDashboard(false);
-      showToast("뷰어 모드로 전환되었습니다.", "info");
-    } else {
-      const password = window.prompt("관리자 비밀번호를 입력하세요:");
-      if (password === ADMIN_PASSWORD) {
-        setIsAdmin(true);
-        showToast("관리자 모드로 접속했습니다.");
-      } else if (password !== null) {
-        showToast("비밀번호가 올바르지 않습니다.", "error");
-      }
-    }
+  // Helper Functions (Declared inside App to fix scope issues)
+  const logActivity = async (action, productName, details = "") => {
+    if (!isFirebaseAvailable || !db) return;
+    try { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'logs'), { action, productName, details, timestamp: Date.now(), adminId: 'admin' }); } catch (e) { console.error(e); }
   };
-
-  const toggleFavorite = (e, productId) => {
-    if(e) e.stopPropagation();
-    let newFavs;
-    if (favorites.includes(productId)) {
-      newFavs = favorites.filter(id => id !== productId);
-      showToast("MY PICK에서 제거되었습니다.", "info");
-    } else {
-      newFavs = [...favorites, productId];
-      showToast("MY PICK에 추가되었습니다.");
-    }
-    setFavorites(newFavs);
-    localStorage.setItem('patra_favorites', JSON.stringify(newFavs));
-  };
-
-  // Image Helper
-  const processImage = (file) => {
-    return new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const img = new Image();
-        img.onload = () => {
-          const canvas = document.createElement('canvas');
-          const MAX_WIDTH = 1600; 
-          let width = img.width;
-          let height = img.height;
-          if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; }
-          canvas.width = width; canvas.height = height;
-          const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0, width, height);
-          resolve(canvas.toDataURL('image/jpeg', 0.85));
-        };
-        img.src = e.target.result;
-      };
-      reader.readAsDataURL(file);
-    });
-  };
-
-  const handleBannerUpload = async (e) => {
-    if (!isAdmin) return;
-    const file = e.target.files[0];
-    if (!file) return;
-    try {
-      const resizedImage = await processImage(file);
-      const newData = { ...bannerData, url: resizedImage };
-      if (isFirebaseAvailable && db) {
-        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'banner'), newData, { merge: true });
-      } else {
-        localStorage.setItem('patra_banner_data', JSON.stringify(newData));
-        setBannerData(newData);
-      }
-      showToast("메인 배너가 업데이트되었습니다.");
-    } catch (error) { showToast("이미지 처리 실패", "error"); }
-  };
-
-  const handleBannerTextChange = async (key, value) => {
-    if (!isAdmin) return;
-    setBannerData(prev => ({ ...prev, [key]: value }));
-  };
-
-  const saveBannerText = async () => {
-    if (isFirebaseAvailable && db) {
-      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'banner'), bannerData, { merge: true });
-      showToast("배너 문구가 저장되었습니다.");
-    }
-  };
-
-  // Space Settings Update
-  const updateSpaceSettings = async (spaceId, newData) => {
-    const updatedSettings = { ...spaceSettings, [spaceId]: { ...(spaceSettings[spaceId] || {}), ...newData } };
-    if (isFirebaseAvailable && db) {
-       await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'spaces_v2'), updatedSettings, { merge: true });
-    } else {
-       localStorage.setItem('patra_space_settings', JSON.stringify(updatedSettings));
-       setSpaceSettings(updatedSettings);
-    }
-    showToast("공간 정보가 저장되었습니다.");
-  };
-
-  const handleSpaceProductToggle = async (spaceId, productId, isAdded) => {
-     const product = products.find(p => p.id === productId);
-     if(!product) return;
-     let newSpaces = product.spaces || [];
-     if(isAdded) { if(!newSpaces.includes(spaceId)) newSpaces.push(spaceId); } 
-     else { newSpaces = newSpaces.filter(s => s !== spaceId); }
-     if (isFirebaseAvailable && db) {
-        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'products', product.id), { spaces: newSpaces }, { merge: true });
-     } else {
-        const idx = products.findIndex(p => p.id === productId);
-        const newProds = [...products];
-        newProds[idx] = { ...product, spaces: newSpaces };
-        saveToLocalStorage(newProds);
-     }
-  };
-
-  // Filter & Sort
-  const getProcessedProducts = () => {
-    let filtered = products.filter(product => {
-      let matchesCategory = true;
-      if (activeCategory === 'DASHBOARD') matchesCategory = false; 
-      else if (activeCategory === 'MY_PICK') matchesCategory = favorites.includes(product.id);
-      else if (activeCategory === 'NEW') matchesCategory = product.isNew;
-      else if (activeCategory === 'ALL') matchesCategory = true;
-      else if (SPACES.find(s => s.id === activeCategory)) {
-        matchesCategory = product.spaces && product.spaces.includes(activeCategory);
-      }
-      else matchesCategory = product.category === activeCategory;
-
-      const searchLower = searchTerm.toLowerCase();
-      const matchesSearch = 
-        product.name.toLowerCase().includes(searchLower) || 
-        product.specs.toLowerCase().includes(searchLower) ||
-        (product.designer && product.designer.toLowerCase().includes(searchLower)) ||
-        (product.options && product.options.some(opt => opt.toLowerCase().includes(searchLower))) ||
-        (product.features && product.features.some(ft => ft.toLowerCase().includes(searchLower))) || 
-        (product.materials && product.materials.some(mat => mat.toLowerCase().includes(searchLower))) ||
-        (product.bodyColors && product.bodyColors.some(c => c.toLowerCase().includes(searchLower))) ||
-        (product.upholsteryColors && product.upholsteryColors.some(c => c.toLowerCase().includes(searchLower))) ||
-        (product.awards && product.awards.some(a => a.toLowerCase().includes(searchLower)));
-
-      return matchesCategory && matchesSearch;
-    });
-
-    filtered.sort((a, b) => {
-      let comparison = 0;
-      if (sortOption === 'name') comparison = a.name.localeCompare(b.name);
-      else if (sortOption === 'launchDate') comparison = new Date(a.launchDate || 0) - new Date(b.launchDate || 0);
-      else if (sortOption === 'manual') comparison = (a.orderIndex || 0) - (b.orderIndex || 0);
-      else comparison = (a.createdAt || 0) - (b.createdAt || 0);
-      return sortDirection === 'asc' ? comparison : -comparison;
-    });
-    return filtered;
-  };
-  const processedProducts = getProcessedProducts();
-
-  const handleMoveProduct = async (index, direction) => {
-    if (!processedProducts || processedProducts.length <= 1) return;
-    const targetIndex = direction === 'left' ? index - 1 : index + 1;
-    if (targetIndex < 0 || targetIndex >= processedProducts.length) return;
-    const currentItem = processedProducts[index];
-    const swapItem = processedProducts[targetIndex];
-    const currentOrder = currentItem.orderIndex !== undefined ? currentItem.orderIndex : currentItem.createdAt;
-    const swapOrder = swapItem.orderIndex !== undefined ? swapItem.orderIndex : swapItem.createdAt;
-    if (isFirebaseAvailable && db) {
-      try {
-        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'products', currentItem.id), { orderIndex: swapOrder }, { merge: true });
-        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'products', swapItem.id), { orderIndex: currentOrder }, { merge: true });
-      } catch (e) { showToast("순서 변경 실패", "error"); }
-    } else {
-      const newProducts = [...products];
-      const p1 = newProducts.find(p => p.id === currentItem.id);
-      const p2 = newProducts.find(p => p.id === swapItem.id);
-      if (p1 && p2) { p1.orderIndex = swapOrder; p2.orderIndex = currentOrder; saveToLocalStorage(newProducts); }
-    }
+  
+  const fetchLogs = async () => {
+    if (!isFirebaseAvailable || !db) return;
+    const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'logs'), orderBy('timestamp', 'desc'), limit(100));
+    onSnapshot(q, (snapshot) => { setActivityLogs(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))); });
   };
 
   const handleSaveProduct = async (productData) => {
@@ -437,6 +276,184 @@ export default function App() {
     }
     setSelectedProduct(null); setIsFormOpen(false); showToast("삭제되었습니다.");
   };
+
+  // Image Upload Logic
+  const processImage = (file) => {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+           const canvas = document.createElement('canvas');
+           const MAX_WIDTH = 1600; let width = img.width; let height = img.height;
+           if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; }
+           canvas.width = width; canvas.height = height;
+           const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0, width, height);
+           resolve(canvas.toDataURL('image/jpeg', 0.85));
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handleBannerUpload = async (e) => {
+    if (!isAdmin) return;
+    const file = e.target.files[0];
+    if (!file) return;
+    try {
+      const resizedImage = await processImage(file);
+      const newData = { ...bannerData, url: resizedImage };
+      if (isFirebaseAvailable && db) {
+        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'banner'), newData, { merge: true });
+      } else {
+        localStorage.setItem('patra_banner_data', JSON.stringify(newData));
+        setBannerData(newData);
+      }
+      showToast("메인 배너가 업데이트되었습니다.");
+    } catch (error) { showToast("이미지 처리 실패", "error"); }
+  };
+
+  const handleBannerTextChange = (key, value) => {
+    if (!isAdmin) return;
+    setBannerData(prev => ({ ...prev, [key]: value }));
+  };
+
+  const saveBannerText = async () => {
+    if (isFirebaseAvailable && db) {
+      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'banner'), bannerData, { merge: true });
+      showToast("배너 문구가 저장되었습니다.");
+    }
+  };
+
+  const handleSpaceImageUpload = async (e, spaceId) => {
+    if (!isAdmin) return;
+    const file = e.target.files[0];
+    if (!file) return;
+    try {
+      const resizedImage = await processImage(file);
+      const newData = { [spaceId]: { ...(spaceSettings[spaceId] || {}), banner: resizedImage } }; // Simple banner update for preview
+      updateSpaceSettings(spaceId, { banner: resizedImage });
+    } catch (error) { showToast("이미지 처리 실패", "error"); }
+  };
+
+  const updateSpaceSettings = async (spaceId, newData) => {
+    const updatedSettings = { ...spaceSettings, [spaceId]: { ...(spaceSettings[spaceId] || {}), ...newData } };
+    if (isFirebaseAvailable && db) {
+       await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'spaces_v2'), updatedSettings, { merge: true });
+    } else {
+       localStorage.setItem('patra_space_settings', JSON.stringify(updatedSettings));
+       setSpaceSettings(updatedSettings);
+    }
+    showToast("공간 정보가 저장되었습니다.");
+  };
+
+  const handleSpaceProductToggle = async (spaceId, productId, isAdded) => {
+     const product = products.find(p => p.id === productId);
+     if(!product) return;
+     let newSpaces = product.spaces || [];
+     if(isAdded) { if(!newSpaces.includes(spaceId)) newSpaces.push(spaceId); } 
+     else { newSpaces = newSpaces.filter(s => s !== spaceId); }
+     if (isFirebaseAvailable && db) {
+        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'products', product.id), { spaces: newSpaces }, { merge: true });
+     } else {
+        const idx = products.findIndex(p => p.id === productId);
+        const newProds = [...products];
+        newProds[idx] = { ...product, spaces: newSpaces };
+        saveToLocalStorage(newProds);
+     }
+  };
+  
+  const handleFullBackup = async () => {
+    const backupData = { version: APP_VERSION, date: new Date().toISOString(), products: products, logs: activityLogs };
+    const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a"); link.href = url; link.download = `PATRA_DB_BACKUP_${new Date().toISOString().slice(0,10)}.json`;
+    document.body.appendChild(link); link.click(); document.body.removeChild(link);
+    showToast("전체 데이터 백업이 완료되었습니다.");
+  };
+
+  const toggleAdminMode = () => {
+    if (isAdmin) {
+      setIsAdmin(false);
+      setShowAdminDashboard(false);
+      showToast("뷰어 모드로 전환되었습니다.", "info");
+    } else {
+      const password = window.prompt("관리자 비밀번호를 입력하세요:");
+      if (password === ADMIN_PASSWORD) {
+        setIsAdmin(true);
+        showToast("관리자 모드로 접속했습니다.");
+      } else if (password !== null) {
+        showToast("비밀번호가 올바르지 않습니다.", "error");
+      }
+    }
+  };
+
+  const toggleFavorite = (e, productId) => {
+    if(e) e.stopPropagation();
+    let newFavs;
+    if (favorites.includes(productId)) { newFavs = favorites.filter(id => id !== productId); showToast("MY PICK에서 제거되었습니다.", "info"); } 
+    else { newFavs = [...favorites, productId]; showToast("MY PICK에 추가되었습니다."); }
+    setFavorites(newFavs);
+    localStorage.setItem('patra_favorites', JSON.stringify(newFavs));
+  };
+  
+  const handleMoveProduct = async (index, direction) => {
+    if (!processedProducts || processedProducts.length <= 1) return;
+    const targetIndex = direction === 'left' ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= processedProducts.length) return;
+    const currentItem = processedProducts[index];
+    const swapItem = processedProducts[targetIndex];
+    const currentOrder = currentItem.orderIndex !== undefined ? currentItem.orderIndex : currentItem.createdAt;
+    const swapOrder = swapItem.orderIndex !== undefined ? swapItem.orderIndex : swapItem.createdAt;
+    if (isFirebaseAvailable && db) {
+      try {
+        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'products', currentItem.id), { orderIndex: swapOrder }, { merge: true });
+        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'products', swapItem.id), { orderIndex: currentOrder }, { merge: true });
+      } catch (e) { showToast("순서 변경 실패", "error"); }
+    } else {
+      const newProducts = [...products];
+      const p1 = newProducts.find(p => p.id === currentItem.id);
+      const p2 = newProducts.find(p => p.id === swapItem.id);
+      if (p1 && p2) { p1.orderIndex = swapOrder; p2.orderIndex = currentOrder; saveToLocalStorage(newProducts); }
+    }
+  };
+
+  // Filter & Sort
+  const getProcessedProducts = () => {
+    let filtered = products.filter(product => {
+      let matchesCategory = true;
+      if (activeCategory === 'DASHBOARD') matchesCategory = false; 
+      else if (activeCategory === 'MY_PICK') matchesCategory = favorites.includes(product.id);
+      else if (activeCategory === 'NEW') matchesCategory = product.isNew;
+      else if (activeCategory === 'ALL') matchesCategory = true;
+      else if (SPACES.find(s => s.id === activeCategory)) matchesCategory = product.spaces && product.spaces.includes(activeCategory);
+      else matchesCategory = product.category === activeCategory;
+
+      const searchLower = searchTerm.toLowerCase();
+      const matchesSearch = 
+        product.name.toLowerCase().includes(searchLower) || 
+        product.specs.toLowerCase().includes(searchLower) ||
+        (product.designer && product.designer.toLowerCase().includes(searchLower)) ||
+        (product.options && product.options.some(opt => opt.toLowerCase().includes(searchLower))) ||
+        (product.features && product.features.some(ft => ft.toLowerCase().includes(searchLower))) || 
+        (product.materials && product.materials.some(mat => mat.toLowerCase().includes(searchLower))) ||
+        (product.awards && product.awards.some(a => a.toLowerCase().includes(searchLower)));
+
+      return matchesCategory && matchesSearch;
+    });
+
+    filtered.sort((a, b) => {
+      let comparison = 0;
+      if (sortOption === 'name') comparison = a.name.localeCompare(b.name);
+      else if (sortOption === 'launchDate') comparison = new Date(a.launchDate || 0) - new Date(b.launchDate || 0);
+      else if (sortOption === 'manual') comparison = (a.orderIndex || 0) - (b.orderIndex || 0);
+      else comparison = (a.createdAt || 0) - (b.createdAt || 0);
+      return sortDirection === 'asc' ? comparison : -comparison;
+    });
+    return filtered;
+  };
+  const processedProducts = getProcessedProducts();
 
   return (
     <div className="flex h-screen bg-zinc-50 font-sans text-zinc-900 overflow-hidden relative selection:bg-black selection:text-white">
@@ -616,7 +633,7 @@ export default function App() {
             />
           ) : (
             <>
-              {/* Space View Header (New Feature) */}
+              {/* Space View Header */}
               {SPACES.find(s => s.id === activeCategory) && (
                  <SpaceDetailView 
                     space={SPACES.find(s => s.id === activeCategory)}
