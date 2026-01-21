@@ -9,7 +9,7 @@ import {
   Trophy, Heart, Link as LinkIcon, Paperclip, PieChart, Clock,
   Share2, Download, Maximize2, LayoutGrid, Zap, GripHorizontal, ImageIcon as ImgIcon,
   ChevronsUp, Camera, ImagePlus, Sofa, Briefcase, Users, Home as HomeIcon, MapPin,
-  Edit3, Grid, MoreVertical, MousePointer2, CheckSquare, XCircle
+  Edit3, Grid, MoreVertical, MousePointer2, CheckSquare, XCircle, Printer, List, Eye
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { 
@@ -30,14 +30,13 @@ const YOUR_FIREBASE_CONFIG = {
   messagingSenderId: "602422986176",
   appId: "1:602422986176:web:0170f7b5f9cd99e4c1f425",
   measurementId: "G-33FMQD1WVS"
-  // 예시: apiKey: "AIzaSy...",
 };
 
 // ----------------------------------------------------------------------
 // 상수 및 설정
 // ----------------------------------------------------------------------
-const APP_VERSION = "v0.5.5-fix"; // Component Definition Fix
-const BUILD_DATE = "2024.06.15";
+const APP_VERSION = "v0.5.6-fix"; // Updated Version
+const BUILD_DATE = "2026.01.21";
 const ADMIN_PASSWORD = "adminlcg1"; 
 
 // Firebase 초기화
@@ -111,6 +110,9 @@ export default function App() {
   const [toast, setToast] = useState(null);
   const [favorites, setFavorites] = useState([]);
   
+  // My Pick View Mode (Grid vs List)
+  const [myPickViewMode, setMyPickViewMode] = useState('grid'); // 'grid' or 'list'
+
   // Banner & Space Data States
   const [bannerData, setBannerData] = useState({ url: null, title: 'Design Lab DB', subtitle: 'Integrated Product Database & Archives' });
   const [spaceContents, setSpaceContents] = useState({}); 
@@ -137,6 +139,27 @@ export default function App() {
     mainContentRef.current.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  // Browser Back Button Handling (V0.5.6 addition)
+  useEffect(() => {
+    const handlePopState = (event) => {
+      if (selectedProduct) {
+        setSelectedProduct(null);
+        window.history.pushState(null, '', window.location.pathname); // Prevent actually going back
+      } else if (activeCategory !== 'DASHBOARD') {
+        setActiveCategory('DASHBOARD');
+      }
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [selectedProduct, activeCategory]);
+
+  // Push state when opening modal
+  useEffect(() => {
+    if (selectedProduct) {
+      window.history.pushState({ modal: true }, '', `?id=${selectedProduct.id}`);
+    }
+  }, [selectedProduct]);
+
   // URL Query Parameter
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -145,15 +168,11 @@ export default function App() {
     
     if (sharedId && products.length > 0) {
       const found = products.find(p => String(p.id) === sharedId);
-      if (found) {
-        setSelectedProduct(found);
-        window.history.replaceState({}, document.title, window.location.pathname);
-      }
+      if (found) setSelectedProduct(found);
     }
     
     if (sharedSpace && SPACES.find(s => s.id === sharedSpace)) {
        setActiveCategory(sharedSpace);
-       window.history.replaceState({}, document.title, window.location.pathname);
     }
   }, [products]);
 
@@ -430,6 +449,7 @@ export default function App() {
     return filtered;
   };
   const processedProducts = getProcessedProducts();
+  
   const handleMoveProduct = async (index, direction) => {
     if (!processedProducts || processedProducts.length <= 1) return;
     const targetIndex = direction === 'left' ? index - 1 : index + 1;
@@ -461,11 +481,11 @@ export default function App() {
   };
 
   return (
-    <div className="flex h-screen bg-zinc-50 font-sans text-zinc-900 overflow-hidden relative selection:bg-black selection:text-white">
+    <div className="flex h-screen bg-zinc-50 font-sans text-zinc-900 overflow-hidden relative selection:bg-black selection:text-white print:overflow-visible print:h-auto print:bg-white">
       {isMobileMenuOpen && <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 md:hidden animate-in fade-in" onClick={() => setIsMobileMenuOpen(false)} />}
       
-      {/* Sidebar */}
-      <aside className={`fixed inset-y-0 left-0 z-50 w-72 bg-white/90 backdrop-blur-md border-r border-zinc-200 flex flex-col shadow-2xl md:shadow-none transition-transform duration-300 md:relative md:translate-x-0 ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+      {/* Sidebar - Hide on Print */}
+      <aside className={`fixed inset-y-0 left-0 z-50 w-72 bg-white/90 backdrop-blur-md border-r border-zinc-200 flex flex-col shadow-2xl md:shadow-none transition-transform duration-300 md:relative md:translate-x-0 print:hidden ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         <div className="p-6 border-b border-zinc-100 flex items-center justify-between cursor-pointer group" onClick={() => { setActiveCategory('DASHBOARD'); setIsMobileMenuOpen(false); }}>
           <div className="flex items-center space-x-3"><div className="w-10 h-10 bg-black text-white rounded-xl flex items-center justify-center font-bold text-xl shadow-lg group-hover:scale-105 transition-transform">P</div><div><h1 className="text-lg font-extrabold tracking-tight text-zinc-900">PATRA</h1><span className="text-[10px] font-semibold text-zinc-400 tracking-widest uppercase block -mt-1">Design Lab DB</span></div></div>
           <button onClick={(e) => { e.stopPropagation(); setIsMobileMenuOpen(false); }} className="md:hidden text-zinc-400 hover:text-zinc-600"><X className="w-6 h-6" /></button>
@@ -488,8 +508,8 @@ export default function App() {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 flex flex-col h-screen overflow-hidden relative">
-        <header className="h-14 md:h-16 bg-white/80 backdrop-blur-md border-b border-zinc-100 flex items-center justify-between px-4 md:px-8 z-30 flex-shrink-0 sticky top-0 transition-all">
+      <main className="flex-1 flex flex-col h-screen overflow-hidden relative print:overflow-visible print:h-auto">
+        <header className="h-14 md:h-16 bg-white/80 backdrop-blur-md border-b border-zinc-100 flex items-center justify-between px-4 md:px-8 z-30 flex-shrink-0 sticky top-0 transition-all print:hidden">
           <div className="flex items-center space-x-3 w-full md:w-auto flex-1 mr-4">
             <button onClick={() => setIsMobileMenuOpen(true)} className="md:hidden p-2 -ml-2 text-zinc-600 hover:bg-zinc-100 rounded-lg active:scale-95 transition-transform"><Menu className="w-6 h-6" /></button>
             <div className="relative w-full max-w-md group"><Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-zinc-400 w-4 h-4 group-focus-within:text-zinc-800 transition-colors" /><input type="text" placeholder="Search..." value={searchTerm} onChange={(e) => { setSearchTerm(e.target.value); if (activeCategory === 'DASHBOARD' && e.target.value) setActiveCategory('ALL'); }} className="w-full pl-10 pr-4 py-2 bg-zinc-50/50 border border-transparent focus:bg-white focus:border-zinc-200 focus:ring-4 focus:ring-zinc-50 rounded-full text-sm transition-all outline-none" /></div>
@@ -504,7 +524,7 @@ export default function App() {
           </div>
         </header>
 
-        <div ref={mainContentRef} className="flex-1 overflow-y-auto p-4 md:p-8 custom-scrollbar relative">
+        <div ref={mainContentRef} className="flex-1 overflow-y-auto p-4 md:p-8 custom-scrollbar relative print:overflow-visible print:p-0">
           {activeCategory === 'DASHBOARD' && !searchTerm ? (
             <DashboardView 
               products={products} favorites={favorites} setActiveCategory={setActiveCategory} setSelectedProduct={setSelectedProduct} 
@@ -531,27 +551,75 @@ export default function App() {
               ) : (
                 <>
                   {!SPACES.find(s => s.id === activeCategory) && (
-                    <div className="mb-4 md:mb-8 flex items-end justify-between px-1">
-                      <div><h2 className="text-xl md:text-3xl font-extrabold text-zinc-900 tracking-tight">{activeCategory === 'MY_PICK' ? 'MY PICK' : CATEGORIES.find(c => c.id === activeCategory)?.label || activeCategory}</h2><p className="text-zinc-500 text-xs md:text-sm mt-1 font-medium">{processedProducts.length} items found {!isFirebaseAvailable && <span className="ml-2 text-red-400 bg-red-50 px-2 py-0.5 rounded-full text-xs">Offline Mode</span>}</p></div>
+                    <div className="mb-4 md:mb-8 flex flex-col md:flex-row md:items-end justify-between px-1 print:hidden">
+                      <div className="mb-4 md:mb-0">
+                        <h2 className="text-xl md:text-3xl font-extrabold text-zinc-900 tracking-tight">{activeCategory === 'MY_PICK' ? 'MY PICK' : CATEGORIES.find(c => c.id === activeCategory)?.label || activeCategory}</h2>
+                        <p className="text-zinc-500 text-xs md:text-sm mt-1 font-medium">{processedProducts.length} items found {!isFirebaseAvailable && <span className="ml-2 text-red-400 bg-red-50 px-2 py-0.5 rounded-full text-xs">Offline Mode</span>}</p>
+                      </div>
+                      
+                      {/* My Pick Tools */}
+                      {activeCategory === 'MY_PICK' && processedProducts.length > 0 && (
+                        <div className="flex space-x-2">
+                           <div className="flex bg-zinc-100 p-1 rounded-lg">
+                              <button onClick={() => setMyPickViewMode('grid')} className={`p-2 rounded-md ${myPickViewMode === 'grid' ? 'bg-white shadow-sm text-zinc-900' : 'text-zinc-400'}`} title="Grid View"><Grid className="w-4 h-4"/></button>
+                              <button onClick={() => setMyPickViewMode('list')} className={`p-2 rounded-md ${myPickViewMode === 'list' ? 'bg-white shadow-sm text-zinc-900' : 'text-zinc-400'}`} title="List View"><List className="w-4 h-4"/></button>
+                           </div>
+                           <button onClick={() => window.print()} className="flex items-center px-4 py-2 bg-zinc-900 text-white rounded-lg text-sm font-bold hover:bg-black transition-colors"><Printer className="w-4 h-4 mr-2"/> Export</button>
+                        </div>
+                      )}
                     </div>
                   )}
                   
-                  <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-8 pb-20">
-                    {processedProducts.map((product, idx) => (<ProductCard key={product.id} product={product} onClick={() => setSelectedProduct(product)} isAdmin={isAdmin} showMoveControls={isAdmin && sortOption === 'manual'} onMove={(dir) => handleMoveProduct(idx, dir)} isFavorite={favorites.includes(product.id)} onToggleFavorite={(e) => toggleFavorite(e, product.id)} />))}
-                    {isAdmin && activeCategory !== 'MY_PICK' && activeCategory !== 'NEW' && !SPACES.find(s => s.id === activeCategory) && (<button onClick={() => { setEditingProduct(null); setIsFormOpen(true); }} className="border-2 border-dashed border-zinc-200 rounded-2xl flex flex-col items-center justify-center min-h-[250px] md:min-h-[300px] text-zinc-400 hover:border-zinc-400 hover:text-zinc-600 hover:bg-zinc-50 transition-all group"><div className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-zinc-100 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform"><Plus className="w-6 h-6" /></div><span className="text-xs md:text-sm font-bold">Add Product</span></button>)}
-                  </div>
+                  {activeCategory === 'MY_PICK' && myPickViewMode === 'list' ? (
+                     <div className="space-y-4 print:space-y-6">
+                        <div className="hidden print:block mb-8">
+                           <h1 className="text-4xl font-bold mb-2">MY PICK SELECTION</h1>
+                           <p className="text-zinc-500">{new Date().toLocaleDateString()} · Patra Design Lab</p>
+                        </div>
+                        {processedProducts.map((product) => (
+                           <div key={product.id} className="flex flex-col md:flex-row gap-6 p-6 bg-white rounded-2xl border border-zinc-200 print:border-zinc-300 print:break-inside-avoid">
+                              <div className="w-full md:w-48 h-48 bg-zinc-50 rounded-xl overflow-hidden flex-shrink-0 border border-zinc-100 flex items-center justify-center">
+                                 {product.images?.[0] ? <img src={product.images[0]} className="w-full h-full object-contain mix-blend-multiply" alt={product.name} /> : <ImageIcon className="w-8 h-8 text-zinc-300"/>}
+                              </div>
+                              <div className="flex-1">
+                                 <div className="flex justify-between items-start">
+                                    <div>
+                                       <span className="inline-block px-2 py-0.5 bg-zinc-100 text-zinc-600 text-xs font-bold rounded mb-2">{product.category}</span>
+                                       <h3 className="text-2xl font-bold text-zinc-900 mb-1">{product.name}</h3>
+                                       <p className="text-zinc-500 font-medium text-sm mb-4">Designed by {product.designer || 'Patra Design Lab'}</p>
+                                    </div>
+                                    <button onClick={(e) => toggleFavorite(e, product.id)} className="print:hidden text-yellow-400 hover:scale-110 transition-transform"><Star className="w-6 h-6 fill-current"/></button>
+                                 </div>
+                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                                    <div className="bg-zinc-50 p-3 rounded-lg"><span className="font-bold block text-xs text-zinc-400 uppercase mb-1">Specs</span>{product.specs}</div>
+                                    <div className="space-y-2">
+                                       <div><span className="font-bold text-xs text-zinc-400 uppercase">Options</span> <span className="text-zinc-700">{product.options?.join(', ')}</span></div>
+                                       <div><span className="font-bold text-xs text-zinc-400 uppercase">Colors</span> <span className="text-zinc-700">{product.bodyColors?.join(', ')} / {product.upholsteryColors?.join(', ')}</span></div>
+                                    </div>
+                                 </div>
+                              </div>
+                           </div>
+                        ))}
+                     </div>
+                  ) : (
+                     <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-8 pb-20 print:grid-cols-3 print:gap-4">
+                        {processedProducts.map((product, idx) => (<ProductCard key={product.id} product={product} onClick={() => setSelectedProduct(product)} isAdmin={isAdmin} showMoveControls={isAdmin && sortOption === 'manual'} onMove={(dir) => handleMoveProduct(idx, dir)} isFavorite={favorites.includes(product.id)} onToggleFavorite={(e) => toggleFavorite(e, product.id)} />))}
+                        {isAdmin && activeCategory !== 'MY_PICK' && activeCategory !== 'NEW' && !SPACES.find(s => s.id === activeCategory) && (<button onClick={() => { setEditingProduct(null); setIsFormOpen(true); }} className="border-2 border-dashed border-zinc-200 rounded-2xl flex flex-col items-center justify-center min-h-[250px] md:min-h-[300px] text-zinc-400 hover:border-zinc-400 hover:text-zinc-600 hover:bg-zinc-50 transition-all group print:hidden"><div className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-zinc-100 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform"><Plus className="w-6 h-6" /></div><span className="text-xs md:text-sm font-bold">Add Product</span></button>)}
+                     </div>
+                  )}
+                  
                   {processedProducts.length === 0 && (<div className="flex flex-col items-center justify-center py-32 text-zinc-300"><CloudOff className="w-16 h-16 mb-4 opacity-50" /><p className="text-sm font-medium">No products found for this space.</p>{isAdmin && SPACES.find(s => s.id === activeCategory) && (<button onClick={() => setManagingSpaceProductsId(activeCategory)} className="mt-4 px-4 py-2 bg-blue-50 text-blue-600 rounded-lg text-sm font-bold hover:bg-blue-100 transition-colors">+ Select Products</button>)}</div>)}
                 </>
               )}
             </>
           )}
-          {showScrollTop && (<button onClick={scrollToTop} className="fixed bottom-6 right-6 md:bottom-10 md:right-10 w-10 h-10 md:w-12 md:h-12 bg-black/80 backdrop-blur-md text-white rounded-full shadow-lg flex items-center justify-center hover:bg-black hover:scale-110 transition-all z-40 animate-in fade-in slide-in-from-bottom-4"><ChevronsUp className="w-6 h-6" /></button>)}
+          {showScrollTop && (<button onClick={scrollToTop} className="fixed bottom-6 right-6 md:bottom-10 md:right-10 w-10 h-10 md:w-12 md:h-12 bg-black/80 backdrop-blur-md text-white rounded-full shadow-lg flex items-center justify-center hover:bg-black hover:scale-110 transition-all z-40 animate-in fade-in slide-in-from-bottom-4 print:hidden"><ChevronsUp className="w-6 h-6" /></button>)}
         </div>
       </main>
 
       {/* Modals & Overlays */}
-      {toast && <div className="fixed bottom-8 right-8 bg-zinc-900 text-white px-5 py-3.5 rounded-xl shadow-2xl flex items-center space-x-3 animate-in slide-in-from-bottom-10 fade-in z-[90]">{toast.type === 'success' ? <Check className="w-5 h-5 text-green-400" /> : <Info className="w-5 h-5 text-red-400" />}<span className="text-sm font-bold tracking-wide">{toast.message}</span></div>}
-      {selectedProduct && <ProductDetailModal product={selectedProduct} onClose={() => setSelectedProduct(null)} onEdit={() => { setEditingProduct(selectedProduct); setIsFormOpen(true); }} isAdmin={isAdmin} showToast={showToast} isFavorite={favorites.includes(selectedProduct.id)} onToggleFavorite={(e) => toggleFavorite(e, selectedProduct.id)} />}
+      {toast && <div className="fixed bottom-8 right-8 bg-zinc-900 text-white px-5 py-3.5 rounded-xl shadow-2xl flex items-center space-x-3 animate-in slide-in-from-bottom-10 fade-in z-[90] print:hidden">{toast.type === 'success' ? <Check className="w-5 h-5 text-green-400" /> : <Info className="w-5 h-5 text-red-400" />}<span className="text-sm font-bold tracking-wide">{toast.message}</span></div>}
+      {selectedProduct && <ProductDetailModal product={selectedProduct} onClose={() => setSelectedProduct(null)} onEdit={() => { setEditingProduct(selectedProduct); setIsFormOpen(true); }} isAdmin={isAdmin} showToast={showToast} isFavorite={favorites.includes(selectedProduct.id)} onToggleFavorite={(e) => toggleFavorite(e, selectedProduct.id)} onNavigateSpace={(spaceId) => { setSelectedProduct(null); setActiveCategory(spaceId); }} />}
       {isFormOpen && <ProductFormModal categories={CATEGORIES.filter(c => !c.isSpecial)} initialCategory={activeCategory} existingData={editingProduct} onClose={() => { setIsFormOpen(false); setEditingProduct(null); }} onSave={handleSaveProduct} onDelete={handleDeleteProduct} isFirebaseAvailable={isFirebaseAvailable} />}
       
       {/* Space Modals (Missing Components Restored) */}
@@ -584,10 +652,11 @@ export default function App() {
               setSelectedScene(updatedScene);
               await handleSceneSave(selectedScene.spaceId, updatedScene);
            }}
+           onNavigateProduct={(p) => { setSelectedScene(null); setSelectedProduct(p); }}
         />
       )}
       {showAdminDashboard && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4 print:hidden">
           <div className="bg-white w-full max-w-4xl rounded-2xl overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200 max-h-[85vh] flex flex-col">
             <div className="px-6 py-4 border-b border-zinc-100 flex justify-between items-center bg-zinc-900 text-white">
               <h3 className="text-lg font-bold flex items-center"><ShieldAlert className="w-5 h-5 mr-2" /> Admin Console</h3>
@@ -614,7 +683,7 @@ function SpaceDetailView({ space, spaceContent, isAdmin, onBannerUpload, onEditI
 
   return (
     <div className="mb-12 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className="relative rounded-3xl overflow-hidden h-72 md:h-96 shadow-lg group mb-8 bg-zinc-900">
+      <div className="relative rounded-3xl overflow-hidden h-72 md:h-96 shadow-lg group mb-8 bg-zinc-900 print:hidden">
         <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent z-10"></div>
         {banner ? <img src={banner} className="w-full h-full object-cover transition-transform duration-1000" alt="Space Banner" /> : <div className="w-full h-full flex items-center justify-center opacity-30"><span className="text-white text-4xl font-bold uppercase">{space.label}</span></div>}
         <div className="absolute bottom-8 left-8 md:bottom-12 md:left-12 z-20 text-white max-w-3xl">
@@ -628,7 +697,7 @@ function SpaceDetailView({ space, spaceContent, isAdmin, onBannerUpload, onEditI
            {isAdmin && (<><label className="p-2.5 bg-black/40 backdrop-blur rounded-full text-white hover:bg-white hover:text-black transition-all cursor-pointer"><Camera className="w-5 h-5" /><input type="file" className="hidden" accept="image/*" onChange={onBannerUpload} /></label><button onClick={onEditInfo} className="p-2.5 bg-black/40 backdrop-blur rounded-full text-white hover:bg-white hover:text-black transition-all"><Edit3 className="w-5 h-5" /></button></>)}
         </div>
       </div>
-      <div className="mb-12">
+      <div className="mb-12 print:hidden">
         <div className="flex items-center justify-between mb-6"><h3 className="text-2xl font-extrabold text-zinc-900 flex items-center"><ImageIcon className="w-6 h-6 mr-2 text-indigo-500" /> Space Scenes</h3>{isAdmin && (<button onClick={onAddScene} className="flex items-center text-sm font-bold bg-zinc-900 text-white px-4 py-2 rounded-lg hover:bg-black transition-colors shadow-lg"><Plus className="w-4 h-4 mr-2" /> Add Scene</button>)}</div>
         {scenes.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -647,7 +716,7 @@ function SpaceDetailView({ space, spaceContent, isAdmin, onBannerUpload, onEditI
           </div>
         ) : (<div className="text-center py-12 bg-zinc-50 rounded-2xl border border-dashed border-zinc-200 text-zinc-400"><ImageIcon className="w-12 h-12 mx-auto mb-3 opacity-20" /><p className="text-sm">등록된 공간 장면이 없습니다.</p></div>)}
       </div>
-      <div className="flex items-center justify-between mb-6 border-t border-zinc-100 pt-12">
+      <div className="flex items-center justify-between mb-6 border-t border-zinc-100 pt-12 print:border-none print:pt-0">
          <h3 className="text-xl font-bold text-zinc-900 flex items-center"><Tag className="w-5 h-5 mr-2 text-zinc-400" /> All Curated Products <span className="ml-2 text-sm font-medium text-zinc-400 bg-zinc-100 px-2 py-0.5 rounded-full">{productCount}</span></h3>
          {isAdmin && (<button onClick={onManageProducts} className="flex items-center text-sm font-bold text-zinc-500 hover:text-zinc-900 bg-white border border-zinc-200 px-4 py-2 rounded-lg hover:border-zinc-400 transition-colors"><Settings className="w-4 h-4 mr-2" /> Manage List</button>)}
       </div>
@@ -655,14 +724,14 @@ function SpaceDetailView({ space, spaceContent, isAdmin, onBannerUpload, onEditI
   );
 }
 
-function SpaceSceneModal({ scene, products, allProducts, isAdmin, onClose, onEdit, onProductToggle }) {
+function SpaceSceneModal({ scene, products, allProducts, isAdmin, onClose, onEdit, onProductToggle, onNavigateProduct }) {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const images = scene.images ? [scene.image, ...scene.images] : [scene.image];
   const [isProductManagerOpen, setProductManagerOpen] = useState(false);
   const [productFilter, setProductFilter] = useState('');
 
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[60] flex items-center justify-center p-0 md:p-6 animate-in zoom-in-95 duration-200">
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[60] flex items-center justify-center p-0 md:p-6 animate-in zoom-in-95 duration-200 print:hidden">
       <div className="bg-white w-full h-full md:h-[90vh] md:max-w-6xl md:rounded-3xl overflow-hidden shadow-2xl flex flex-col md:flex-row relative">
          <button onClick={onClose} className="absolute top-4 right-4 z-50 p-2 bg-black/20 text-white hover:bg-black/50 rounded-full backdrop-blur"><X className="w-6 h-6"/></button>
          <div className="w-full md:w-2/3 bg-black relative flex flex-col justify-center h-[40vh] md:h-full">
@@ -681,7 +750,7 @@ function SpaceSceneModal({ scene, products, allProducts, isAdmin, onClose, onEdi
                     <div className="max-h-32 overflow-y-auto space-y-1 custom-scrollbar">{allProducts.filter(p => p.name.toLowerCase().includes(productFilter.toLowerCase())).map(p => { const isTagged = scene.productIds?.includes(p.id); return (<div key={p.id} onClick={() => onProductToggle(p.id, !isTagged)} className={`flex items-center p-1.5 rounded cursor-pointer ${isTagged ? 'bg-indigo-50 text-indigo-700' : 'hover:bg-zinc-50'}`}><div className={`w-3 h-3 border rounded mr-2 flex items-center justify-center ${isTagged ? 'bg-indigo-500 border-indigo-500' : 'border-zinc-300'}`}>{isTagged && <Check className="w-2 h-2 text-white"/>}</div><span className="text-xs truncate">{p.name}</span></div>) })}</div>
                  </div>
                )}
-               <div className="space-y-3">{products.length > 0 ? products.map(product => (<div key={product.id} className="flex items-center p-3 bg-white rounded-xl border border-zinc-100 shadow-sm hover:border-zinc-300 transition-all cursor-pointer group"><div className="w-12 h-12 bg-zinc-50 rounded-lg flex-shrink-0 flex items-center justify-center mr-3 overflow-hidden">{product.images?.[0] ? <img src={product.images[0]} className="w-full h-full object-cover" /> : <ImageIcon className="w-5 h-5 text-zinc-300"/>}</div><div className="flex-1 min-w-0"><h4 className="text-sm font-bold text-zinc-900 truncate group-hover:text-blue-600">{product.name}</h4><p className="text-xs text-zinc-500">{product.category}</p></div><ChevronRight className="w-4 h-4 text-zinc-300 group-hover:text-zinc-600"/></div>)) : (<div className="text-center py-8 text-zinc-400 text-xs">연관된 제품이 없습니다.</div>)}</div>
+               <div className="space-y-3">{products.length > 0 ? products.map(product => (<div key={product.id} onClick={() => onNavigateProduct(product)} className="flex items-center p-3 bg-white rounded-xl border border-zinc-100 shadow-sm hover:border-zinc-300 transition-all cursor-pointer group"><div className="w-12 h-12 bg-zinc-50 rounded-lg flex-shrink-0 flex items-center justify-center mr-3 overflow-hidden">{product.images?.[0] ? <img src={product.images[0]} className="w-full h-full object-cover" /> : <ImageIcon className="w-5 h-5 text-zinc-300"/>}</div><div className="flex-1 min-w-0"><h4 className="text-sm font-bold text-zinc-900 truncate group-hover:text-blue-600">{product.name}</h4><p className="text-xs text-zinc-500">{product.category}</p></div><ChevronRight className="w-4 h-4 text-zinc-300 group-hover:text-zinc-600"/></div>)) : (<div className="text-center py-8 text-zinc-400 text-xs">연관된 제품이 없습니다.</div>)}</div>
             </div>
          </div>
       </div>
@@ -771,9 +840,6 @@ function SpaceProductManager({ spaceId, products, onClose, onToggle }) {
   );
 }
 
-// ... DashboardView, ProductCard, ProductDetailModal, ProductFormModal (Same as previous) ...
-// (Re-including DashboardView & ProductCard for full context)
-
 function DashboardView({ products, favorites, setActiveCategory, setSelectedProduct, isAdmin, bannerData, onBannerUpload, onBannerTextChange, onSaveBannerText }) {
   const totalCount = products.length; const newCount = products.filter(p => p.isNew).length; const pickCount = favorites.length;
   const categoryCounts = []; let totalStandardProducts = 0;
@@ -784,7 +850,7 @@ function DashboardView({ products, favorites, setActiveCategory, setSelectedProd
   const fileInputRef = useRef(null);
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6 md:space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20">
+    <div className="max-w-6xl mx-auto space-y-6 md:space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20 print:hidden">
       <div className="relative w-full h-48 md:h-72 rounded-3xl overflow-hidden shadow-lg border border-zinc-200 group bg-zinc-900">
          <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/40 to-transparent z-10"></div>
          {bannerData.url ? <img src={bannerData.url} alt="Dashboard Banner" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" /> : <div className="w-full h-full flex items-center justify-center opacity-20"><img src="/api/placeholder/1200/400" className="w-full h-full object-cover grayscale" alt="Pattern" /></div>}
@@ -805,22 +871,31 @@ function DashboardView({ products, favorites, setActiveCategory, setSelectedProd
       </div>
 
       <div className="grid grid-cols-3 gap-3 md:gap-6">
-        <div onClick={() => setActiveCategory('ALL')} className="bg-white p-3 md:p-6 rounded-xl md:rounded-2xl border border-zinc-100 shadow-sm hover:shadow-md cursor-pointer group flex flex-col justify-center items-center md:items-start text-center md:text-left h-24 md:h-32">
-          <div className="hidden md:flex justify-between w-full mb-2"><div className="p-3 bg-zinc-50 rounded-xl group-hover:bg-zinc-900 group-hover:text-white transition-colors text-zinc-400"><LayoutGrid className="w-6 h-6" /></div></div>
-          <p className="text-[10px] md:text-xs font-bold text-zinc-400 uppercase tracking-wider mb-0 md:mb-1">Total</p><h3 className="text-xl md:text-4xl font-extrabold text-zinc-900">{totalCount}</h3>
+        <div onClick={() => setActiveCategory('ALL')} className="bg-white p-4 rounded-xl md:rounded-2xl border border-zinc-100 shadow-sm hover:shadow-md cursor-pointer group flex items-center justify-between transition-all">
+          <div className="flex items-center space-x-3 md:space-x-4">
+             <div className="p-2.5 bg-zinc-100 rounded-lg group-hover:bg-zinc-900 group-hover:text-white transition-colors text-zinc-500"><LayoutGrid className="w-5 h-5 md:w-6 md:h-6" /></div>
+             <span className="text-xs md:text-sm font-bold text-zinc-500 uppercase tracking-wide">Total</span>
+          </div>
+          <h3 className="text-2xl md:text-3xl font-black text-zinc-900">{totalCount}</h3>
         </div>
-        <div onClick={() => setActiveCategory('NEW')} className="bg-white p-3 md:p-6 rounded-xl md:rounded-2xl border border-zinc-100 shadow-sm hover:shadow-md cursor-pointer group flex flex-col justify-center items-center md:items-start text-center md:text-left h-24 md:h-32">
-          <div className="hidden md:flex justify-between w-full mb-2"><div className="p-3 bg-red-50 rounded-xl text-red-500 group-hover:bg-red-500 group-hover:text-white transition-colors"><Zap className="w-6 h-6" /></div></div>
-          <p className="text-[10px] md:text-xs font-bold text-red-400 uppercase tracking-wider mb-0 md:mb-1">New</p><h3 className="text-xl md:text-4xl font-extrabold text-zinc-900">{newCount}</h3>
+        <div onClick={() => setActiveCategory('NEW')} className="bg-white p-4 rounded-xl md:rounded-2xl border border-zinc-100 shadow-sm hover:shadow-md cursor-pointer group flex items-center justify-between transition-all">
+          <div className="flex items-center space-x-3 md:space-x-4">
+             <div className="p-2.5 bg-red-50 rounded-lg text-red-500 group-hover:bg-red-500 group-hover:text-white transition-colors"><Zap className="w-5 h-5 md:w-6 md:h-6" /></div>
+             <span className="text-xs md:text-sm font-bold text-red-400 uppercase tracking-wide">New</span>
+          </div>
+          <h3 className="text-2xl md:text-3xl font-black text-zinc-900">{newCount}</h3>
         </div>
-        <div onClick={() => setActiveCategory('MY_PICK')} className="bg-white p-3 md:p-6 rounded-xl md:rounded-2xl border border-zinc-100 shadow-sm hover:shadow-md cursor-pointer group flex flex-col justify-center items-center md:items-start text-center md:text-left h-24 md:h-32">
-          <div className="hidden md:flex justify-between w-full mb-2"><div className="p-3 bg-yellow-50 rounded-xl text-yellow-500 group-hover:bg-yellow-400 group-hover:text-white transition-colors"><Heart className="w-6 h-6 fill-current" /></div></div>
-          <p className="text-[10px] md:text-xs font-bold text-yellow-500 uppercase tracking-wider mb-0 md:mb-1">Pick</p><h3 className="text-xl md:text-4xl font-extrabold text-zinc-900">{pickCount}</h3>
+        <div onClick={() => setActiveCategory('MY_PICK')} className="bg-white p-4 rounded-xl md:rounded-2xl border border-zinc-100 shadow-sm hover:shadow-md cursor-pointer group flex items-center justify-between transition-all">
+          <div className="flex items-center space-x-3 md:space-x-4">
+             <div className="p-2.5 bg-yellow-50 rounded-lg text-yellow-500 group-hover:bg-yellow-400 group-hover:text-white transition-colors"><Heart className="w-5 h-5 md:w-6 md:h-6 fill-current" /></div>
+             <span className="text-xs md:text-sm font-bold text-yellow-500 uppercase tracking-wide">Pick</span>
+          </div>
+          <h3 className="text-2xl md:text-3xl font-black text-zinc-900">{pickCount}</h3>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white p-6 md:p-8 rounded-2xl border border-zinc-100 shadow-sm flex flex-col justify-center min-h-[auto] md:min-h-[360px]"><h3 className="text-base md:text-lg font-bold text-zinc-900 mb-6 flex items-center"><PieChart className="w-5 h-5 mr-2 text-zinc-400" /> Category Distribution</h3>{totalStandardProducts > 0 ? (<div className="flex flex-col sm:flex-row items-center justify-around gap-6 md:gap-8"><div className="relative w-32 h-32 md:w-48 md:h-48 rounded-full shadow-inner flex-shrink-0 aspect-square" style={chartStyle}><div className="absolute inset-0 m-auto w-16 h-16 md:w-24 md:h-24 bg-white rounded-full flex items-center justify-center flex-col shadow-sm"><span className="text-[8px] md:text-[10px] text-zinc-400 uppercase font-bold tracking-widest">Total</span><span className="text-lg md:text-2xl font-extrabold text-zinc-800">{totalStandardProducts}</span></div></div><div className="grid grid-cols-2 gap-x-4 gap-y-2 w-full sm:w-auto">{categoryCounts.map(item => (<div key={item.id} className="flex items-center text-[10px] md:text-xs group cursor-default"><div className="w-2 md:w-2.5 h-2 md:h-2.5 rounded-full mr-2 ring-2 ring-transparent group-hover:ring-zinc-100 transition-all flex-shrink-0" style={{ backgroundColor: item.color }}></div><span className="font-bold text-zinc-600 mr-1">{item.label}</span><span className="text-zinc-400 font-medium">{Math.round((item.count/totalStandardProducts)*100)}%</span></div>))}</div></div>) : <div className="text-center text-zinc-300 text-sm">No data available</div>}</div>
+        <div className="bg-white p-6 md:p-8 rounded-2xl border border-zinc-100 shadow-sm flex flex-col justify-center min-h-[auto] md:min-h-[360px]"><h3 className="text-base md:text-lg font-bold text-zinc-900 mb-6 flex items-center"><PieChart className="w-5 h-5 mr-2 text-zinc-400" /> Category Distribution</h3>{totalStandardProducts > 0 ? (<div className="flex flex-col sm:flex-row items-center justify-around gap-6 md:gap-8"><div className="relative w-32 h-32 md:w-48 md:h-48 rounded-full shadow-inner flex-shrink-0 aspect-square" style={chartStyle}><div className="absolute inset-0 m-auto w-16 h-16 md:w-24 md:h-24 bg-white rounded-full flex items-center justify-center flex-col shadow-sm"><span className="text-[8px] md:text-[10px] text-zinc-400 uppercase font-bold tracking-widest">Total</span><span className="text-lg md:text-2xl font-extrabold text-zinc-800">{totalStandardProducts}</span></div></div><div className="grid grid-cols-2 gap-x-6 gap-y-3 w-full sm:w-auto">{categoryCounts.map(item => (<div key={item.id} className="flex items-center text-[10px] md:text-xs group cursor-default"><div className="w-2.5 h-2.5 rounded-full mr-2.5 ring-2 ring-transparent group-hover:ring-zinc-100 transition-all flex-shrink-0" style={{ backgroundColor: item.color }}></div><span className="font-bold text-zinc-600 mr-2 flex-1">{item.label}</span><span className="text-zinc-400 font-bold tabular-nums">{Math.round((item.count/totalStandardProducts)*100)}%</span></div>))}</div></div>) : <div className="text-center text-zinc-300 text-sm">No data available</div>}</div>
         <div className="bg-white p-6 md:p-8 rounded-2xl border border-zinc-100 shadow-sm flex flex-col min-h-[auto] md:min-h-[360px]"><h3 className="text-base md:text-lg font-bold text-zinc-900 mb-6 flex items-center"><Clock className="w-5 h-5 mr-2 text-zinc-400" /> Recent Updates</h3><div className="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-3">{recentUpdates.length > 0 ? recentUpdates.map(product => (<div key={product.id} onClick={() => setSelectedProduct(product)} className="flex items-center p-3 rounded-xl border border-zinc-100 hover:border-zinc-300 hover:bg-zinc-50 cursor-pointer transition-all group"><div className="w-10 h-10 md:w-12 md:h-12 bg-zinc-100 rounded-lg flex-shrink-0 flex items-center justify-center mr-3 md:mr-4 overflow-hidden border border-zinc-200">{product.images?.[0] ? <img src={product.images[0]} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" alt="" /> : <ImageIcon className="w-5 h-5 text-zinc-300"/>}</div><div className="flex-1 min-w-0"><h4 className="text-sm font-bold text-zinc-800 truncate group-hover:text-blue-600 transition-colors">{product.name}</h4><p className="text-[10px] md:text-[11px] text-zinc-400 mt-0.5 truncate">{new Date(product.updatedAt || product.createdAt).toLocaleDateString()} · {product.category}</p></div><ChevronRight className="w-4 h-4 text-zinc-300 group-hover:text-zinc-600 group-hover:translate-x-1 transition-all" /></div>)) : <div className="text-center text-zinc-300 text-sm py-10">No updates yet.</div>}</div></div>
       </div>
     </div>
@@ -829,24 +904,33 @@ function DashboardView({ products, favorites, setActiveCategory, setSelectedProd
 
 function ProductCard({ product, onClick, showMoveControls, onMove, isFavorite, onToggleFavorite }) {
   const mainImage = product.images && product.images.length > 0 ? product.images[0] : null;
-  const materialBadge = product.materials?.[0];
   const awardBadge = product.awards?.[0];
+  
   return (
-    <div onClick={onClick} className="bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer group border border-zinc-100 relative flex flex-col h-full">
+    <div onClick={onClick} className="bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer group border border-zinc-100 relative flex flex-col h-full print:break-inside-avoid print:shadow-none print:border-zinc-200">
       <div className="relative h-32 md:h-64 bg-zinc-50 p-2 md:p-6 flex items-center justify-center overflow-hidden">
         <div className="absolute top-2 left-2 md:top-4 md:left-4 flex flex-col gap-1 z-10 items-start">
            {product.isNew && <span className="bg-black text-white text-[8px] md:text-[9px] font-extrabold px-1.5 py-0.5 md:px-2 md:py-1 rounded shadow-sm tracking-wide">NEW</span>}
            {awardBadge && <span className="bg-yellow-400 text-yellow-900 text-[8px] md:text-[9px] font-bold px-1.5 py-0.5 md:px-2 md:py-1 rounded shadow-sm flex items-center"><Trophy className="w-2 h-2 md:w-2.5 md:h-2.5 mr-1" /> {awardBadge}</span>}
-           {materialBadge && !awardBadge && <span className="bg-white/90 backdrop-blur border border-zinc-200 text-zinc-600 text-[8px] md:text-[9px] font-bold px-1.5 py-0.5 md:px-2 md:py-1 rounded uppercase tracking-wide">{materialBadge}</span>}
         </div>
-        <button onClick={onToggleFavorite} className="absolute top-2 right-2 md:top-4 md:right-4 z-20 text-zinc-300 hover:text-yellow-400 hover:scale-110 transition-all"><Star className={`w-4 h-4 md:w-5 md:h-5 ${isFavorite ? 'text-yellow-400 fill-yellow-400' : ''}`} /></button>
+        <button onClick={onToggleFavorite} className="absolute top-2 right-2 md:top-4 md:right-4 z-20 text-zinc-300 hover:text-yellow-400 hover:scale-110 transition-all print:hidden"><Star className={`w-4 h-4 md:w-5 md:h-5 ${isFavorite ? 'text-yellow-400 fill-yellow-400' : ''}`} /></button>
         <div className="w-full h-full flex items-center justify-center transition-transform duration-500 group-hover:scale-105">
             {mainImage ? <img src={mainImage} alt={product.name} loading="lazy" className="w-full h-full object-contain mix-blend-multiply" /> : <div className="text-center opacity-30"><ImageIcon className="w-8 h-8 md:w-10 md:h-10 mx-auto mb-2 text-zinc-400" /></div>}
         </div>
         {showMoveControls && (
-          <div className="absolute bottom-1 md:bottom-2 left-0 right-0 flex justify-center gap-2 z-20">
+          <div className="absolute bottom-1 md:bottom-2 left-0 right-0 flex justify-center gap-2 z-20 print:hidden">
              <button onClick={(e) => {e.stopPropagation(); onMove('left')}} className="p-1 md:p-1.5 bg-white/90 rounded-full shadow hover:bg-black hover:text-white text-zinc-700 transition-colors"><ArrowLeft className="w-3 h-3 md:w-4 md:h-4" /></button>
              <button onClick={(e) => {e.stopPropagation(); onMove('right')}} className="p-1 md:p-1.5 bg-white/90 rounded-full shadow hover:bg-black hover:text-white text-zinc-700 transition-colors"><ArrowRight className="w-3 h-3 md:w-4 md:h-4" /></button>
+          </div>
+        )}
+        {/* Related Spaces Badges in Card */}
+        {product.spaces && product.spaces.length > 0 && (
+          <div className="absolute bottom-2 left-2 flex gap-1 z-10 opacity-0 group-hover:opacity-100 transition-opacity duration-300 print:opacity-100">
+             {product.spaces.slice(0, 2).map(sid => {
+                const s = SPACES.find(sp => sp.id === sid);
+                if (!s) return null;
+                return <div key={sid} className="bg-white/80 backdrop-blur px-1.5 py-0.5 rounded text-[8px] font-bold text-zinc-600 border border-zinc-200">{s.label}</div>
+             })}
           </div>
         )}
       </div>
@@ -871,7 +955,7 @@ function ProductCard({ product, onClick, showMoveControls, onMove, isFavorite, o
   );
 }
 
-function ProductDetailModal({ product, onClose, onEdit, isAdmin, showToast, isFavorite, onToggleFavorite }) {
+function ProductDetailModal({ product, onClose, onEdit, isAdmin, showToast, isFavorite, onToggleFavorite, onNavigateSpace }) {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [isZoomed, setIsZoomed] = useState(false);
   const canvasRef = useRef(null);
@@ -879,37 +963,115 @@ function ProductDetailModal({ product, onClose, onEdit, isAdmin, showToast, isFa
   const images = product.images || [];
   const currentImage = images.length > 0 ? images[currentImageIndex] : null;
   const contentImages = product.contentImages || [];
+  const relatedSpaces = SPACES.filter(s => product.spaces && product.spaces.includes(s.id));
+
   const copyToClipboard = () => { navigator.clipboard.writeText(`[${product.name}]\n${product.specs}`); showToast("Copied to clipboard"); };
-  const copyShareLink = () => { navigator.clipboard.writeText(`${window.location.origin}${window.location.pathname}?id=${product.id}`); showToast("Link copied"); };
+  
   const handleShareImage = () => {
-    const canvas = canvasRef.current; if (!canvas) return; const ctx = canvas.getContext('2d'); const w = 1080; const h = 1350; canvas.width = w; canvas.height = h; const img = new Image(); img.crossOrigin = "Anonymous";
+    const canvas = canvasRef.current; if (!canvas) return; const ctx = canvas.getContext('2d');
+    const w = 1080;
+    // Calculate estimated height
+    const baseHeight = 1350;
+    const specLines = product.specs.split('\n').length;
+    const featureCount = (product.features?.length || 0) + (product.options?.length || 0);
+    const estimatedExtraHeight = (specLines * 40) + (featureCount * 50);
+    const h = baseHeight + Math.max(0, estimatedExtraHeight - 400); // Dynamic height
+    
+    canvas.width = w; canvas.height = h; const img = new Image(); img.crossOrigin = "Anonymous";
     img.onload = () => {
-      ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, w, h); ctx.fillStyle = '#18181b'; ctx.fillRect(0, 0, w, 120); ctx.fillStyle = '#ffffff'; ctx.font = 'bold 40px sans-serif'; ctx.textAlign = 'left'; ctx.fillText("PATRA DESIGN LAB", 60, 75);
-      const ratio = Math.min((w - 120) / img.width, (h * 0.5) / img.height); const imgW = img.width * ratio; const imgH = img.height * ratio; ctx.drawImage(img, (w - imgW) / 2, 200, imgW, imgH);
-      ctx.textAlign = 'center'; ctx.fillStyle = '#18181b'; ctx.font = 'bold 70px sans-serif'; ctx.fillText(product.name, w/2, h * 0.65); ctx.fillStyle = '#71717a'; ctx.font = 'bold 30px sans-serif'; ctx.fillText(product.category.toUpperCase(), w/2, h * 0.6);
-      if(product.designer) { ctx.fillStyle = '#a1a1aa'; ctx.font = '30px sans-serif'; ctx.fillText(`Designed by ${product.designer}`, w/2, h * 0.69); }
-      ctx.fillStyle = '#f4f4f5'; ctx.fillRect(60, h * 0.73, w - 120, 300); ctx.fillStyle = '#3f3f46'; ctx.font = '24px sans-serif'; ctx.textAlign = 'left'; const specLines = product.specs.split('\n').slice(0, 8); let y = h * 0.77; specLines.forEach(line => { ctx.fillText(line, 100, y); y += 35; });
+      // Background
+      ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, w, h);
+      ctx.fillStyle = '#18181b'; ctx.fillRect(0, 0, w, 140);
+      
+      // Header
+      ctx.fillStyle = '#ffffff'; ctx.font = 'bold 40px sans-serif'; ctx.textAlign = 'left'; ctx.fillText("PATRA DESIGN LAB", 60, 85);
+      
+      // Main Image
+      const ratio = Math.min((w - 120) / img.width, 600 / img.height);
+      const imgW = img.width * ratio; const imgH = img.height * ratio;
+      ctx.drawImage(img, (w - imgW) / 2, 200, imgW, imgH);
+      
+      let cursorY = 200 + imgH + 80;
+
+      // Title & Category
+      ctx.textAlign = 'center'; ctx.fillStyle = '#18181b'; ctx.font = 'bold 70px sans-serif'; 
+      ctx.fillText(product.name, w/2, cursorY);
+      cursorY += 60;
+      
+      ctx.fillStyle = '#71717a'; ctx.font = 'bold 30px sans-serif'; 
+      ctx.fillText(product.category.toUpperCase(), w/2, cursorY);
+      cursorY += 50;
+
+      if(product.designer) {
+        ctx.fillStyle = '#a1a1aa'; ctx.font = '30px sans-serif'; 
+        ctx.fillText(`Designed by ${product.designer}`, w/2, cursorY);
+        cursorY += 80;
+      } else {
+         cursorY += 40;
+      }
+
+      // Specs Box
+      ctx.textAlign = 'left';
+      ctx.fillStyle = '#f4f4f5'; ctx.fillRect(60, cursorY, w - 120, h - cursorY - 60);
+      
+      cursorY += 60;
+      ctx.fillStyle = '#3f3f46'; ctx.font = 'bold 30px sans-serif';
+      ctx.fillText("SPECIFICATIONS", 100, cursorY);
+      cursorY += 50;
+      
+      ctx.font = '26px sans-serif'; ctx.fillStyle = '#52525b';
+      const specText = product.specs.split('\n');
+      specText.forEach(line => {
+         ctx.fillText(line, 100, cursorY);
+         cursorY += 40;
+      });
+      
+      cursorY += 40;
+
+      // Features if any
+      if (product.features?.length > 0 || product.options?.length > 0) {
+         ctx.fillStyle = '#3f3f46'; ctx.font = 'bold 30px sans-serif';
+         ctx.fillText("FEATURES & OPTIONS", 100, cursorY);
+         cursorY += 50;
+         
+         ctx.font = '26px sans-serif'; ctx.fillStyle = '#52525b';
+         const allFeatures = [...(product.options||[]), ...(product.features||[])];
+         allFeatures.forEach(f => {
+             ctx.fillText(`• ${f}`, 100, cursorY);
+             cursorY += 40;
+         });
+      }
+
       const dataUrl = canvas.toDataURL('image/png'); const a = document.createElement('a'); a.href = dataUrl; a.download = `${product.name}-card.png`; a.click(); showToast("이미지가 저장되었습니다.");
     };
     if(currentImage) img.src = currentImage; else showToast("이미지가 없어 생성할 수 없습니다.", "error");
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-50 flex items-center justify-center p-0 md:p-4 animate-in fade-in duration-200">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-50 flex items-center justify-center p-0 md:p-4 animate-in fade-in duration-200 print:hidden">
       <canvas ref={canvasRef} style={{ display: 'none' }} />
       {isZoomed && currentImage && (<div className="fixed inset-0 z-[70] bg-black/95 flex items-center justify-center p-8 cursor-zoom-out" onClick={() => setIsZoomed(false)}><img src={currentImage} className="max-w-full max-h-full object-contain" alt="Zoomed" /><button className="absolute top-6 right-6 text-white/50 hover:text-white"><X className="w-10 h-10" /></button></div>)}
       <div className="bg-white w-full h-full md:h-[90vh] md:w-full md:max-w-6xl md:rounded-3xl overflow-hidden shadow-2xl flex flex-col md:flex-row relative">
-        <button onClick={onClose} className="fixed md:absolute top-4 right-4 md:top-5 md:right-5 p-2 bg-white/50 hover:bg-zinc-100 rounded-full z-[60] transition-colors backdrop-blur"><X className="w-6 h-6 text-zinc-900" /></button>
-        <div className="flex-1 overflow-y-auto custom-scrollbar flex flex-col md:flex-row h-full">
+        <button onClick={onClose} className="hidden md:flex absolute top-5 right-5 p-2 bg-white/50 hover:bg-zinc-100 rounded-full z-[60] transition-colors backdrop-blur"><X className="w-6 h-6 text-zinc-900" /></button>
+        
+        {/* Mobile Sticky Header */}
+        <div className="md:hidden flex items-center justify-between p-4 border-b border-zinc-100 bg-white sticky top-0 z-50">
+           <button onClick={onClose} className="p-2 -ml-2"><ArrowLeft className="w-6 h-6"/></button>
+           <span className="font-bold text-sm truncate max-w-[200px]">{product.name}</span>
+           <div className="flex gap-2">
+              <button onClick={onToggleFavorite}><Star className={`w-6 h-6 ${isFavorite ? 'text-yellow-400 fill-yellow-400' : 'text-zinc-300'}`}/></button>
+           </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto custom-scrollbar flex flex-col md:flex-row h-full pb-20 md:pb-0">
           <div className="w-full md:w-1/2 bg-zinc-50 p-6 md:p-8 flex flex-col border-b md:border-b-0 md:border-r border-zinc-100 md:sticky md:top-0">
-            <div className="w-12 h-1.5 bg-zinc-200 rounded-full mx-auto mb-6 md:hidden"></div>
             <div className="flex-1 w-full bg-white rounded-2xl flex items-center justify-center shadow-sm border border-zinc-100 overflow-hidden p-8 mb-4 relative group min-h-[300px]">
                {currentImage ? (<><img src={currentImage} alt="Main" className="w-full h-full object-contain cursor-zoom-in mix-blend-multiply" onClick={() => setIsZoomed(true)} /><div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity"><div className="bg-black/80 backdrop-blur text-white px-4 py-2 rounded-full text-xs font-bold flex items-center"><Maximize2 className="w-4 h-4 mr-2"/> ZOOM</div></div></>) : <ImageIcon className="w-20 h-20 opacity-20 text-zinc-400" />}
-               <button onClick={onToggleFavorite} className="absolute top-4 left-4 p-3 bg-white rounded-full shadow-sm border border-zinc-100 hover:border-zinc-300 transition-all"><Star className={`w-5 h-5 ${isFavorite ? 'text-yellow-400 fill-yellow-400' : 'text-zinc-300'}`} /></button>
+               <button onClick={onToggleFavorite} className="absolute top-4 left-4 p-3 bg-white rounded-full shadow-sm border border-zinc-100 hover:border-zinc-300 transition-all hidden md:flex"><Star className={`w-5 h-5 ${isFavorite ? 'text-yellow-400 fill-yellow-400' : 'text-zinc-300'}`} /></button>
             </div>
             {images.length > 0 && (<div className="flex space-x-2 md:space-x-3 overflow-x-auto custom-scrollbar pb-1 px-1">{images.map((img, idx) => (<button key={idx} onClick={() => setCurrentImageIndex(idx)} className={`flex-shrink-0 w-10 h-10 md:w-20 md:h-20 rounded-lg md:rounded-xl overflow-hidden border-2 transition-all ${currentImageIndex === idx ? 'border-zinc-900 ring-2 ring-zinc-200' : 'border-transparent opacity-60 hover:opacity-100 bg-white'}`}><img src={img} alt={`Thumbnail ${idx}`} className="w-full h-full object-cover" /></button>))}</div>)}
           </div>
-          <div className="w-full md:w-1/2 p-6 md:p-12 bg-white pb-20 md:pb-12">
+          <div className="w-full md:w-1/2 p-6 md:p-12 bg-white pb-32 md:pb-12">
             <div className="mb-6 md:mb-10">
               <div className="flex flex-wrap gap-2 mb-2"><span className="inline-block px-2.5 py-0.5 bg-zinc-900 text-white text-[10px] font-extrabold rounded uppercase tracking-widest">{product.category}</span>{product.awards?.map(award => (<span key={award} className="inline-flex items-center px-2.5 py-0.5 bg-yellow-400/20 text-yellow-700 border border-yellow-400/30 text-[10px] font-bold rounded uppercase tracking-wide"><Trophy className="w-3 h-3 mr-1" /> {award}</span>))}</div>
               <h2 className="text-3xl md:text-5xl font-black text-zinc-900 mb-1 tracking-tight">{product.name}</h2>
@@ -923,10 +1085,43 @@ function ProductDetailModal({ product, onClose, onEdit, isAdmin, showToast, isFa
                  <div><h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2">Upholstery</h3><div className="flex flex-wrap gap-2">{product.upholsteryColors?.map((c, i) => (<div key={i} className="group relative"><div className="w-6 h-6 rounded-md border border-zinc-200 shadow-sm cursor-help" style={{ backgroundColor: c }} /><span className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 px-2 py-1 bg-black text-white text-[10px] rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10 pointer-events-none">{c}</span></div>))}</div></div>
               </div>
               {(product.productLink || product.attachments?.length > 0) && (<div className="pt-6 border-t border-zinc-100 flex flex-col gap-3">{product.productLink && <a href={product.productLink} target="_blank" rel="noreferrer" className="flex items-center text-sm font-bold text-zinc-900 hover:text-blue-600 transition-colors"><LinkIcon className="w-4 h-4 mr-2" /> Visit Product Website</a>}{product.attachments?.map((file, idx) => (<a key={idx} href={file.url} target="_blank" rel="noreferrer" className="flex items-center p-3 bg-zinc-50 border border-zinc-100 rounded-xl hover:border-zinc-300 hover:bg-white transition-all group"><div className="p-2 bg-white rounded-lg shadow-sm mr-3 group-hover:text-blue-500"><Paperclip className="w-4 h-4" /></div><span className="text-sm font-medium text-zinc-600 group-hover:text-zinc-900">{file.name}</span></a>))}</div>)}
+              
+              {/* Related Spaces Section */}
+              {relatedSpaces.length > 0 && (
+                <div className="pt-8 border-t border-zinc-100">
+                  <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-3">Related Spaces</h3>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    {relatedSpaces.map(space => (
+                      <button key={space.id} onClick={() => onNavigateSpace(space.id)} className="flex items-center p-3 bg-zinc-50 hover:bg-zinc-100 rounded-xl transition-all text-left border border-transparent hover:border-zinc-200 group">
+                         <div className="p-2 bg-white rounded-lg shadow-sm mr-3 text-zinc-400 group-hover:text-black transition-colors"><space.icon className="w-4 h-4" /></div>
+                         <span className="text-sm font-bold text-zinc-700">{space.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {contentImages.length > 0 && (<div className="pt-8 border-t border-zinc-100 space-y-4"><h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Detail View</h3><div className="flex flex-col gap-4">{contentImages.map((img, idx) => (<img key={idx} src={img} alt={`Detail ${idx+1}`} className="w-full h-auto rounded-xl border border-zinc-100" />))}</div></div>)}
             </div>
-            <div className="mt-8 md:mt-12 pt-6 border-t border-zinc-100 flex justify-between items-center"><div className="flex gap-3"><button onClick={handleShareImage} className="flex items-center px-5 py-2.5 bg-zinc-100 text-zinc-600 rounded-xl text-sm font-bold hover:bg-zinc-200 transition-colors"><ImgIcon className="w-4 h-4 mr-2" /> Share Image</button></div>{isAdmin && (<button onClick={onEdit} className="flex items-center px-6 py-2.5 bg-zinc-900 text-white rounded-xl text-sm font-bold hover:bg-black hover:shadow-lg transition-all"><Edit2 className="w-4 h-4 mr-2" /> Edit</button>)}</div>
+            
+            {/* Desktop Bottom Action Bar */}
+            <div className="hidden md:flex mt-12 pt-6 border-t border-zinc-100 justify-between items-center">
+              <div className="flex gap-3">
+                 <button onClick={handleShareImage} className="flex items-center px-5 py-2.5 bg-zinc-100 text-zinc-600 rounded-xl text-sm font-bold hover:bg-zinc-200 transition-colors"><ImgIcon className="w-4 h-4 mr-2" /> Share Image</button>
+                 <button onClick={() => window.print()} className="flex items-center px-5 py-2.5 bg-zinc-100 text-zinc-600 rounded-xl text-sm font-bold hover:bg-zinc-200 transition-colors"><Printer className="w-4 h-4 mr-2" /> Print PDF</button>
+              </div>
+              {isAdmin && (<button onClick={onEdit} className="flex items-center px-6 py-2.5 bg-zinc-900 text-white rounded-xl text-sm font-bold hover:bg-black hover:shadow-lg transition-all"><Edit2 className="w-4 h-4 mr-2" /> Edit</button>)}
+            </div>
           </div>
+        </div>
+        
+        {/* Mobile Sticky Bottom Bar */}
+        <div className="md:hidden absolute bottom-0 left-0 right-0 bg-white border-t border-zinc-100 p-4 flex justify-between items-center z-50 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)]">
+           <div className="flex gap-2">
+             <button onClick={handleShareImage} className="p-3 bg-zinc-100 rounded-xl"><ImgIcon className="w-5 h-5 text-zinc-600"/></button>
+             <button onClick={() => window.print()} className="p-3 bg-zinc-100 rounded-xl"><Printer className="w-5 h-5 text-zinc-600"/></button>
+           </div>
+           {isAdmin && <button onClick={onEdit} className="flex items-center px-6 py-3 bg-zinc-900 text-white rounded-xl text-sm font-bold">Edit Product</button>}
         </div>
       </div>
     </div>
