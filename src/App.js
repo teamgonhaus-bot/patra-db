@@ -36,8 +36,8 @@ const YOUR_FIREBASE_CONFIG = {
 // ----------------------------------------------------------------------
 // 상수 및 설정
 // ----------------------------------------------------------------------
-const APP_VERSION = "v0.6.0"; // Space Detail View & Product Curation
-const BUILD_DATE = "2024.06.10";
+const APP_VERSION = "v2.8.0"; // Banner Edit & Mobile List Optimization
+const BUILD_DATE = "2024.06.11";
 const ADMIN_PASSWORD = "adminlcg1"; 
 
 // Firebase 초기화
@@ -117,8 +117,8 @@ export default function App() {
   const [spaceSettings, setSpaceSettings] = useState({}); // { OFFICE: { banner, desc, images:[] } }
   
   // Space Edit Modals
-  const [editingSpaceId, setEditingSpaceId] = useState(null); // 공간 정보 수정 모달
-  const [managingSpaceProductsId, setManagingSpaceProductsId] = useState(null); // 공간 제품 큐레이션 모달
+  const [editingSpaceId, setEditingSpaceId] = useState(null);
+  const [managingSpaceProductsId, setManagingSpaceProductsId] = useState(null);
 
   // Scroll Handler
   const mainContentRef = useRef(null);
@@ -136,7 +136,7 @@ export default function App() {
     mainContentRef.current.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // URL Query Parameter (Product & Space)
+  // URL Query Parameter
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const sharedId = params.get('id');
@@ -198,7 +198,7 @@ export default function App() {
         if (doc.exists()) setBannerData(prev => ({ ...prev, ...doc.data() }));
       });
 
-      // Space Settings (v2)
+      // Space Settings
       const spaceDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'spaces_v2');
       const unsubSpaces = onSnapshot(spaceDocRef, (doc) => {
         if (doc.exists()) setSpaceSettings(doc.data());
@@ -259,7 +259,7 @@ export default function App() {
     localStorage.setItem('patra_favorites', JSON.stringify(newFavs));
   };
 
-  // Image Upload Helper
+  // Image Helper
   const processImage = (file) => {
     return new Promise((resolve) => {
       const reader = new FileReader();
@@ -323,22 +323,14 @@ export default function App() {
   };
 
   const handleSpaceProductToggle = async (spaceId, productId, isAdded) => {
-     // This function is for the Space Product Management Modal
-     // It updates the PRODUCT document's 'spaces' array directly
      const product = products.find(p => p.id === productId);
      if(!product) return;
-     
      let newSpaces = product.spaces || [];
-     if(isAdded) {
-        if(!newSpaces.includes(spaceId)) newSpaces.push(spaceId);
-     } else {
-        newSpaces = newSpaces.filter(s => s !== spaceId);
-     }
-     
+     if(isAdded) { if(!newSpaces.includes(spaceId)) newSpaces.push(spaceId); } 
+     else { newSpaces = newSpaces.filter(s => s !== spaceId); }
      if (isFirebaseAvailable && db) {
         await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'products', product.id), { spaces: newSpaces }, { merge: true });
      } else {
-        // Local logic
         const idx = products.findIndex(p => p.id === productId);
         const newProds = [...products];
         newProds[idx] = { ...product, spaces: newSpaces };
@@ -386,7 +378,6 @@ export default function App() {
   };
   const processedProducts = getProcessedProducts();
 
-  // Handle Move & CRUD (Same as before, omitted for brevity but functionality preserved in full code block)
   const handleMoveProduct = async (index, direction) => {
     if (!processedProducts || processedProducts.length <= 1) return;
     const targetIndex = direction === 'left' ? index - 1 : index + 1;
@@ -395,10 +386,8 @@ export default function App() {
     const swapItem = processedProducts[targetIndex];
     const currentOrder = currentItem.orderIndex !== undefined ? currentItem.orderIndex : currentItem.createdAt;
     const swapOrder = swapItem.orderIndex !== undefined ? swapItem.orderIndex : swapItem.createdAt;
-
     if (isFirebaseAvailable && db) {
       try {
-        const batch = 
         await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'products', currentItem.id), { orderIndex: swapOrder }, { merge: true });
         await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'products', swapItem.id), { orderIndex: currentOrder }, { merge: true });
       } catch (e) { showToast("순서 변경 실패", "error"); }
@@ -423,6 +412,7 @@ export default function App() {
     if (isFirebaseAvailable && db) {
       try {
         await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'products', docId), payload, { merge: true });
+        await logActivity(isEdit ? "UPDATE" : "CREATE", productData.name, isEdit ? "정보 수정" : "신규 등록");
       } catch (error) { showToast("저장 실패: " + error.message, "error"); return; }
     } else {
       const existingIndex = products.findIndex(p => String(p.id) === docId);
@@ -439,6 +429,7 @@ export default function App() {
     if (isFirebaseAvailable && db) {
       try {
         await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'products', String(productId)));
+        await logActivity("DELETE", productName, "삭제됨");
       } catch (error) { showToast("삭제 실패", "error"); return; }
     } else {
       const newProducts = products.filter(p => String(p.id) !== String(productId));
