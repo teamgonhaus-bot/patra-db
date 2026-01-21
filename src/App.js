@@ -9,7 +9,7 @@ import {
   Trophy, Heart, Link as LinkIcon, Paperclip, PieChart, Clock,
   Share2, Download, Maximize2, LayoutGrid, Zap, GripHorizontal, ImageIcon as ImgIcon,
   ChevronsUp, Camera, ImagePlus, Sofa, Briefcase, Users, Home as HomeIcon, MapPin,
-  Edit3, Grid, MoreVertical, MousePointer2, CheckSquare, XCircle, Printer, List
+  Edit3, Grid, MoreVertical, MousePointer2, CheckSquare, XCircle
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { 
@@ -30,13 +30,14 @@ const YOUR_FIREBASE_CONFIG = {
   messagingSenderId: "602422986176",
   appId: "1:602422986176:web:0170f7b5f9cd99e4c1f425",
   measurementId: "G-33FMQD1WVS"
+  // 예시: apiKey: "AIzaSy...",
 };
 
 // ----------------------------------------------------------------------
 // 상수 및 설정
 // ----------------------------------------------------------------------
-const APP_VERSION = "v0.5.6-fix"; // Share Logic Improved & UX Fixes
-const BUILD_DATE = "2024.06.20";
+const APP_VERSION = "v0.5.5-fix"; // Component Definition Fix
+const BUILD_DATE = "2024.06.15";
 const ADMIN_PASSWORD = "adminlcg1"; 
 
 // Firebase 초기화
@@ -103,7 +104,6 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [showScrollTop, setShowScrollTop] = useState(false);
-  const [myPickViewMode, setMyPickViewMode] = useState('grid'); // 'grid' or 'list'
   
   const [isAdmin, setIsAdmin] = useState(false);
   const [showAdminDashboard, setShowAdminDashboard] = useState(false);
@@ -451,113 +451,13 @@ export default function App() {
     }
   };
 
-  // ----------------------------------------------------------------------
-  // Shared Utilities (Canvas Generation for My Pick List)
-  // ----------------------------------------------------------------------
-  const handleShareMyPickList = () => {
-    if (processedProducts.length === 0) { showToast("공유할 제품이 없습니다.", "error"); return; }
-    
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
-    const rowHeight = 100;
-    const headerHeight = 150;
-    const footerHeight = 80;
-    const width = 800;
-    const height = headerHeight + (processedProducts.length * rowHeight) + footerHeight;
-    
-    canvas.width = width;
-    canvas.height = height;
-
-    // Background
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, width, height);
-
-    // Header
-    ctx.fillStyle = '#18181b';
-    ctx.fillRect(0, 0, width, 100);
-    ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 30px sans-serif';
-    ctx.fillText("PATRA DESIGN LAB - MY PICK", 40, 60);
-    
-    ctx.fillStyle = '#f4f4f5';
-    ctx.fillRect(0, 100, width, 50);
-    ctx.fillStyle = '#71717a';
-    ctx.font = 'bold 14px sans-serif';
-    ctx.fillText(`TOTAL: ${processedProducts.length} ITEMS`, 40, 130);
-    ctx.fillText(`DATE: ${new Date().toLocaleDateString()}`, width - 200, 130);
-
-    // List
-    let y = headerHeight;
-    
-    const loadAndDrawImages = async () => {
-      for (const [index, product] of processedProducts.entries()) {
-        const bg = index % 2 === 0 ? '#ffffff' : '#fafafa';
-        ctx.fillStyle = bg;
-        ctx.fillRect(0, y, width, rowHeight);
-        
-        // Product Info Text
-        ctx.fillStyle = '#18181b';
-        ctx.font = 'bold 20px sans-serif';
-        ctx.fillText(product.name, 120, y + 45);
-        
-        ctx.fillStyle = '#71717a';
-        ctx.font = '14px sans-serif';
-        ctx.fillText(product.category, 120, y + 70);
-
-        // Thumbnail (Placeholder or Image)
-        if (product.images && product.images.length > 0) {
-           try {
-             const img = new Image();
-             img.crossOrigin = "Anonymous";
-             img.src = product.images[0];
-             await new Promise(r => img.onload = r);
-             
-             // Aspect fill
-             const size = 80;
-             const scale = Math.max(size/img.width, size/img.height);
-             const x = (size - img.width * scale) / 2;
-             const yOff = (size - img.height * scale) / 2;
-             
-             ctx.save();
-             ctx.beginPath();
-             ctx.rect(20, y + 10, size, size);
-             ctx.clip();
-             ctx.drawImage(img, 20 + x, y + 10 + yOff, img.width * scale, img.height * scale);
-             ctx.restore();
-           } catch (e) {
-             ctx.fillStyle = '#e4e4e7';
-             ctx.fillRect(20, y + 10, 80, 80);
-           }
-        } else {
-           ctx.fillStyle = '#e4e4e7';
-           ctx.fillRect(20, y + 10, 80, 80);
-        }
-
-        // Specs (Short)
-        const specs = product.specs.replace(/\n/g, ' ').substring(0, 60) + (product.specs.length > 60 ? '...' : '');
-        ctx.fillStyle = '#a1a1aa';
-        ctx.font = 'italic 12px sans-serif';
-        ctx.fillText(specs, 350, y + 55);
-
-        y += rowHeight;
-      }
-
-      // Footer
-      ctx.fillStyle = '#18181b';
-      ctx.fillRect(0, height - footerHeight, width, footerHeight);
-      ctx.fillStyle = '#ffffff';
-      ctx.font = '12px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText("Generated by Patra Design Lab DB", width / 2, height - 35);
-      
-      const link = document.createElement('a');
-      link.download = `PATRA_MY_PICK_${new Date().toISOString().slice(0,10)}.jpg`;
-      link.href = canvas.toDataURL('image/jpeg', 0.8);
-      link.click();
-      showToast("마이픽 리스트가 이미지로 저장되었습니다.");
-    };
-    
-    loadAndDrawImages();
+  const handleFullBackup = async () => { 
+    const backupData = { version: APP_VERSION, date: new Date().toISOString(), products: products, logs: activityLogs };
+    const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a"); link.href = url; link.download = `PATRA_DB_BACKUP_${new Date().toISOString().slice(0,10)}.json`;
+    document.body.appendChild(link); link.click(); document.body.removeChild(link);
+    showToast("전체 데이터 백업이 완료되었습니다.");
   };
 
   return (
@@ -631,76 +531,16 @@ export default function App() {
               ) : (
                 <>
                   {!SPACES.find(s => s.id === activeCategory) && (
-                    <div className="mb-4 md:mb-8 flex flex-col md:flex-row md:items-end justify-between px-1 gap-4">
-                      <div>
-                        <h2 className="text-xl md:text-3xl font-extrabold text-zinc-900 tracking-tight flex items-center">
-                          {activeCategory === 'MY_PICK' ? 'MY PICK' : CATEGORIES.find(c => c.id === activeCategory)?.label || activeCategory}
-                          {activeCategory === 'MY_PICK' && <Heart className="ml-3 w-5 h-5 md:w-6 md:h-6 text-red-500 fill-red-500" />}
-                        </h2>
-                        <p className="text-zinc-500 text-xs md:text-sm mt-1 font-medium">{processedProducts.length} items found {!isFirebaseAvailable && <span className="ml-2 text-red-400 bg-red-50 px-2 py-0.5 rounded-full text-xs">Offline Mode</span>}</p>
-                      </div>
-                      
-                      {activeCategory === 'MY_PICK' && processedProducts.length > 0 && (
-                        <div className="flex space-x-2">
-                           <button onClick={() => setMyPickViewMode(myPickViewMode === 'grid' ? 'list' : 'grid')} className="flex items-center px-4 py-2 bg-white border border-zinc-200 rounded-lg text-sm font-bold text-zinc-600 hover:bg-zinc-50 transition-colors">
-                             {myPickViewMode === 'grid' ? <><List className="w-4 h-4 mr-2"/> List View</> : <><Grid className="w-4 h-4 mr-2"/> Grid View</>}
-                           </button>
-                           {myPickViewMode === 'list' && (
-                             <button onClick={handleShareMyPickList} className="flex items-center px-4 py-2 bg-zinc-900 text-white rounded-lg text-sm font-bold hover:bg-black transition-colors shadow-sm">
-                               <Share2 className="w-4 h-4 mr-2" /> Share List
-                             </button>
-                           )}
-                        </div>
-                      )}
+                    <div className="mb-4 md:mb-8 flex items-end justify-between px-1">
+                      <div><h2 className="text-xl md:text-3xl font-extrabold text-zinc-900 tracking-tight">{activeCategory === 'MY_PICK' ? 'MY PICK' : CATEGORIES.find(c => c.id === activeCategory)?.label || activeCategory}</h2><p className="text-zinc-500 text-xs md:text-sm mt-1 font-medium">{processedProducts.length} items found {!isFirebaseAvailable && <span className="ml-2 text-red-400 bg-red-50 px-2 py-0.5 rounded-full text-xs">Offline Mode</span>}</p></div>
                     </div>
                   )}
                   
-                  {activeCategory === 'MY_PICK' && myPickViewMode === 'list' ? (
-                    <div className="bg-white rounded-2xl border border-zinc-200 shadow-sm overflow-hidden mb-20">
-                      <table className="w-full text-left border-collapse">
-                        <thead>
-                          <tr className="bg-zinc-50 border-b border-zinc-100 text-xs text-zinc-500 uppercase tracking-wider">
-                            <th className="px-6 py-4 font-bold">Product</th>
-                            <th className="px-6 py-4 font-bold hidden md:table-cell">Category</th>
-                            <th className="px-6 py-4 font-bold hidden md:table-cell">Specs</th>
-                            <th className="px-6 py-4 font-bold text-right">Action</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-zinc-100">
-                          {processedProducts.map(product => (
-                            <tr key={product.id} className="hover:bg-zinc-50/50 transition-colors">
-                              <td className="px-6 py-4">
-                                <div className="flex items-center" onClick={() => setSelectedProduct(product)}>
-                                  <div className="w-12 h-12 rounded-lg bg-zinc-100 mr-4 flex-shrink-0 border border-zinc-200 overflow-hidden">
-                                     {product.images?.[0] ? <img src={product.images[0]} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center"><ImageIcon className="w-5 h-5 text-zinc-300"/></div>}
-                                  </div>
-                                  <div>
-                                    <div className="font-bold text-zinc-900">{product.name}</div>
-                                    <div className="text-xs text-zinc-400 md:hidden">{product.category}</div>
-                                  </div>
-                                </div>
-                              </td>
-                              <td className="px-6 py-4 hidden md:table-cell"><span className="px-2 py-1 bg-zinc-100 rounded text-xs font-bold text-zinc-600">{product.category}</span></td>
-                              <td className="px-6 py-4 hidden md:table-cell"><div className="text-sm text-zinc-500 truncate max-w-xs">{product.specs}</div></td>
-                              <td className="px-6 py-4 text-right">
-                                <button onClick={(e) => toggleFavorite(e, product.id)} className="p-2 rounded-full hover:bg-red-50 text-red-500">
-                                  <XCircle className="w-5 h-5" />
-                                </button>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                      {processedProducts.length === 0 && <div className="p-10 text-center text-zinc-400">마이픽에 담긴 제품이 없습니다.</div>}
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-8 pb-20">
-                      {processedProducts.map((product, idx) => (<ProductCard key={product.id} product={product} onClick={() => setSelectedProduct(product)} isAdmin={isAdmin} showMoveControls={isAdmin && sortOption === 'manual'} onMove={(dir) => handleMoveProduct(idx, dir)} isFavorite={favorites.includes(product.id)} onToggleFavorite={(e) => toggleFavorite(e, product.id)} />))}
-                      {isAdmin && activeCategory !== 'MY_PICK' && activeCategory !== 'NEW' && !SPACES.find(s => s.id === activeCategory) && (<button onClick={() => { setEditingProduct(null); setIsFormOpen(true); }} className="border-2 border-dashed border-zinc-200 rounded-2xl flex flex-col items-center justify-center min-h-[250px] md:min-h-[300px] text-zinc-400 hover:border-zinc-400 hover:text-zinc-600 hover:bg-zinc-50 transition-all group"><div className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-zinc-100 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform"><Plus className="w-6 h-6" /></div><span className="text-xs md:text-sm font-bold">Add Product</span></button>)}
-                    </div>
-                  )}
-                  
-                  {processedProducts.length === 0 && myPickViewMode === 'grid' && (<div className="flex flex-col items-center justify-center py-32 text-zinc-300"><CloudOff className="w-16 h-16 mb-4 opacity-50" /><p className="text-sm font-medium">No products found.</p>{isAdmin && SPACES.find(s => s.id === activeCategory) && (<button onClick={() => setManagingSpaceProductsId(activeCategory)} className="mt-4 px-4 py-2 bg-blue-50 text-blue-600 rounded-lg text-sm font-bold hover:bg-blue-100 transition-colors">+ Select Products</button>)}</div>)}
+                  <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-8 pb-20">
+                    {processedProducts.map((product, idx) => (<ProductCard key={product.id} product={product} onClick={() => setSelectedProduct(product)} isAdmin={isAdmin} showMoveControls={isAdmin && sortOption === 'manual'} onMove={(dir) => handleMoveProduct(idx, dir)} isFavorite={favorites.includes(product.id)} onToggleFavorite={(e) => toggleFavorite(e, product.id)} />))}
+                    {isAdmin && activeCategory !== 'MY_PICK' && activeCategory !== 'NEW' && !SPACES.find(s => s.id === activeCategory) && (<button onClick={() => { setEditingProduct(null); setIsFormOpen(true); }} className="border-2 border-dashed border-zinc-200 rounded-2xl flex flex-col items-center justify-center min-h-[250px] md:min-h-[300px] text-zinc-400 hover:border-zinc-400 hover:text-zinc-600 hover:bg-zinc-50 transition-all group"><div className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-zinc-100 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform"><Plus className="w-6 h-6" /></div><span className="text-xs md:text-sm font-bold">Add Product</span></button>)}
+                  </div>
+                  {processedProducts.length === 0 && (<div className="flex flex-col items-center justify-center py-32 text-zinc-300"><CloudOff className="w-16 h-16 mb-4 opacity-50" /><p className="text-sm font-medium">No products found for this space.</p>{isAdmin && SPACES.find(s => s.id === activeCategory) && (<button onClick={() => setManagingSpaceProductsId(activeCategory)} className="mt-4 px-4 py-2 bg-blue-50 text-blue-600 rounded-lg text-sm font-bold hover:bg-blue-100 transition-colors">+ Select Products</button>)}</div>)}
                 </>
               )}
             </>
@@ -711,7 +551,7 @@ export default function App() {
 
       {/* Modals & Overlays */}
       {toast && <div className="fixed bottom-8 right-8 bg-zinc-900 text-white px-5 py-3.5 rounded-xl shadow-2xl flex items-center space-x-3 animate-in slide-in-from-bottom-10 fade-in z-[90]">{toast.type === 'success' ? <Check className="w-5 h-5 text-green-400" /> : <Info className="w-5 h-5 text-red-400" />}<span className="text-sm font-bold tracking-wide">{toast.message}</span></div>}
-      {selectedProduct && <ProductDetailModal product={selectedProduct} onClose={() => setSelectedProduct(null)} onEdit={() => { setEditingProduct(selectedProduct); setIsFormOpen(true); }} isAdmin={isAdmin} showToast={showToast} isFavorite={favorites.includes(selectedProduct.id)} onToggleFavorite={(e) => toggleFavorite(e, selectedProduct.id)} onNavigateSpace={(spaceId) => { setActiveCategory(spaceId); setSelectedProduct(null); }} />}
+      {selectedProduct && <ProductDetailModal product={selectedProduct} onClose={() => setSelectedProduct(null)} onEdit={() => { setEditingProduct(selectedProduct); setIsFormOpen(true); }} isAdmin={isAdmin} showToast={showToast} isFavorite={favorites.includes(selectedProduct.id)} onToggleFavorite={(e) => toggleFavorite(e, selectedProduct.id)} />}
       {isFormOpen && <ProductFormModal categories={CATEGORIES.filter(c => !c.isSpecial)} initialCategory={activeCategory} existingData={editingProduct} onClose={() => { setIsFormOpen(false); setEditingProduct(null); }} onSave={handleSaveProduct} onDelete={handleDeleteProduct} isFirebaseAvailable={isFirebaseAvailable} />}
       
       {/* Space Modals (Missing Components Restored) */}
@@ -989,14 +829,15 @@ function DashboardView({ products, favorites, setActiveCategory, setSelectedProd
 
 function ProductCard({ product, onClick, showMoveControls, onMove, isFavorite, onToggleFavorite }) {
   const mainImage = product.images && product.images.length > 0 ? product.images[0] : null;
-  const awardBadge = product.awards?.[0]; // Only showing award badge as requested
-  
+  const materialBadge = product.materials?.[0];
+  const awardBadge = product.awards?.[0];
   return (
     <div onClick={onClick} className="bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer group border border-zinc-100 relative flex flex-col h-full">
       <div className="relative h-32 md:h-64 bg-zinc-50 p-2 md:p-6 flex items-center justify-center overflow-hidden">
         <div className="absolute top-2 left-2 md:top-4 md:left-4 flex flex-col gap-1 z-10 items-start">
-           {/* Removed Material Badge & New Badge as per request, only keeping Award */}
+           {product.isNew && <span className="bg-black text-white text-[8px] md:text-[9px] font-extrabold px-1.5 py-0.5 md:px-2 md:py-1 rounded shadow-sm tracking-wide">NEW</span>}
            {awardBadge && <span className="bg-yellow-400 text-yellow-900 text-[8px] md:text-[9px] font-bold px-1.5 py-0.5 md:px-2 md:py-1 rounded shadow-sm flex items-center"><Trophy className="w-2 h-2 md:w-2.5 md:h-2.5 mr-1" /> {awardBadge}</span>}
+           {materialBadge && !awardBadge && <span className="bg-white/90 backdrop-blur border border-zinc-200 text-zinc-600 text-[8px] md:text-[9px] font-bold px-1.5 py-0.5 md:px-2 md:py-1 rounded uppercase tracking-wide">{materialBadge}</span>}
         </div>
         <button onClick={onToggleFavorite} className="absolute top-2 right-2 md:top-4 md:right-4 z-20 text-zinc-300 hover:text-yellow-400 hover:scale-110 transition-all"><Star className={`w-4 h-4 md:w-5 md:h-5 ${isFavorite ? 'text-yellow-400 fill-yellow-400' : ''}`} /></button>
         <div className="w-full h-full flex items-center justify-center transition-transform duration-500 group-hover:scale-105">
@@ -1030,7 +871,7 @@ function ProductCard({ product, onClick, showMoveControls, onMove, isFavorite, o
   );
 }
 
-function ProductDetailModal({ product, onClose, onEdit, isAdmin, showToast, isFavorite, onToggleFavorite, onNavigateSpace }) {
+function ProductDetailModal({ product, onClose, onEdit, isAdmin, showToast, isFavorite, onToggleFavorite }) {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [isZoomed, setIsZoomed] = useState(false);
   const canvasRef = useRef(null);
@@ -1038,111 +879,19 @@ function ProductDetailModal({ product, onClose, onEdit, isAdmin, showToast, isFa
   const images = product.images || [];
   const currentImage = images.length > 0 ? images[currentImageIndex] : null;
   const contentImages = product.contentImages || [];
-  
   const copyToClipboard = () => { navigator.clipboard.writeText(`[${product.name}]\n${product.specs}`); showToast("Copied to clipboard"); };
-  
-  // Robust Share Image Generation (Dynamic Height)
+  const copyShareLink = () => { navigator.clipboard.writeText(`${window.location.origin}${window.location.pathname}?id=${product.id}`); showToast("Link copied"); };
   const handleShareImage = () => {
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
-    const w = 1080;
-    
-    // 1. Calculate height needed
-    const headerH = 200;
-    const imageH = 1000; // Fixed aspect or dynamic? Let's use fixed slot for safety
-    const infoStart = headerH + imageH + 50;
-    
-    // Font settings for measurement
-    ctx.font = '24px sans-serif';
-    const specLines = product.specs.split('\n');
-    const lineHeight = 35;
-    const specsH = specLines.length * lineHeight;
-    
-    // Features & Options calc (Rough estimate)
-    const extraH = 300; 
-    
-    // Total Height (Dynamic)
-    const h = infoStart + 250 + specsH + extraH + 200; // Buffer
-    
-    canvas.width = w;
-    canvas.height = h;
-
-    // Background
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, w, h);
-    
-    // Header Block
-    ctx.fillStyle = '#18181b';
-    ctx.fillRect(0, 0, w, 150);
-    ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 40px sans-serif';
-    ctx.textAlign = 'left';
-    ctx.fillText("PATRA DESIGN LAB", 60, 90);
-    
-    // Image drawing
-    const img = new Image();
-    img.crossOrigin = "Anonymous";
+    const canvas = canvasRef.current; if (!canvas) return; const ctx = canvas.getContext('2d'); const w = 1080; const h = 1350; canvas.width = w; canvas.height = h; const img = new Image(); img.crossOrigin = "Anonymous";
     img.onload = () => {
-      const ratio = Math.min((w - 120) / img.width, imageH / img.height);
-      const imgW = img.width * ratio;
-      const imgH = img.height * ratio;
-      ctx.drawImage(img, (w - imgW) / 2, 200, imgW, imgH);
-      
-      // Info Block
-      let y = infoStart;
-      ctx.textAlign = 'center';
-      
-      ctx.fillStyle = '#18181b';
-      ctx.font = 'bold 80px sans-serif';
-      ctx.fillText(product.name, w/2, y);
-      y += 60;
-      
-      ctx.fillStyle = '#71717a';
-      ctx.font = 'bold 35px sans-serif';
-      ctx.fillText(product.category.toUpperCase(), w/2, y);
-      y += 50;
-
-      if(product.designer) { 
-        ctx.fillStyle = '#a1a1aa'; 
-        ctx.font = '30px sans-serif'; 
-        ctx.fillText(`Designed by ${product.designer}`, w/2, y);
-        y += 60;
-      }
-      
-      y += 40;
-
-      // Specs Container
-      ctx.fillStyle = '#f4f4f5';
-      ctx.fillRect(60, y, w - 120, specsH + 100);
-      
-      ctx.fillStyle = '#3f3f46';
-      ctx.font = '24px sans-serif';
-      ctx.textAlign = 'left';
-      
-      let textY = y + 60;
-      specLines.forEach(line => {
-        ctx.fillText(line, 100, textY);
-        textY += lineHeight;
-      });
-
-      // Footer
-      ctx.textAlign = 'center';
-      ctx.fillStyle = '#d4d4d8';
-      ctx.font = '20px sans-serif';
-      ctx.fillText("Generated by Patra Design Lab DB", w/2, h - 50);
-
-      const dataUrl = canvas.toDataURL('image/png');
-      const a = document.createElement('a');
-      a.href = dataUrl;
-      a.download = `${product.name}-card-full.png`;
-      a.click();
-      showToast("이미지가 저장되었습니다.");
+      ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, w, h); ctx.fillStyle = '#18181b'; ctx.fillRect(0, 0, w, 120); ctx.fillStyle = '#ffffff'; ctx.font = 'bold 40px sans-serif'; ctx.textAlign = 'left'; ctx.fillText("PATRA DESIGN LAB", 60, 75);
+      const ratio = Math.min((w - 120) / img.width, (h * 0.5) / img.height); const imgW = img.width * ratio; const imgH = img.height * ratio; ctx.drawImage(img, (w - imgW) / 2, 200, imgW, imgH);
+      ctx.textAlign = 'center'; ctx.fillStyle = '#18181b'; ctx.font = 'bold 70px sans-serif'; ctx.fillText(product.name, w/2, h * 0.65); ctx.fillStyle = '#71717a'; ctx.font = 'bold 30px sans-serif'; ctx.fillText(product.category.toUpperCase(), w/2, h * 0.6);
+      if(product.designer) { ctx.fillStyle = '#a1a1aa'; ctx.font = '30px sans-serif'; ctx.fillText(`Designed by ${product.designer}`, w/2, h * 0.69); }
+      ctx.fillStyle = '#f4f4f5'; ctx.fillRect(60, h * 0.73, w - 120, 300); ctx.fillStyle = '#3f3f46'; ctx.font = '24px sans-serif'; ctx.textAlign = 'left'; const specLines = product.specs.split('\n').slice(0, 8); let y = h * 0.77; specLines.forEach(line => { ctx.fillText(line, 100, y); y += 35; });
+      const dataUrl = canvas.toDataURL('image/png'); const a = document.createElement('a'); a.href = dataUrl; a.download = `${product.name}-card.png`; a.click(); showToast("이미지가 저장되었습니다.");
     };
-    if(currentImage) img.src = currentImage; 
-    else {
-      // Handle no image case
-       showToast("이미지가 없어 생성할 수 없습니다.", "error");
-    }
+    if(currentImage) img.src = currentImage; else showToast("이미지가 없어 생성할 수 없습니다.", "error");
   };
 
   return (
@@ -1150,12 +899,7 @@ function ProductDetailModal({ product, onClose, onEdit, isAdmin, showToast, isFa
       <canvas ref={canvasRef} style={{ display: 'none' }} />
       {isZoomed && currentImage && (<div className="fixed inset-0 z-[70] bg-black/95 flex items-center justify-center p-8 cursor-zoom-out" onClick={() => setIsZoomed(false)}><img src={currentImage} className="max-w-full max-h-full object-contain" alt="Zoomed" /><button className="absolute top-6 right-6 text-white/50 hover:text-white"><X className="w-10 h-10" /></button></div>)}
       <div className="bg-white w-full h-full md:h-[90vh] md:w-full md:max-w-6xl md:rounded-3xl overflow-hidden shadow-2xl flex flex-col md:flex-row relative">
-        {/* Buttons: Back and Close */}
-        <div className="absolute top-4 left-4 z-[60] md:hidden">
-           <button onClick={onClose} className="p-2 bg-white/50 hover:bg-zinc-100 rounded-full transition-colors backdrop-blur shadow-sm"><ArrowLeft className="w-6 h-6 text-zinc-900" /></button>
-        </div>
         <button onClick={onClose} className="fixed md:absolute top-4 right-4 md:top-5 md:right-5 p-2 bg-white/50 hover:bg-zinc-100 rounded-full z-[60] transition-colors backdrop-blur"><X className="w-6 h-6 text-zinc-900" /></button>
-        
         <div className="flex-1 overflow-y-auto custom-scrollbar flex flex-col md:flex-row h-full">
           <div className="w-full md:w-1/2 bg-zinc-50 p-6 md:p-8 flex flex-col border-b md:border-b-0 md:border-r border-zinc-100 md:sticky md:top-0">
             <div className="w-12 h-1.5 bg-zinc-200 rounded-full mx-auto mb-6 md:hidden"></div>
@@ -1165,8 +909,7 @@ function ProductDetailModal({ product, onClose, onEdit, isAdmin, showToast, isFa
             </div>
             {images.length > 0 && (<div className="flex space-x-2 md:space-x-3 overflow-x-auto custom-scrollbar pb-1 px-1">{images.map((img, idx) => (<button key={idx} onClick={() => setCurrentImageIndex(idx)} className={`flex-shrink-0 w-10 h-10 md:w-20 md:h-20 rounded-lg md:rounded-xl overflow-hidden border-2 transition-all ${currentImageIndex === idx ? 'border-zinc-900 ring-2 ring-zinc-200' : 'border-transparent opacity-60 hover:opacity-100 bg-white'}`}><img src={img} alt={`Thumbnail ${idx}`} className="w-full h-full object-cover" /></button>))}</div>)}
           </div>
-          {/* Added pb-24 to ensure content is not cut off on mobile scroll */}
-          <div className="w-full md:w-1/2 p-6 md:p-12 bg-white pb-24 md:pb-12">
+          <div className="w-full md:w-1/2 p-6 md:p-12 bg-white pb-20 md:pb-12">
             <div className="mb-6 md:mb-10">
               <div className="flex flex-wrap gap-2 mb-2"><span className="inline-block px-2.5 py-0.5 bg-zinc-900 text-white text-[10px] font-extrabold rounded uppercase tracking-widest">{product.category}</span>{product.awards?.map(award => (<span key={award} className="inline-flex items-center px-2.5 py-0.5 bg-yellow-400/20 text-yellow-700 border border-yellow-400/30 text-[10px] font-bold rounded uppercase tracking-wide"><Trophy className="w-3 h-3 mr-1" /> {award}</span>))}</div>
               <h2 className="text-3xl md:text-5xl font-black text-zinc-900 mb-1 tracking-tight">{product.name}</h2>
@@ -1174,26 +917,7 @@ function ProductDetailModal({ product, onClose, onEdit, isAdmin, showToast, isFa
             </div>
             <div className="space-y-6 md:space-y-10">
               <div><h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-3 flex items-center justify-between">Specifications <button onClick={copyToClipboard} className="text-zinc-400 hover:text-zinc-900"><Copy className="w-4 h-4" /></button></h3><p className="text-sm text-zinc-600 leading-relaxed bg-zinc-50 p-4 md:p-6 rounded-2xl border border-zinc-100 whitespace-pre-wrap">{product.specs}</p></div>
-              
-              {/* Features & Spaces */}
-              {(product.features?.length > 0 || product.spaces?.length > 0) && (
-                <div>
-                   <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-3">Related Info</h3>
-                   <div className="flex flex-wrap gap-2">
-                     {product.spaces?.map(spaceId => {
-                        const space = SPACES.find(s => s.id === spaceId);
-                        if(!space) return null;
-                        return (
-                           <button key={spaceId} onClick={() => onNavigateSpace(spaceId)} className="px-3 py-1.5 bg-indigo-50 text-indigo-600 border border-indigo-100 rounded-lg text-xs font-bold hover:bg-indigo-100 transition-colors flex items-center">
-                              {React.createElement(space.icon, { className: "w-3 h-3 mr-1.5" })} {space.label}
-                           </button>
-                        );
-                     })}
-                     {product.features?.map((ft, idx) => (<span key={idx} className="px-3 py-1.5 bg-zinc-100 text-zinc-600 rounded-lg text-xs font-medium flex items-center"><Check className="w-3 h-3 mr-1.5" /> {ft}</span>))}
-                   </div>
-                </div>
-              )}
-              
+              {(product.features?.length > 0 || product.options?.length > 0) && (<div><h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-3">Features & Options</h3><div className="flex flex-wrap gap-2">{product.options?.map((opt, idx) => (<span key={idx} className="px-3 py-1.5 bg-blue-50 text-blue-600 border border-blue-100 rounded-lg text-xs font-bold">{opt}</span>))}{product.features?.map((ft, idx) => (<span key={idx} className="px-3 py-1.5 bg-zinc-100 text-zinc-600 rounded-lg text-xs font-medium flex items-center"><Check className="w-3 h-3 mr-1.5" /> {ft}</span>))}</div></div>)}
               <div className="grid grid-cols-2 gap-4 md:gap-8">
                  <div><h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2">Body Color</h3><div className="flex flex-wrap gap-2">{product.bodyColors?.map((c, i) => (<div key={i} className="group relative"><div className="w-6 h-6 rounded-full border border-zinc-200 shadow-sm cursor-help" style={{ backgroundColor: c }} /><span className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 px-2 py-1 bg-black text-white text-[10px] rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10 pointer-events-none">{c}</span></div>))}</div></div>
                  <div><h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2">Upholstery</h3><div className="flex flex-wrap gap-2">{product.upholsteryColors?.map((c, i) => (<div key={i} className="group relative"><div className="w-6 h-6 rounded-md border border-zinc-200 shadow-sm cursor-help" style={{ backgroundColor: c }} /><span className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 px-2 py-1 bg-black text-white text-[10px] rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10 pointer-events-none">{c}</span></div>))}</div></div>
@@ -1201,7 +925,7 @@ function ProductDetailModal({ product, onClose, onEdit, isAdmin, showToast, isFa
               {(product.productLink || product.attachments?.length > 0) && (<div className="pt-6 border-t border-zinc-100 flex flex-col gap-3">{product.productLink && <a href={product.productLink} target="_blank" rel="noreferrer" className="flex items-center text-sm font-bold text-zinc-900 hover:text-blue-600 transition-colors"><LinkIcon className="w-4 h-4 mr-2" /> Visit Product Website</a>}{product.attachments?.map((file, idx) => (<a key={idx} href={file.url} target="_blank" rel="noreferrer" className="flex items-center p-3 bg-zinc-50 border border-zinc-100 rounded-xl hover:border-zinc-300 hover:bg-white transition-all group"><div className="p-2 bg-white rounded-lg shadow-sm mr-3 group-hover:text-blue-500"><Paperclip className="w-4 h-4" /></div><span className="text-sm font-medium text-zinc-600 group-hover:text-zinc-900">{file.name}</span></a>))}</div>)}
               {contentImages.length > 0 && (<div className="pt-8 border-t border-zinc-100 space-y-4"><h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Detail View</h3><div className="flex flex-col gap-4">{contentImages.map((img, idx) => (<img key={idx} src={img} alt={`Detail ${idx+1}`} className="w-full h-auto rounded-xl border border-zinc-100" />))}</div></div>)}
             </div>
-            <div className="mt-8 md:mt-12 pt-6 border-t border-zinc-100 flex justify-between items-center"><div className="flex gap-3"><button onClick={handleShareImage} className="flex items-center px-5 py-2.5 bg-zinc-100 text-zinc-600 rounded-xl text-sm font-bold hover:bg-zinc-200 transition-colors"><ImgIcon className="w-4 h-4 mr-2" /> Share Card</button></div>{isAdmin && (<button onClick={onEdit} className="flex items-center px-6 py-2.5 bg-zinc-900 text-white rounded-xl text-sm font-bold hover:bg-black hover:shadow-lg transition-all"><Edit2 className="w-4 h-4 mr-2" /> Edit</button>)}</div>
+            <div className="mt-8 md:mt-12 pt-6 border-t border-zinc-100 flex justify-between items-center"><div className="flex gap-3"><button onClick={handleShareImage} className="flex items-center px-5 py-2.5 bg-zinc-100 text-zinc-600 rounded-xl text-sm font-bold hover:bg-zinc-200 transition-colors"><ImgIcon className="w-4 h-4 mr-2" /> Share Image</button></div>{isAdmin && (<button onClick={onEdit} className="flex items-center px-6 py-2.5 bg-zinc-900 text-white rounded-xl text-sm font-bold hover:bg-black hover:shadow-lg transition-all"><Edit2 className="w-4 h-4 mr-2" /> Edit</button>)}</div>
           </div>
         </div>
       </div>
