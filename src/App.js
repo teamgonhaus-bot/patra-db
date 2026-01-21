@@ -8,14 +8,14 @@ import {
   ArrowLeft, ArrowRight, ArrowUp, ArrowDown, Layers, Star,
   Trophy, Heart, Link as LinkIcon, Paperclip, PieChart, Clock,
   Share2, Download, Maximize2, LayoutGrid, Zap, GripHorizontal, ImageIcon as ImgIcon,
-  ChevronsUp
+  ChevronsUp, Camera, ImagePlus, Sofa, Briefcase, Users, Home as HomeIcon, MapPin
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { 
   getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged 
 } from 'firebase/auth';
 import { 
-  getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot, addDoc, query, orderBy, limit 
+  getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot, addDoc, query, orderBy, limit, getDoc 
 } from 'firebase/firestore';
 
 // ----------------------------------------------------------------------
@@ -35,8 +35,8 @@ const YOUR_FIREBASE_CONFIG = {
 // ----------------------------------------------------------------------
 // 상수 및 설정
 // ----------------------------------------------------------------------
-const APP_VERSION = "v2.7.0"; // Mobile Scroll & Layout Fix
-const BUILD_DATE = "2024.06.05";
+const APP_VERSION = "v0.5.0"; // Space Curation & Text Edit
+const BUILD_DATE = "2024.06.09";
 const ADMIN_PASSWORD = "adminlcg1"; 
 
 // Firebase 초기화
@@ -69,15 +69,24 @@ try {
 const CATEGORIES = [
   { id: 'ALL', label: 'Total View', isSpecial: true, color: '#18181b' },
   { id: 'NEW', label: 'New Arrivals', isSpecial: true, color: '#ef4444' },
-  { id: 'EXECUTIVE', label: 'EXECUTIVE', color: '#2563eb' },
-  { id: 'TASK', label: 'TASK', color: '#0891b2' },
-  { id: 'CONFERENCE', label: 'CONFERENCE', color: '#7c3aed' },
-  { id: 'GUEST', label: 'GUEST', color: '#db2777' },
-  { id: 'STOOL', label: 'STOOL', color: '#059669' },
-  { id: 'LOUNGE', label: 'LOUNGE', color: '#d97706' },
-  { id: 'HOME', label: 'HOME', color: '#ea580c' },
-  { id: 'TABLE', label: 'TABLE', color: '#475569' },
-  { id: 'ETC', label: 'ETC', color: '#9ca3af' }
+  // Collections
+  { id: 'EXECUTIVE', label: 'Executive', color: '#2563eb' },
+  { id: 'TASK', label: 'Task', color: '#0891b2' },
+  { id: 'CONFERENCE', label: 'Conference', color: '#7c3aed' },
+  { id: 'GUEST', label: 'Guest', color: '#db2777' },
+  { id: 'STOOL', label: 'Stool', color: '#059669' },
+  { id: 'LOUNGE', label: 'Lounge', color: '#d97706' },
+  { id: 'HOME', label: 'Home', color: '#ea580c' },
+  { id: 'TABLE', label: 'Table', color: '#475569' },
+  { id: 'ETC', label: 'Etc', color: '#9ca3af' }
+];
+
+// 공간 정의 (New Feature)
+const SPACES = [
+  { id: 'OFFICE', label: 'Office Space', icon: Briefcase },
+  { id: 'MEETING', label: 'Meeting Room', icon: Users },
+  { id: 'LOUNGE_SPACE', label: 'Lounge & Lobby', icon: Sofa },
+  { id: 'HOME_SPACE', label: 'Home Interior', icon: HomeIcon },
 ];
 
 export default function App() {
@@ -101,16 +110,17 @@ export default function App() {
   const [activityLogs, setActivityLogs] = useState([]);
   const [toast, setToast] = useState(null);
   const [favorites, setFavorites] = useState([]);
+  
+  // Banner States
+  const [bannerData, setBannerData] = useState({ url: null, title: 'Design Lab DB', subtitle: 'Integrated Product Database & Archives' });
+  const [spaceImages, setSpaceImages] = useState({}); // { OFFICE: url, ... }
 
   // Scroll Handler
   const mainContentRef = useRef(null);
   useEffect(() => {
     const handleScroll = () => {
-      if (mainContentRef.current.scrollTop > 300) {
-        setShowScrollTop(true);
-      } else {
-        setShowScrollTop(false);
-      }
+      if (mainContentRef.current.scrollTop > 300) setShowScrollTop(true);
+      else setShowScrollTop(false);
     };
     const div = mainContentRef.current;
     if (div) div.addEventListener('scroll', handleScroll);
@@ -134,7 +144,7 @@ export default function App() {
     }
   }, [products]);
 
-  // Auth Init
+  // Auth & Initial Data Load
   useEffect(() => {
     const initApp = async () => {
       if (isFirebaseAvailable && auth) {
@@ -159,21 +169,43 @@ export default function App() {
     if (savedFavs) setFavorites(JSON.parse(savedFavs));
   }, []);
 
-  // Data Sync
+  // Data Sync (Products, Banners, Spaces)
   useEffect(() => {
     if (isFirebaseAvailable && user && db) {
+      // 1. Products
       const qProducts = collection(db, 'artifacts', appId, 'public', 'data', 'products');
       const unsubProducts = onSnapshot(qProducts, (snapshot) => {
         const loadedProducts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         setProducts(loadedProducts);
         setIsLoading(false);
-      }, (error) => {
-        console.error("Sync Error:", error);
-        showToast("서버 동기화 오류. 로컬 모드로 전환합니다.", "error");
-        setIsLoading(false);
       });
-      return () => unsubProducts();
-    } 
+
+      // 2. Main Banner
+      const bannerDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'banner');
+      const unsubBanner = onSnapshot(bannerDocRef, (doc) => {
+        if (doc.exists()) {
+          setBannerData(prev => ({ ...prev, ...doc.data() }));
+        }
+      });
+
+      // 3. Space Images
+      const spaceDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'spaces');
+      const unsubSpaces = onSnapshot(spaceDocRef, (doc) => {
+        if (doc.exists()) {
+          setSpaceImages(doc.data());
+        }
+      });
+
+      return () => {
+        unsubProducts();
+        unsubBanner();
+        unsubSpaces();
+      };
+    } else {
+      // Local Banner Load
+      const localBanner = localStorage.getItem('patra_banner_data');
+      if (localBanner) setBannerData(JSON.parse(localBanner));
+    }
   }, [user]);
 
   const loadFromLocalStorage = () => {
@@ -222,6 +254,71 @@ export default function App() {
     localStorage.setItem('patra_favorites', JSON.stringify(newFavs));
   };
 
+  // Image Upload Helpers
+  const processImage = (file) => {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          const MAX_WIDTH = 1600; // Larger for banners
+          let width = img.width;
+          let height = img.height;
+          if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; }
+          canvas.width = width; canvas.height = height;
+          const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0, width, height);
+          resolve(canvas.toDataURL('image/jpeg', 0.85));
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handleBannerUpload = async (e) => {
+    if (!isAdmin) return;
+    const file = e.target.files[0];
+    if (!file) return;
+    try {
+      const resizedImage = await processImage(file);
+      const newData = { ...bannerData, url: resizedImage };
+      if (isFirebaseAvailable && db) {
+        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'banner'), newData, { merge: true });
+      } else {
+        localStorage.setItem('patra_banner_data', JSON.stringify(newData));
+        setBannerData(newData);
+      }
+      showToast("배너 이미지가 업데이트되었습니다.");
+    } catch (error) { showToast("이미지 처리 실패", "error"); }
+  };
+
+  const handleBannerTextChange = async (key, value) => {
+    if (!isAdmin) return;
+    const newData = { ...bannerData, [key]: value };
+    setBannerData(newData); // Optimistic update
+  };
+
+  const saveBannerText = async () => {
+    if (isFirebaseAvailable && db) {
+      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'banner'), bannerData, { merge: true });
+      showToast("배너 문구가 저장되었습니다.");
+    }
+  };
+
+  const handleSpaceImageUpload = async (e, spaceId) => {
+    if (!isAdmin) return;
+    const file = e.target.files[0];
+    if (!file) return;
+    try {
+      const resizedImage = await processImage(file);
+      if (isFirebaseAvailable && db) {
+        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'spaces'), { [spaceId]: resizedImage }, { merge: true });
+      }
+      showToast("공간 이미지가 업데이트되었습니다.");
+    } catch (error) { showToast("이미지 처리 실패", "error"); }
+  };
+
   const logActivity = async (action, productName, details = "") => {
     if (!isFirebaseAvailable || !db) return;
     try { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'logs'), { action, productName, details, timestamp: Date.now(), adminId: 'admin' }); } catch (e) { console.error(e); }
@@ -249,7 +346,12 @@ export default function App() {
       if (activeCategory === 'DASHBOARD') matchesCategory = false; 
       else if (activeCategory === 'MY_PICK') matchesCategory = favorites.includes(product.id);
       else if (activeCategory === 'NEW') matchesCategory = product.isNew;
-      else if (activeCategory !== 'ALL') matchesCategory = product.category === activeCategory;
+      else if (activeCategory === 'ALL') matchesCategory = true;
+      else if (SPACES.find(s => s.id === activeCategory)) {
+        // Space Filter: Check if product.spaces array contains activeCategory
+        matchesCategory = product.spaces && product.spaces.includes(activeCategory);
+      }
+      else matchesCategory = product.category === activeCategory;
 
       const searchLower = searchTerm.toLowerCase();
       const matchesSearch = 
@@ -304,6 +406,7 @@ export default function App() {
   const handleSaveProduct = async (productData) => {
     const docId = productData.id ? String(productData.id) : String(Date.now());
     const isEdit = !!productData.id && products.some(p => String(p.id) === docId);
+    
     const payload = {
       ...productData,
       id: docId,
@@ -363,13 +466,15 @@ export default function App() {
           <button onClick={(e) => { e.stopPropagation(); setIsMobileMenuOpen(false); }} className="md:hidden text-zinc-400 hover:text-zinc-600"><X className="w-6 h-6" /></button>
         </div>
 
-        <nav className="flex-1 overflow-y-auto py-6 px-4 space-y-1 custom-scrollbar">
-          <div className="space-y-2 mb-8">
+        <nav className="flex-1 overflow-y-auto py-6 px-4 space-y-4 custom-scrollbar">
+          
+          {/* Main Views */}
+          <div className="space-y-1">
             {CATEGORIES.filter(c => c.isSpecial).map((cat) => (
               <button
                 key={cat.id}
                 onClick={() => { setActiveCategory(cat.id); setIsMobileMenuOpen(false); }}
-                className={`w-full text-left px-4 py-3.5 rounded-xl text-sm font-medium transition-all duration-200 flex items-center justify-between group border
+                className={`w-full text-left px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 flex items-center justify-between group border
                   ${activeCategory === cat.id 
                     ? 'bg-zinc-900 text-white shadow-lg border-zinc-900' 
                     : 'bg-white text-zinc-600 border-zinc-100 hover:bg-zinc-50 hover:border-zinc-300'}
@@ -385,34 +490,67 @@ export default function App() {
             ))}
           </div>
 
-          <div className="text-[10px] font-bold text-zinc-400 mb-3 px-3 flex justify-between items-center tracking-widest uppercase border-b border-zinc-100 pb-2">
-             <span>Collections</span>
-             {isFirebaseAvailable ? <div className="flex items-center text-green-500"><Cloud className="w-3 h-3 mr-1" /> ON</div> : <div className="flex items-center text-zinc-300"><CloudOff className="w-3 h-3 mr-1" /> OFF</div>}
-          </div>
-          
-          <div className="space-y-0.5">
-            {CATEGORIES.filter(c => !c.isSpecial).map((cat) => (
-              <button
-                key={cat.id}
-                onClick={() => { setActiveCategory(cat.id); setIsMobileMenuOpen(false); }}
-                className={`w-full text-left px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 flex items-center justify-between group
-                  ${activeCategory === cat.id ? 'bg-zinc-100 text-zinc-900 font-bold' : 'text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900'}
-                `}
-              >
-                {cat.label}
-              </button>
-            ))}
+          {/* SPACES Section */}
+          <div>
+            <div className="text-[10px] font-bold text-zinc-400 mb-2 px-3 flex justify-between items-center tracking-widest uppercase">
+               <span>SPACES</span>
+            </div>
+            <div className="space-y-1">
+              {SPACES.map((space) => (
+                <button
+                  key={space.id}
+                  onClick={() => { setActiveCategory(space.id); setIsMobileMenuOpen(false); }}
+                  className={`w-full text-left px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 flex items-center justify-between group
+                    ${activeCategory === space.id 
+                      ? 'bg-zinc-800 text-white font-bold' 
+                      : 'text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900'}
+                  `}
+                >
+                  <div className="flex items-center">
+                    <space.icon className={`w-3.5 h-3.5 mr-3 ${activeCategory === space.id ? 'text-white' : 'text-zinc-400'}`} />
+                    {space.label}
+                  </div>
+                  {activeCategory === space.id && <div className="w-1.5 h-1.5 rounded-full bg-green-500"></div>}
+                </button>
+              ))}
+            </div>
           </div>
 
-          <div className="mt-6 pt-4 border-t border-zinc-100">
+          {/* COLLECTIONS Section */}
+          <div>
+            <div className="text-[10px] font-bold text-zinc-400 mb-2 px-3 flex justify-between items-center tracking-widest uppercase border-t border-zinc-100 pt-4">
+               <span>COLLECTIONS</span>
+               {isFirebaseAvailable ? <div className="flex items-center text-green-500"><Cloud className="w-3 h-3 mr-1" /></div> : <div className="flex items-center text-zinc-300"><CloudOff className="w-3 h-3 mr-1" /></div>}
+            </div>
+            
+            <div className="space-y-0.5">
+              {CATEGORIES.filter(c => !c.isSpecial).map((cat) => (
+                <button
+                  key={cat.id}
+                  onClick={() => { setActiveCategory(cat.id); setIsMobileMenuOpen(false); }}
+                  className={`w-full text-left px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center justify-between group
+                    ${activeCategory === cat.id 
+                      ? 'bg-zinc-100 text-zinc-900 font-bold' 
+                      : 'text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900'}
+                  `}
+                >
+                  {cat.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="pt-2">
             <button
               onClick={() => { setActiveCategory('MY_PICK'); setIsMobileMenuOpen(false); }}
-              className={`w-full text-left px-4 py-3 rounded-xl text-sm font-bold transition-all duration-200 flex items-center space-x-3 group
-                ${activeCategory === 'MY_PICK' ? 'bg-yellow-50 text-yellow-700' : 'text-zinc-400 hover:bg-zinc-50 hover:text-zinc-600'}
+              className={`w-full text-left px-4 py-3 rounded-xl text-sm font-bold transition-all duration-200 flex items-center space-x-3 group border
+                ${activeCategory === 'MY_PICK' 
+                  ? 'bg-yellow-50 text-yellow-700 border-yellow-200' 
+                  : 'text-zinc-400 border-transparent hover:bg-zinc-50 hover:text-zinc-600'}
               `}
             >
               <Heart className={`w-4 h-4 ${activeCategory === 'MY_PICK' ? 'fill-yellow-500 text-yellow-500' : ''}`} />
-              <span>MY PICK ({favorites.length})</span>
+              <span>My Pick ({favorites.length})</span>
             </button>
           </div>
         </nav>
@@ -427,7 +565,7 @@ export default function App() {
                 <button onClick={() => { fetchLogs(); setShowAdminDashboard(true); }} className="text-[10px] text-blue-600 hover:text-blue-800 flex items-center font-bold">
                   <Settings className="w-3 h-3 mr-1" /> Dashboard
                 </button>
-              ) : <span className="text-[10px] text-zinc-400">v{APP_VERSION}</span>}
+              ) : <span className="text-[10px] text-zinc-400">{APP_VERSION}</span>}
               {isAdmin && <span className="text-[10px] text-zinc-300">{BUILD_DATE}</span>}
            </div>
         </div>
@@ -478,9 +616,41 @@ export default function App() {
               favorites={favorites} 
               setActiveCategory={setActiveCategory} 
               setSelectedProduct={setSelectedProduct} 
+              isAdmin={isAdmin}
+              bannerData={bannerData}
+              onBannerUpload={handleBannerUpload}
+              onBannerTextChange={handleBannerTextChange}
+              onSaveBannerText={saveBannerText}
             />
           ) : (
             <>
+              {/* Space View Header */}
+              {SPACES.find(s => s.id === activeCategory) && (
+                 <div className="mb-8 relative rounded-3xl overflow-hidden h-48 md:h-64 shadow-md group">
+                    <div className="absolute inset-0 bg-black/40 z-10"></div>
+                    {spaceImages[activeCategory] ? (
+                      <img src={spaceImages[activeCategory]} className="w-full h-full object-cover" alt="Space" />
+                    ) : (
+                      <div className="w-full h-full bg-zinc-800 flex items-center justify-center">
+                        <span className="text-zinc-600 font-bold text-2xl uppercase opacity-30">{SPACES.find(s => s.id === activeCategory).label}</span>
+                      </div>
+                    )}
+                    <div className="absolute bottom-6 left-8 z-20 text-white">
+                      <div className="flex items-center space-x-2 mb-1">
+                        {React.createElement(SPACES.find(s => s.id === activeCategory).icon, { className: "w-5 h-5 opacity-80" })}
+                        <span className="text-sm font-medium opacity-80 uppercase tracking-widest">Space Collection</span>
+                      </div>
+                      <h2 className="text-3xl md:text-5xl font-black">{SPACES.find(s => s.id === activeCategory).label}</h2>
+                    </div>
+                    {isAdmin && (
+                      <>
+                        <input type="file" id="space-img-upload" className="hidden" accept="image/*" onChange={(e) => handleSpaceImageUpload(e, activeCategory)} />
+                        <button onClick={() => document.getElementById('space-img-upload').click()} className="absolute top-4 right-4 z-30 p-2 bg-white/20 backdrop-blur rounded-full text-white hover:bg-white hover:text-black opacity-0 group-hover:opacity-100 transition-all"><Camera className="w-5 h-5"/></button>
+                      </>
+                    )}
+                 </div>
+              )}
+
               {isLoading && products.length === 0 ? (
                 <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-6">
                    {[1,2,3,4].map(n => (
@@ -493,24 +663,26 @@ export default function App() {
                 </div>
               ) : (
                 <>
-                  <div className="mb-4 md:mb-8 flex items-end justify-between px-1">
-                    <div>
-                      <h2 className="text-xl md:text-3xl font-extrabold text-zinc-900 tracking-tight">
-                        {activeCategory === 'MY_PICK' ? 'MY PICK' : CATEGORIES.find(c => c.id === activeCategory)?.label || activeCategory}
-                      </h2>
-                      <p className="text-zinc-500 text-xs md:text-sm mt-1 font-medium">
-                        {processedProducts.length} items found
-                        {!isFirebaseAvailable && <span className="ml-2 text-red-400 bg-red-50 px-2 py-0.5 rounded-full text-xs">Offline Mode</span>}
-                      </p>
+                  {!SPACES.find(s => s.id === activeCategory) && (
+                    <div className="mb-4 md:mb-8 flex items-end justify-between px-1">
+                      <div>
+                        <h2 className="text-xl md:text-3xl font-extrabold text-zinc-900 tracking-tight">
+                          {activeCategory === 'MY_PICK' ? 'MY PICK' : CATEGORIES.find(c => c.id === activeCategory)?.label || activeCategory}
+                        </h2>
+                        <p className="text-zinc-500 text-xs md:text-sm mt-1 font-medium">
+                          {processedProducts.length} items found
+                          {!isFirebaseAvailable && <span className="ml-2 text-red-400 bg-red-50 px-2 py-0.5 rounded-full text-xs">Offline Mode</span>}
+                        </p>
+                      </div>
                     </div>
-                  </div>
+                  )}
                   
-                  {/* List Grid: Compact Gap for Mobile */}
+                  {/* List Grid */}
                   <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-8 pb-20">
                     {processedProducts.map((product, idx) => (
                       <ProductCard key={product.id} product={product} onClick={() => setSelectedProduct(product)} isAdmin={isAdmin} showMoveControls={isAdmin && sortOption === 'manual'} onMove={(dir) => handleMoveProduct(idx, dir)} isFavorite={favorites.includes(product.id)} onToggleFavorite={(e) => toggleFavorite(e, product.id)} />
                     ))}
-                    {isAdmin && activeCategory !== 'MY_PICK' && activeCategory !== 'NEW' && (
+                    {isAdmin && activeCategory !== 'MY_PICK' && activeCategory !== 'NEW' && !SPACES.find(s => s.id === activeCategory) && (
                       <button onClick={() => { setEditingProduct(null); setIsFormOpen(true); }} className="border-2 border-dashed border-zinc-200 rounded-2xl flex flex-col items-center justify-center min-h-[250px] md:min-h-[300px] text-zinc-400 hover:border-zinc-400 hover:text-zinc-600 hover:bg-zinc-50 transition-all group">
                         <div className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-zinc-100 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform"><Plus className="w-6 h-6" /></div>
                         <span className="text-xs md:text-sm font-bold">Add Product</span>
@@ -576,7 +748,7 @@ export default function App() {
 // ----------------------------------------------------------------------
 // Dashboard View
 // ----------------------------------------------------------------------
-function DashboardView({ products, favorites, setActiveCategory, setSelectedProduct }) {
+function DashboardView({ products, favorites, setActiveCategory, setSelectedProduct, isAdmin, bannerData, onBannerUpload, onBannerTextChange, onSaveBannerText }) {
   const totalCount = products.length;
   const newCount = products.filter(p => p.isNew).length;
   const pickCount = favorites.length;
@@ -607,12 +779,66 @@ function DashboardView({ products, favorites, setActiveCategory, setSelectedProd
   };
 
   const recentUpdates = [...products].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)).slice(0, 5);
+  const fileInputRef = useRef(null);
 
   return (
     <div className="max-w-6xl mx-auto space-y-6 md:space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20">
-      <div className="mb-4 md:mb-8">
-        <h2 className="text-2xl md:text-4xl font-extrabold text-zinc-900 tracking-tight">Overview</h2>
-        <p className="text-sm md:text-base text-zinc-500 mt-1 font-medium">Welcome to Patra Design Database</p>
+      
+      {/* Customizable Banner */}
+      <div className="relative w-full h-48 md:h-72 rounded-3xl overflow-hidden shadow-lg border border-zinc-200 group bg-zinc-900">
+         <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/40 to-transparent z-10"></div>
+         {bannerData.url ? (
+           <img src={bannerData.url} alt="Dashboard Banner" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
+         ) : (
+           <div className="w-full h-full flex items-center justify-center opacity-20">
+              <img src="/api/placeholder/1200/400" className="w-full h-full object-cover grayscale" alt="Pattern" />
+           </div>
+         )}
+         
+         <div className="absolute bottom-6 left-6 md:bottom-10 md:left-10 z-20 max-w-2xl">
+            {isAdmin ? (
+              <div className="space-y-2">
+                <input 
+                  type="text" 
+                  value={bannerData.title}
+                  onChange={(e) => onBannerTextChange('title', e.target.value)}
+                  onBlur={onSaveBannerText}
+                  className="bg-transparent text-3xl md:text-5xl font-black text-white tracking-tighter w-full outline-none placeholder-zinc-500 border-b border-transparent hover:border-zinc-500 transition-colors"
+                />
+                <input 
+                  type="text" 
+                  value={bannerData.subtitle}
+                  onChange={(e) => onBannerTextChange('subtitle', e.target.value)}
+                  onBlur={onSaveBannerText}
+                  className="bg-transparent text-zinc-300 font-medium text-sm md:text-lg w-full outline-none placeholder-zinc-500 border-b border-transparent hover:border-zinc-500 transition-colors"
+                />
+              </div>
+            ) : (
+              <>
+                <h2 className="text-3xl md:text-5xl font-black text-white tracking-tighter mb-2">{bannerData.title}</h2>
+                <p className="text-zinc-300 font-medium text-sm md:text-lg">{bannerData.subtitle}</p>
+              </>
+            )}
+         </div>
+
+         {isAdmin && (
+           <>
+             <button 
+               onClick={() => fileInputRef.current.click()} 
+               className="absolute top-4 right-4 z-30 p-2 bg-white/20 backdrop-blur rounded-full text-white hover:bg-white hover:text-black transition-all opacity-0 group-hover:opacity-100"
+               title="Change Banner Image"
+             >
+               <Camera className="w-5 h-5" />
+             </button>
+             <input 
+               type="file" 
+               ref={fileInputRef} 
+               className="hidden" 
+               accept="image/*"
+               onChange={onBannerUpload}
+             />
+           </>
+         )}
       </div>
 
       <div className="grid grid-cols-3 gap-3 md:gap-6">
@@ -689,6 +915,10 @@ function DashboardView({ products, favorites, setActiveCategory, setSelectedProd
   );
 }
 
+// ----------------------------------------------------------------------
+// Sub Components
+// ----------------------------------------------------------------------
+
 function ProductCard({ product, onClick, showMoveControls, onMove, isFavorite, onToggleFavorite }) {
   const mainImage = product.images && product.images.length > 0 ? product.images[0] : null;
   const materialBadge = product.materials?.[0];
@@ -719,10 +949,11 @@ function ProductCard({ product, onClick, showMoveControls, onMove, isFavorite, o
 
       <div className="p-3 md:p-5 flex-1 flex flex-col bg-white">
         <div className="flex justify-between items-start mb-1 md:mb-2">
-          <span className="text-[9px] md:text-[10px] font-bold text-zinc-400 bg-zinc-50 px-1.5 py-0.5 rounded uppercase tracking-wider truncate max-w-[60px] md:max-w-none">{product.category}</span>
+          {/* Mobile Text Wrap Fix */}
+          <span className="text-[9px] md:text-[10px] font-bold text-zinc-400 bg-zinc-50 px-1.5 py-0.5 rounded uppercase tracking-wider break-words whitespace-normal leading-tight">{product.category}</span>
         </div>
         <h3 className="text-sm md:text-lg font-extrabold text-zinc-900 mb-1 leading-tight group-hover:text-blue-600 transition-colors line-clamp-1">{product.name}</h3>
-        {product.designer && <p className="text-[11px] text-zinc-400 font-medium mb-3 hidden md:block">by {product.designer}</p>}
+        {/* Designer hidden everywhere in list view */}
         
         <div className="mt-auto pt-2 md:pt-4 border-t border-zinc-50 space-y-2">
           <div className="flex items-center gap-1 md:gap-2">
@@ -748,12 +979,13 @@ function ProductDetailModal({ product, onClose, onEdit, isAdmin, showToast, isFa
   if (!product) return null;
   const images = product.images || [];
   const currentImage = images.length > 0 ? images[currentImageIndex] : null;
+  const contentImages = product.contentImages || [];
   
   const copyToClipboard = () => { navigator.clipboard.writeText(`[${product.name}]\n${product.specs}`); showToast("Copied to clipboard"); };
   const copyShareLink = () => { navigator.clipboard.writeText(`${window.location.origin}${window.location.pathname}?id=${product.id}`); showToast("Link copied"); };
   
   const handleShareImage = () => {
-    // ... Canvas Image Generation Logic (Same as v2.5.0) ...
+    /* ... (Canvas Logic Kept Same) ... */
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
@@ -805,7 +1037,7 @@ function ProductDetailModal({ product, onClose, onEdit, isAdmin, showToast, isFa
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-50 flex items-center justify-center p-0 md:p-4 animate-in fade-in duration-200">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-50 flex items-center justify-center p-0 md:p-4 animate-in fade-in duration-200 items-end md:items-center">
       <canvas ref={canvasRef} style={{ display: 'none' }} />
 
       {isZoomed && currentImage && (
@@ -824,7 +1056,6 @@ function ProductDetailModal({ product, onClose, onEdit, isAdmin, showToast, isFa
           
           {/* Left: Visual */}
           <div className="w-full md:w-1/2 bg-zinc-50 p-6 md:p-8 flex flex-col border-b md:border-b-0 md:border-r border-zinc-100 md:sticky md:top-0">
-            {/* Mobile Drag Handle */}
             <div className="w-12 h-1.5 bg-zinc-200 rounded-full mx-auto mb-6 md:hidden"></div>
 
             <div className="flex-1 w-full bg-white rounded-2xl flex items-center justify-center shadow-sm border border-zinc-100 overflow-hidden p-8 mb-4 relative group min-h-[300px]">
@@ -903,6 +1134,18 @@ function ProductDetailModal({ product, onClose, onEdit, isAdmin, showToast, isFa
                    ))}
                 </div>
               )}
+
+              {/* Vertical Detailed Content Images */}
+              {contentImages.length > 0 && (
+                <div className="pt-8 border-t border-zinc-100 space-y-4">
+                  <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Detail View</h3>
+                  <div className="flex flex-col gap-4">
+                    {contentImages.map((img, idx) => (
+                      <img key={idx} src={img} alt={`Detail ${idx+1}`} className="w-full h-auto rounded-xl border border-zinc-100" />
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
             
             <div className="mt-8 md:mt-12 pt-6 border-t border-zinc-100 flex justify-between items-center">
@@ -922,8 +1165,15 @@ function ProductDetailModal({ product, onClose, onEdit, isAdmin, showToast, isFa
 function ProductFormModal({ categories, existingData, onClose, onSave, onDelete, isFirebaseAvailable, initialCategory }) {
   const isEditMode = !!existingData;
   const fileInputRef = useRef(null);
-  const defaultCategory = (initialCategory && !['ALL','NEW','MY_PICK','DASHBOARD'].includes(initialCategory)) ? initialCategory : 'EXECUTIVE';
-  const [formData, setFormData] = useState({ id: null, name: '', category: defaultCategory, specs: '', designer: '', featuresString: '', optionsString: '', materialsString: '', bodyColorsString: '', upholsteryColorsString: '', awardsString: '', productLink: '', isNew: false, launchDate: new Date().toISOString().split('T')[0], images: [], attachments: [] });
+  const contentInputRef = useRef(null);
+  const defaultCategory = (initialCategory && !['ALL','NEW','MY_PICK','DASHBOARD'].includes(initialCategory) && !SPACES.find(s=>s.id===initialCategory)) ? initialCategory : 'EXECUTIVE';
+  const [formData, setFormData] = useState({ 
+    id: null, name: '', category: defaultCategory, specs: '', designer: '',
+    featuresString: '', optionsString: '', materialsString: '',
+    bodyColorsString: '', upholsteryColorsString: '', awardsString: '',
+    productLink: '', isNew: false, launchDate: new Date().toISOString().split('T')[0],
+    images: [], attachments: [], contentImages: [], spaces: []
+  });
   const [isProcessingImage, setIsProcessingImage] = useState(false);
 
   useEffect(() => {
@@ -933,18 +1183,36 @@ function ProductFormModal({ categories, existingData, onClose, onSave, onDelete,
         featuresString: existingData.features?.join(', ') || '', optionsString: existingData.options?.join(', ') || '', materialsString: existingData.materials?.join(', ') || '',
         bodyColorsString: existingData.bodyColors?.join(', ') || '', upholsteryColorsString: existingData.upholsteryColors?.join(', ') || '', awardsString: existingData.awards?.join(', ') || '',
         productLink: existingData.productLink || '', isNew: existingData.isNew, launchDate: existingData.launchDate || new Date().toISOString().split('T')[0],
-        images: existingData.images || [], attachments: existingData.attachments || [] 
+        images: existingData.images || [], attachments: existingData.attachments || [], contentImages: existingData.contentImages || [],
+        spaces: existingData.spaces || []
       });
     }
   }, [existingData]);
 
-  const processImage = (file) => { return new Promise((resolve) => { const reader = new FileReader(); reader.onload = (e) => { const img = new Image(); img.onload = () => { const canvas = document.createElement('canvas'); const MAX_WIDTH = 800; let width = img.width; let height = img.height; if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; } canvas.width = width; canvas.height = height; const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0, width, height); resolve(canvas.toDataURL('image/jpeg', 0.7)); }; img.src = e.target.result; }; reader.readAsDataURL(file); }); };
+  const processImage = (file) => { return new Promise((resolve) => { const reader = new FileReader(); reader.onload = (e) => { const img = new Image(); img.onload = () => { const canvas = document.createElement('canvas'); const MAX_WIDTH = 1000; let width = img.width; let height = img.height; if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; } canvas.width = width; canvas.height = height; const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0, width, height); resolve(canvas.toDataURL('image/jpeg', 0.8)); }; img.src = e.target.result; }; reader.readAsDataURL(file); }); };
+  
   const handleImageUpload = async (e) => { const files = Array.from(e.target.files); if (files.length > 0) { setIsProcessingImage(true); const newUrls = []; for (const file of files) { try { newUrls.push(await processImage(file)); } catch (e) {} } setFormData(prev => ({ ...prev, images: [...prev.images, ...newUrls] })); setIsProcessingImage(false); } };
+  
+  const handleContentImageUpload = async (e) => { const files = Array.from(e.target.files); if (files.length > 0) { setIsProcessingImage(true); const newUrls = []; for (const file of files) { try { newUrls.push(await processImage(file)); } catch (e) {} } setFormData(prev => ({ ...prev, contentImages: [...prev.contentImages, ...newUrls] })); setIsProcessingImage(false); } };
+
   const handleAttachmentUpload = (e) => { const files = Array.from(e.target.files); files.forEach(file => { if (file.size > 300*1024) return alert("Too large"); const reader = new FileReader(); reader.onload = (e) => setFormData(p => ({...p, attachments: [...p.attachments, {name: file.name, url: e.target.result}]})); reader.readAsDataURL(file); }); };
   const handleAddLinkAttachment = () => { const url = prompt("URL:"); const name = prompt("Name:"); if(url && name) setFormData(p => ({...p, attachments: [...p.attachments, {name, url}]})); };
+  
   const removeImage = (i) => setFormData(p => ({...p, images: p.images.filter((_, idx) => idx !== i)}));
+  const removeContentImage = (i) => setFormData(p => ({...p, contentImages: p.contentImages.filter((_, idx) => idx !== i)}));
   const setMainImage = (i) => setFormData(p => { const imgs = [...p.images]; const [m] = imgs.splice(i, 1); imgs.unshift(m); return {...p, images: imgs}; });
   const removeAttachment = (i) => setFormData(p => ({...p, attachments: p.attachments.filter((_, idx) => idx !== i)}));
+  
+  const toggleSpace = (spaceId) => {
+    setFormData(prev => {
+      const currentSpaces = prev.spaces || [];
+      if (currentSpaces.includes(spaceId)) {
+        return { ...prev, spaces: currentSpaces.filter(id => id !== spaceId) };
+      } else {
+        return { ...prev, spaces: [...currentSpaces, spaceId] };
+      }
+    });
+  };
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -967,10 +1235,10 @@ function ProductFormModal({ categories, existingData, onClose, onSave, onDelete,
           <button onClick={onClose}><X className="w-6 h-6 text-zinc-400 hover:text-zinc-900" /></button>
         </div>
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-8 space-y-6">
+          
           <div className="bg-zinc-50 p-6 rounded-xl border border-zinc-200">
-             <div className="flex justify-between mb-4"><span className="font-bold text-sm">Images</span><div className="space-x-2"><button type="button" onClick={() => fileInputRef.current.click()} className="text-xs bg-white border px-3 py-1 rounded-lg font-medium hover:bg-zinc-100">Upload</button></div><input ref={fileInputRef} type="file" multiple className="hidden" onChange={handleImageUpload} accept="image/*"/></div>
-             {/* Mobile Responsive Grid for Images */}
-             <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3">
+             <div className="flex justify-between mb-4"><span className="font-bold text-sm">Product Images (Main)</span><div className="space-x-2"><button type="button" onClick={() => fileInputRef.current.click()} className="text-xs bg-white border px-3 py-1 rounded-lg font-medium hover:bg-zinc-100">Upload</button></div><input ref={fileInputRef} type="file" multiple className="hidden" onChange={handleImageUpload} accept="image/*"/></div>
+             <div className="grid grid-cols-3 sm:grid-cols-5 gap-3">
                {formData.images.map((img, i) => (
                  <div key={i} className="relative aspect-square bg-white rounded-lg border overflow-hidden group">
                    <img src={img} className="w-full h-full object-cover" />
@@ -981,7 +1249,41 @@ function ProductFormModal({ categories, existingData, onClose, onSave, onDelete,
                ))}
              </div>
           </div>
-          {/* ... (Rest of the form same as before) ... */}
+
+          <div className="bg-zinc-50 p-6 rounded-xl border border-zinc-200">
+             <div className="flex justify-between mb-4"><span className="font-bold text-sm">Detailed Content Images (Vertical Scroll)</span><div className="space-x-2"><button type="button" onClick={() => contentInputRef.current.click()} className="text-xs bg-white border px-3 py-1 rounded-lg font-medium hover:bg-zinc-100">Upload</button></div><input ref={contentInputRef} type="file" multiple className="hidden" onChange={handleContentImageUpload} accept="image/*"/></div>
+             <div className="grid grid-cols-3 sm:grid-cols-5 gap-3">
+               {formData.contentImages.map((img, i) => (
+                 <div key={i} className="relative aspect-[3/4] bg-white rounded-lg border overflow-hidden group">
+                   <img src={img} className="w-full h-full object-cover" />
+                   <button type="button" onClick={()=>removeContentImage(i)} className="absolute top-1 right-1 bg-red-500 text-white p-1 rounded-full opacity-0 group-hover:opacity-100"><X className="w-3 h-3"/></button>
+                 </div>
+               ))}
+             </div>
+          </div>
+          
+          <div className="mb-4">
+            <label className="block text-xs font-bold text-zinc-500 uppercase mb-2">Related Spaces</label>
+            <div className="flex flex-wrap gap-2">
+              {SPACES.map(space => (
+                <button
+                  key={space.id}
+                  type="button"
+                  onClick={() => toggleSpace(space.id)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-colors flex items-center ${
+                    formData.spaces.includes(space.id) 
+                      ? 'bg-zinc-900 text-white border-zinc-900' 
+                      : 'bg-white text-zinc-500 border-zinc-200 hover:border-zinc-400'
+                  }`}
+                >
+                  {formData.spaces.includes(space.id) && <Check className="w-3 h-3 mr-1.5" />}
+                  {space.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* ... (Basic Info Fields) ... */}
           <div className="grid grid-cols-2 gap-6">
              <div><label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Name</label><input required className="w-full border p-2 rounded-lg" value={formData.name} onChange={e=>setFormData({...formData, name: e.target.value})}/></div>
              <div><label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Category</label><select className="w-full border p-2 rounded-lg" value={formData.category} onChange={e=>setFormData({...formData, category: e.target.value})}>{categories.map(c=><option key={c.id} value={c.id}>{c.label}</option>)}</select></div>
