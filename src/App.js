@@ -9,7 +9,7 @@ import {
   Trophy, Heart, Link as LinkIcon, Paperclip, PieChart, Clock,
   Share2, Download, Maximize2, LayoutGrid, Zap, GripHorizontal, ImageIcon as ImgIcon,
   ChevronsUp, Camera, ImagePlus, Sofa, Briefcase, Users, Home as HomeIcon, MapPin,
-  Edit3, Grid, MoreVertical, MousePointer2
+  Edit3, Grid, MoreVertical, MousePointer2, CheckSquare
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { 
@@ -36,8 +36,8 @@ const YOUR_FIREBASE_CONFIG = {
 // ----------------------------------------------------------------------
 // 상수 및 설정
 // ----------------------------------------------------------------------
-const APP_VERSION = "v2.9.1"; // Bug Fix: no-restricted-globals
-const BUILD_DATE = "2024.06.12";
+const APP_VERSION = "v0.5.4"; // Multi-Image Scenes & Product Tagging
+const BUILD_DATE = "2024.06.14";
 const ADMIN_PASSWORD = "adminlcg1"; 
 
 // Firebase 초기화
@@ -113,8 +113,6 @@ export default function App() {
   
   // Banner & Space Data States
   const [bannerData, setBannerData] = useState({ url: null, title: 'Design Lab DB', subtitle: 'Integrated Product Database & Archives' });
-  
-  // spaceContents: { banner, description, trend, scenes: [ {id, title, desc, image, images:[], products:[] } ] }
   const [spaceContents, setSpaceContents] = useState({}); 
 
   // Modal States
@@ -251,6 +249,7 @@ export default function App() {
     localStorage.setItem('patra_favorites', JSON.stringify(newFavs));
   };
 
+  // Image Helper
   const processImage = (file) => {
     return new Promise((resolve) => {
       const reader = new FileReader();
@@ -296,10 +295,7 @@ export default function App() {
       const resizedImage = await processImage(file);
       const currentContent = spaceContents[spaceId] || {};
       const newContent = { ...currentContent, banner: resizedImage };
-      
-      if (isFirebaseAvailable && db) {
-        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'space_contents', spaceId), newContent, { merge: true });
-      }
+      if (isFirebaseAvailable && db) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'space_contents', spaceId), newContent, { merge: true });
       showToast("공간 배너가 업데이트되었습니다.");
     } catch (error) { showToast("이미지 처리 실패", "error"); }
   };
@@ -333,7 +329,7 @@ export default function App() {
   };
 
   const handleSceneDelete = async (spaceId, sceneId) => {
-    if(!window.confirm("이 장면을 삭제하시겠습니까?")) return; // window.confirm으로 수정
+    if(!window.confirm("이 장면을 삭제하시겠습니까?")) return;
     const currentContent = spaceContents[spaceId] || { scenes: [] };
     const newScenes = (currentContent.scenes || []).filter(s => s.id !== sceneId);
     
@@ -393,7 +389,7 @@ export default function App() {
   };
 
   const handleDeleteProduct = async (productId, productName) => {
-    if (!window.confirm('정말 삭제하시겠습니까?')) return; // window.confirm으로 수정
+    if (!window.confirm('정말 삭제하시겠습니까?')) return;
     if (isFirebaseAvailable && db) {
       try {
         await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'products', String(productId)));
@@ -471,7 +467,7 @@ export default function App() {
     <div className="flex h-screen bg-zinc-50 font-sans text-zinc-900 overflow-hidden relative selection:bg-black selection:text-white">
       {isMobileMenuOpen && <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 md:hidden animate-in fade-in" onClick={() => setIsMobileMenuOpen(false)} />}
       
-      {/* Sidebar */}
+      {/* Sidebar (Same as v2.8.0) */}
       <aside className={`fixed inset-y-0 left-0 z-50 w-72 bg-white/90 backdrop-blur-md border-r border-zinc-200 flex flex-col shadow-2xl md:shadow-none transition-transform duration-300 md:relative md:translate-x-0 ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         <div className="p-6 border-b border-zinc-100 flex items-center justify-between cursor-pointer group" onClick={() => { setActiveCategory('DASHBOARD'); setIsMobileMenuOpen(false); }}>
           <div className="flex items-center space-x-3"><div className="w-10 h-10 bg-black text-white rounded-xl flex items-center justify-center font-bold text-xl shadow-lg group-hover:scale-105 transition-transform">P</div><div><h1 className="text-lg font-extrabold tracking-tight text-zinc-900">PATRA</h1><span className="text-[10px] font-semibold text-zinc-400 tracking-widest uppercase block -mt-1">Design Lab DB</span></div></div>
@@ -633,11 +629,41 @@ function SpaceDetailView({ space, spaceContent, isAdmin, onBannerUpload, onEditI
   );
 }
 
+// Scene Product Selection Modal Component
+function SceneProductSelector({ products, selectedIds, onClose, onToggle }) {
+    const [filter, setFilter] = useState('');
+    return (
+      <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[90] flex items-center justify-center p-4">
+        <div className="bg-white w-full max-w-md rounded-2xl overflow-hidden shadow-2xl flex flex-col max-h-[70vh]">
+          <div className="px-6 py-4 border-b border-zinc-100 flex justify-between items-center bg-indigo-50">
+            <div><h3 className="text-lg font-bold text-indigo-900">Select Products</h3><p className="text-xs text-indigo-600">Link products to this scene</p></div>
+            <button onClick={onClose}><X className="w-5 h-5 text-indigo-400"/></button>
+          </div>
+          <div className="p-4 border-b border-zinc-100">
+             <input type="text" placeholder="Search..." className="w-full px-4 py-2 bg-zinc-50 rounded-lg border border-zinc-200 text-sm focus:outline-none focus:border-indigo-500" value={filter} onChange={(e) => setFilter(e.target.value)} />
+          </div>
+          <div className="flex-1 overflow-y-auto p-4 space-y-2 custom-scrollbar">
+             {products.filter(p => p.name.toLowerCase().includes(filter.toLowerCase())).map(p => {
+               const isSelected = selectedIds?.includes(p.id);
+               return (
+                 <div key={p.id} onClick={() => onToggle(p.id, !isSelected)} className={`flex items-center p-3 rounded-lg border cursor-pointer transition-all ${isSelected ? 'border-indigo-500 bg-indigo-50' : 'border-zinc-100 hover:bg-zinc-50'}`}>
+                   <div className={`w-5 h-5 rounded border flex items-center justify-center mr-3 ${isSelected ? 'bg-indigo-500 border-indigo-500' : 'bg-white border-zinc-300'}`}>{isSelected && <Check className="w-3.5 h-3.5 text-white" />}</div>
+                   {p.images?.[0] && <img src={p.images[0]} className="w-10 h-10 rounded object-cover mr-3" />}
+                   <span className="text-sm font-medium text-zinc-800">{p.name}</span>
+                 </div>
+               )
+             })}
+          </div>
+          <div className="p-4 border-t border-zinc-100 flex justify-end"><button onClick={onClose} className="px-6 py-2 bg-indigo-600 text-white rounded-lg text-sm font-bold hover:bg-indigo-700">Done</button></div>
+        </div>
+      </div>
+    );
+}
+
 function SpaceSceneModal({ scene, products, allProducts, isAdmin, onClose, onEdit, onProductToggle }) {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const images = scene.images ? [scene.image, ...scene.images] : [scene.image];
-  const [isProductManagerOpen, setProductManagerOpen] = useState(false);
-  const [productFilter, setProductFilter] = useState('');
+  const [isProductSelectorOpen, setProductSelectorOpen] = useState(false);
 
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[60] flex items-center justify-center p-0 md:p-6 animate-in zoom-in-95 duration-200">
@@ -652,13 +678,17 @@ function SpaceSceneModal({ scene, products, allProducts, isAdmin, onClose, onEdi
                <div className="flex justify-between items-start mb-4"><div><h2 className="text-2xl md:text-3xl font-black text-zinc-900 mb-2">{scene.title}</h2><p className="text-zinc-500 text-sm leading-relaxed">{scene.description}</p></div>{isAdmin && <button onClick={onEdit} className="p-2 text-zinc-400 hover:text-zinc-900"><Edit3 className="w-5 h-5"/></button>}</div>
             </div>
             <div className="flex-1 overflow-y-auto p-6 md:p-8 custom-scrollbar bg-zinc-50/50">
-               <div className="flex justify-between items-center mb-4"><h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Tagged Products</h3>{isAdmin && <button onClick={() => setProductManagerOpen(!isProductManagerOpen)} className="text-xs font-bold text-indigo-600 hover:text-indigo-800">+ Add Tag</button>}</div>
-               {isAdmin && isProductManagerOpen && (
-                 <div className="mb-4 bg-white p-3 rounded-xl border border-indigo-100 shadow-sm animate-in slide-in-from-top-2">
-                    <input type="text" placeholder="Search to tag..." className="w-full text-xs p-2 bg-zinc-50 rounded-lg border border-zinc-200 mb-2 outline-none focus:border-indigo-500" value={productFilter} onChange={(e) => setProductFilter(e.target.value)} />
-                    <div className="max-h-32 overflow-y-auto space-y-1 custom-scrollbar">{allProducts.filter(p => p.name.toLowerCase().includes(productFilter.toLowerCase())).map(p => { const isTagged = scene.productIds?.includes(p.id); return (<div key={p.id} onClick={() => onProductToggle(p.id, !isTagged)} className={`flex items-center p-1.5 rounded cursor-pointer ${isTagged ? 'bg-indigo-50 text-indigo-700' : 'hover:bg-zinc-50'}`}><div className={`w-3 h-3 border rounded mr-2 flex items-center justify-center ${isTagged ? 'bg-indigo-500 border-indigo-500' : 'border-zinc-300'}`}>{isTagged && <Check className="w-2 h-2 text-white"/>}</div><span className="text-xs truncate">{p.name}</span></div>) })}</div>
-                 </div>
+               <div className="flex justify-between items-center mb-4"><h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Linked Products</h3>{isAdmin && <button onClick={() => setProductSelectorOpen(true)} className="text-xs font-bold text-indigo-600 hover:text-indigo-800 flex items-center"><Plus className="w-3 h-3 mr-1"/> Link Products</button>}</div>
+               
+               {isProductSelectorOpen && (
+                 <SceneProductSelector 
+                    products={allProducts} 
+                    selectedIds={scene.productIds} 
+                    onClose={() => setProductSelectorOpen(false)}
+                    onToggle={onProductToggle}
+                 />
                )}
+
                <div className="space-y-3">{products.length > 0 ? products.map(product => (<div key={product.id} className="flex items-center p-3 bg-white rounded-xl border border-zinc-100 shadow-sm hover:border-zinc-300 transition-all cursor-pointer group"><div className="w-12 h-12 bg-zinc-50 rounded-lg flex-shrink-0 flex items-center justify-center mr-3 overflow-hidden">{product.images?.[0] ? <img src={product.images[0]} className="w-full h-full object-cover" /> : <ImageIcon className="w-5 h-5 text-zinc-300"/>}</div><div className="flex-1 min-w-0"><h4 className="text-sm font-bold text-zinc-900 truncate group-hover:text-blue-600">{product.name}</h4><p className="text-xs text-zinc-500">{product.category}</p></div><ChevronRight className="w-4 h-4 text-zinc-300 group-hover:text-zinc-600"/></div>)) : (<div className="text-center py-8 text-zinc-400 text-xs">연관된 제품이 없습니다.</div>)}</div>
             </div>
          </div>
@@ -670,6 +700,7 @@ function SpaceSceneModal({ scene, products, allProducts, isAdmin, onClose, onEdi
 function SceneEditModal({ initialData, onClose, onSave, onDelete }) {
   const [data, setData] = useState({ id: null, title: '', description: '', image: null, images: [], productIds: [] });
   const mainInputRef = useRef(null);
+  const galleryInputRef = useRef(null);
   
   useEffect(() => {
     if(initialData && !initialData.isNew) {
@@ -679,13 +710,38 @@ function SceneEditModal({ initialData, onClose, onSave, onDelete }) {
 
   const processImage = (file) => { return new Promise((resolve) => { const reader = new FileReader(); reader.onload = (e) => { const img = new Image(); img.onload = () => { const canvas = document.createElement('canvas'); const MAX_WIDTH = 1200; let width = img.width; let height = img.height; if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; } canvas.width = width; canvas.height = height; const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0, width, height); resolve(canvas.toDataURL('image/jpeg', 0.8)); }; img.src = e.target.result; }; reader.readAsDataURL(file); }); };
   const handleMainImage = async (e) => { const file = e.target.files[0]; if (file) { const imageUrl = await processImage(file); setData(prev => ({ ...prev, image: imageUrl })); } };
+  
+  const handleGalleryUpload = async (e) => {
+    const files = Array.from(e.target.files);
+    if(files.length > 0) {
+      const newUrls = [];
+      for(const file of files) {
+        try { newUrls.push(await processImage(file)); } catch(e) {}
+      }
+      setData(prev => ({ ...prev, images: [...prev.images, ...newUrls] }));
+    }
+  };
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[80] flex items-center justify-center p-4">
-      <div className="bg-white w-full max-w-lg rounded-2xl overflow-hidden shadow-2xl">
+      <div className="bg-white w-full max-w-lg rounded-2xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
          <div className="px-6 py-4 border-b border-zinc-100 flex justify-between items-center"><h3 className="text-lg font-bold text-zinc-900">{initialData.isNew ? 'New Scene' : 'Edit Scene'}</h3><button onClick={onClose}><X className="w-5 h-5 text-zinc-400"/></button></div>
-         <div className="p-6 space-y-4">
-            <div><label className="block text-xs font-bold text-zinc-500 uppercase mb-2">Main Image</label><div onClick={() => mainInputRef.current.click()} className="w-full h-48 bg-zinc-100 rounded-xl flex items-center justify-center cursor-pointer border-2 border-dashed border-zinc-300 overflow-hidden relative">{data.image ? <img src={data.image} className="w-full h-full object-cover" /> : <div className="flex flex-col items-center text-zinc-400"><ImagePlus className="w-8 h-8 mb-2"/><span className="text-xs">Upload Image</span></div>}</div><input type="file" ref={mainInputRef} className="hidden" accept="image/*" onChange={handleMainImage} /></div>
+         <div className="flex-1 overflow-y-auto p-6 space-y-4">
+            <div><label className="block text-xs font-bold text-zinc-500 uppercase mb-2">Main Image</label><div onClick={() => mainInputRef.current.click()} className="w-full h-48 bg-zinc-100 rounded-xl flex items-center justify-center cursor-pointer border-2 border-dashed border-zinc-300 overflow-hidden relative">{data.image ? <img src={data.image} className="w-full h-full object-cover" /> : <div className="flex flex-col items-center text-zinc-400"><ImagePlus className="w-8 h-8 mb-2"/><span className="text-xs">Upload Main</span></div>}</div><input type="file" ref={mainInputRef} className="hidden" accept="image/*" onChange={handleMainImage} /></div>
+            
+            {/* Additional Images Gallery */}
+            <div>
+               <div className="flex justify-between items-center mb-2"><label className="block text-xs font-bold text-zinc-500 uppercase">Additional Images</label><button type="button" onClick={() => galleryInputRef.current.click()} className="text-xs bg-zinc-100 px-2 py-1 rounded hover:bg-zinc-200">+ Add</button><input type="file" ref={galleryInputRef} multiple className="hidden" accept="image/*" onChange={handleGalleryUpload} /></div>
+               <div className="grid grid-cols-4 gap-2">
+                 {data.images.map((img, i) => (
+                   <div key={i} className="relative aspect-square rounded-lg overflow-hidden group border border-zinc-200">
+                     <img src={img} className="w-full h-full object-cover" />
+                     <button onClick={() => setData(prev => ({...prev, images: prev.images.filter((_, idx) => idx !== i)}))} className="absolute top-0.5 right-0.5 bg-red-500 text-white p-0.5 rounded-full opacity-0 group-hover:opacity-100"><X className="w-3 h-3"/></button>
+                   </div>
+                 ))}
+               </div>
+            </div>
+
             <div><label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Title</label><input className="w-full border border-zinc-300 rounded-lg p-2 text-sm" value={data.title} onChange={e=>setData({...data, title: e.target.value})} /></div>
             <div><label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Description</label><textarea className="w-full border border-zinc-300 rounded-lg p-2 text-sm" rows={3} value={data.description} onChange={e=>setData({...data, description: e.target.value})} /></div>
          </div>
@@ -777,6 +833,13 @@ function DashboardView({ products, favorites, setActiveCategory, setSelectedProd
     </div>
   );
 }
+
+// ----------------------------------------------------------------------
+// Sub Components (Card, Modal, Form - Same logic, minor UI tweaks)
+// ----------------------------------------------------------------------
+// ... (ProductCard, ProductDetailModal, ProductFormModal - keeping existing implementations for brevity but assume they are part of the full code) ...
+// For this response, I will include the full code block for the final update.
+// ...
 
 function ProductCard({ product, onClick, showMoveControls, onMove, isFavorite, onToggleFavorite }) {
   const mainImage = product.images && product.images.length > 0 ? product.images[0] : null;
@@ -914,8 +977,8 @@ function ProductFormModal({ categories, existingData, onClose, onSave, onDelete,
   const processImage = (file) => { return new Promise((resolve) => { const reader = new FileReader(); reader.onload = (e) => { const img = new Image(); img.onload = () => { const canvas = document.createElement('canvas'); const MAX_WIDTH = 1000; let width = img.width; let height = img.height; if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; } canvas.width = width; canvas.height = height; const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0, width, height); resolve(canvas.toDataURL('image/jpeg', 0.8)); }; img.src = e.target.result; }; reader.readAsDataURL(file); }); };
   const handleImageUpload = async (e) => { const files = Array.from(e.target.files); if (files.length > 0) { setIsProcessingImage(true); const newUrls = []; for (const file of files) { try { newUrls.push(await processImage(file)); } catch (e) {} } setFormData(prev => ({ ...prev, images: [...prev.images, ...newUrls] })); setIsProcessingImage(false); } };
   const handleContentImageUpload = async (e) => { const files = Array.from(e.target.files); if (files.length > 0) { setIsProcessingImage(true); const newUrls = []; for (const file of files) { try { newUrls.push(await processImage(file)); } catch (e) {} } setFormData(prev => ({ ...prev, contentImages: [...prev.contentImages, ...newUrls] })); setIsProcessingImage(false); } };
-  const handleAttachmentUpload = (e) => { const files = Array.from(e.target.files); files.forEach(file => { if (file.size > 300*1024) return alert("Too large"); const reader = new FileReader(); reader.onload = (e) => setFormData(p => ({...p, attachments: [...p.attachments, {name: file.name, url: e.target.result}]})); reader.readAsDataURL(file); }); };
-  const handleAddLinkAttachment = () => { const url = prompt("URL:"); const name = prompt("Name:"); if(url && name) setFormData(p => ({...p, attachments: [...p.attachments, {name, url}]})); };
+  const handleAttachmentUpload = (e) => { const files = Array.from(e.target.files); files.forEach(file => { if (file.size > 300*1024) return window.alert("Too large"); const reader = new FileReader(); reader.onload = (e) => setFormData(p => ({...p, attachments: [...p.attachments, {name: file.name, url: e.target.result}]})); reader.readAsDataURL(file); }); };
+  const handleAddLinkAttachment = () => { const url = window.prompt("URL:"); const name = window.prompt("Name:"); if(url && name) setFormData(p => ({...p, attachments: [...p.attachments, {name, url}]})); };
   const removeImage = (i) => setFormData(p => ({...p, images: p.images.filter((_, idx) => idx !== i)}));
   const removeContentImage = (i) => setFormData(p => ({...p, contentImages: p.contentImages.filter((_, idx) => idx !== i)}));
   const setMainImage = (i) => setFormData(p => { const imgs = [...p.images]; const [m] = imgs.splice(i, 1); imgs.unshift(m); return {...p, images: imgs}; });
