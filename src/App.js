@@ -9,7 +9,7 @@ import {
   Trophy, Heart, Link as LinkIcon, Paperclip, PieChart, Clock,
   Share2, Download, Maximize2, LayoutGrid, Zap, GripHorizontal, ImageIcon as ImgIcon,
   ChevronsUp, Camera, ImagePlus, Sofa, Briefcase, Users, Home as HomeIcon, MapPin,
-  Edit3, Grid
+  Edit3, Grid, MoreVertical, MousePointer2
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { 
@@ -36,8 +36,8 @@ const YOUR_FIREBASE_CONFIG = {
 // ----------------------------------------------------------------------
 // 상수 및 설정
 // ----------------------------------------------------------------------
-const APP_VERSION = "v0.5.3"; // Code Stabilization & Version Bump
-const BUILD_DATE = "2024.06.13";
+const APP_VERSION = "v2.9.1"; // Bug Fix: no-restricted-globals
+const BUILD_DATE = "2024.06.12";
 const ADMIN_PASSWORD = "adminlcg1"; 
 
 // Firebase 초기화
@@ -70,7 +70,6 @@ try {
 const CATEGORIES = [
   { id: 'ALL', label: 'Total View', isSpecial: true, color: '#18181b' },
   { id: 'NEW', label: 'New Arrivals', isSpecial: true, color: '#ef4444' },
-  // Collections
   { id: 'EXECUTIVE', label: 'Executive', color: '#2563eb' },
   { id: 'TASK', label: 'Task', color: '#0891b2' },
   { id: 'CONFERENCE', label: 'Conference', color: '#7c3aed' },
@@ -114,16 +113,15 @@ export default function App() {
   
   // Banner & Space Data States
   const [bannerData, setBannerData] = useState({ url: null, title: 'Design Lab DB', subtitle: 'Integrated Product Database & Archives' });
-  const [spaceSettings, setSpaceSettings] = useState({}); // { OFFICE: { banner, desc, images:[] } }
   
   // spaceContents: { banner, description, trend, scenes: [ {id, title, desc, image, images:[], products:[] } ] }
   const [spaceContents, setSpaceContents] = useState({}); 
 
   // Modal States
-  const [editingSpaceInfoId, setEditingSpaceInfoId] = useState(null); // 공간 기본정보(텍스트) 수정
-  const [managingSpaceProductsId, setManagingSpaceProductsId] = useState(null); // 공간 전체 제품 관리
-  const [editingScene, setEditingScene] = useState(null); // 씬 추가/수정 모달
-  const [selectedScene, setSelectedScene] = useState(null); // 씬 상세 보기 모달
+  const [editingSpaceInfoId, setEditingSpaceInfoId] = useState(null);
+  const [managingSpaceProductsId, setManagingSpaceProductsId] = useState(null);
+  const [editingScene, setEditingScene] = useState(null);
+  const [selectedScene, setSelectedScene] = useState(null);
 
   // Scroll Handler
   const mainContentRef = useRef(null);
@@ -161,21 +159,15 @@ export default function App() {
     }
   }, [products]);
 
-  // Auth & Initial Data
+  // Auth
   useEffect(() => {
     const initApp = async () => {
       if (isFirebaseAvailable && auth) {
         try {
-          if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-            await signInWithCustomToken(auth, __initial_auth_token);
-          } else {
-            await signInAnonymously(auth);
-          }
+          if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) await signInWithCustomToken(auth, __initial_auth_token);
+          else await signInAnonymously(auth);
           onAuthStateChanged(auth, setUser);
-        } catch (error) {
-          console.error("Auth Error:", error);
-          loadFromLocalStorage();
-        }
+        } catch (error) { loadFromLocalStorage(); }
       } else {
         loadFromLocalStorage();
         setUser({ uid: 'local-user', isAnonymous: true });
@@ -189,7 +181,6 @@ export default function App() {
   // Data Sync
   useEffect(() => {
     if (isFirebaseAvailable && user && db) {
-      // Products
       const qProducts = collection(db, 'artifacts', appId, 'public', 'data', 'products');
       const unsubProducts = onSnapshot(qProducts, (snapshot) => {
         const loadedProducts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -197,24 +188,16 @@ export default function App() {
         setIsLoading(false);
       });
 
-      // Main Banner
       const bannerDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'banner');
       const unsubBanner = onSnapshot(bannerDocRef, (doc) => {
         if (doc.exists()) setBannerData(prev => ({ ...prev, ...doc.data() }));
       });
 
-      // Space Settings
-      const spaceDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'spaces_v2');
-      const unsubSpaces = onSnapshot(spaceDocRef, (doc) => {
-        if (doc.exists()) setSpaceSettings(doc.data());
-      });
-
-      return () => { unsubProducts(); unsubBanner(); unsubSpaces(); };
+      return () => { unsubProducts(); unsubBanner(); };
     } else {
       const localBanner = localStorage.getItem('patra_banner_data');
       if (localBanner) setBannerData(JSON.parse(localBanner));
-      const localSpaces = localStorage.getItem('patra_space_settings');
-      if (localSpaces) setSpaceSettings(JSON.parse(localSpaces));
+      loadFromLocalStorage();
     }
   }, [user]);
 
@@ -251,50 +234,32 @@ export default function App() {
   };
 
   const toggleAdminMode = () => {
-    if (isAdmin) {
-      setIsAdmin(false);
-      setShowAdminDashboard(false);
-      showToast("뷰어 모드로 전환되었습니다.", "info");
-    } else {
+    if (isAdmin) { setIsAdmin(false); setShowAdminDashboard(false); showToast("뷰어 모드로 전환되었습니다.", "info"); } 
+    else {
       const password = window.prompt("관리자 비밀번호를 입력하세요:");
-      if (password === ADMIN_PASSWORD) {
-        setIsAdmin(true);
-        showToast("관리자 모드로 접속했습니다.");
-      } else if (password !== null) {
-        showToast("비밀번호가 올바르지 않습니다.", "error");
-      }
+      if (password === ADMIN_PASSWORD) { setIsAdmin(true); showToast("관리자 모드로 접속했습니다."); } 
+      else if (password !== null) showToast("비밀번호가 올바르지 않습니다.", "error");
     }
   };
 
   const toggleFavorite = (e, productId) => {
     if(e) e.stopPropagation();
     let newFavs;
-    if (favorites.includes(productId)) {
-      newFavs = favorites.filter(id => id !== productId);
-      showToast("MY PICK에서 제거되었습니다.", "info");
-    } else {
-      newFavs = [...favorites, productId];
-      showToast("MY PICK에 추가되었습니다.");
-    }
+    if (favorites.includes(productId)) { newFavs = favorites.filter(id => id !== productId); showToast("MY PICK에서 제거되었습니다.", "info"); } 
+    else { newFavs = [...favorites, productId]; showToast("MY PICK에 추가되었습니다."); }
     setFavorites(newFavs);
     localStorage.setItem('patra_favorites', JSON.stringify(newFavs));
   };
 
-  // Image Helper
   const processImage = (file) => {
     return new Promise((resolve) => {
       const reader = new FileReader();
       reader.onload = (e) => {
         const img = new Image();
         img.onload = () => {
-           const canvas = document.createElement('canvas');
-           const MAX_WIDTH = 1600; 
-           let width = img.width;
-           let height = img.height;
-           if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; }
-           canvas.width = width; canvas.height = height;
-           const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0, width, height);
-           resolve(canvas.toDataURL('image/jpeg', 0.85));
+           const canvas = document.createElement('canvas'); const MAX_WIDTH = 1200; let width = img.width; let height = img.height;
+           if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; } canvas.width = width; canvas.height = height;
+           const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0, width, height); resolve(canvas.toDataURL('image/jpeg', 0.8));
         };
         img.src = e.target.result;
       };
@@ -309,21 +274,13 @@ export default function App() {
     try {
       const resizedImage = await processImage(file);
       const newData = { ...bannerData, url: resizedImage };
-      if (isFirebaseAvailable && db) {
-        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'banner'), newData, { merge: true });
-      } else {
-        localStorage.setItem('patra_banner_data', JSON.stringify(newData));
-        setBannerData(newData);
-      }
+      if (isFirebaseAvailable && db) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'banner'), newData, { merge: true });
+      else { localStorage.setItem('patra_banner_data', JSON.stringify(newData)); setBannerData(newData); }
       showToast("메인 배너가 업데이트되었습니다.");
     } catch (error) { showToast("이미지 처리 실패", "error"); }
   };
 
-  const handleBannerTextChange = async (key, value) => {
-    if (!isAdmin) return;
-    setBannerData(prev => ({ ...prev, [key]: value }));
-  };
-
+  const handleBannerTextChange = (key, value) => { if (!isAdmin) return; setBannerData(prev => ({ ...prev, [key]: value })); };
   const saveBannerText = async () => {
     if (isFirebaseAvailable && db) {
       await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'banner'), bannerData, { merge: true });
@@ -376,7 +333,7 @@ export default function App() {
   };
 
   const handleSceneDelete = async (spaceId, sceneId) => {
-    if(!confirm("이 장면을 삭제하시겠습니까?")) return;
+    if(!window.confirm("이 장면을 삭제하시겠습니까?")) return; // window.confirm으로 수정
     const currentContent = spaceContents[spaceId] || { scenes: [] };
     const newScenes = (currentContent.scenes || []).filter(s => s.id !== sceneId);
     
@@ -436,10 +393,11 @@ export default function App() {
   };
 
   const handleDeleteProduct = async (productId, productName) => {
-    if (!window.confirm('정말 삭제하시겠습니까?')) return;
+    if (!window.confirm('정말 삭제하시겠습니까?')) return; // window.confirm으로 수정
     if (isFirebaseAvailable && db) {
       try {
         await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'products', String(productId)));
+        await logActivity("DELETE", productName, "삭제됨");
       } catch (error) { showToast("삭제 실패", "error"); return; }
     } else {
       const newProducts = products.filter(p => String(p.id) !== String(productId));
@@ -479,7 +437,6 @@ export default function App() {
     return filtered;
   };
   const processedProducts = getProcessedProducts();
-  
   const handleMoveProduct = async (index, direction) => {
     if (!processedProducts || processedProducts.length <= 1) return;
     const targetIndex = direction === 'left' ? index - 1 : index + 1;
@@ -501,7 +458,14 @@ export default function App() {
     }
   };
 
-  const handleFullBackup = async () => { /* ... */ };
+  const handleFullBackup = async () => { 
+    const backupData = { version: APP_VERSION, date: new Date().toISOString(), products: products, logs: activityLogs };
+    const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a"); link.href = url; link.download = `PATRA_DB_BACKUP_${new Date().toISOString().slice(0,10)}.json`;
+    document.body.appendChild(link); link.click(); document.body.removeChild(link);
+    showToast("전체 데이터 백업이 완료되었습니다.");
+  };
 
   return (
     <div className="flex h-screen bg-zinc-50 font-sans text-zinc-900 overflow-hidden relative selection:bg-black selection:text-white">
@@ -592,7 +556,7 @@ export default function App() {
         </div>
       </main>
 
-      {/* Modals */}
+      {/* Modals & Overlays */}
       {toast && <div className="fixed bottom-8 right-8 bg-zinc-900 text-white px-5 py-3.5 rounded-xl shadow-2xl flex items-center space-x-3 animate-in slide-in-from-bottom-10 fade-in z-[90]">{toast.type === 'success' ? <Check className="w-5 h-5 text-green-400" /> : <Info className="w-5 h-5 text-red-400" />}<span className="text-sm font-bold tracking-wide">{toast.message}</span></div>}
       {selectedProduct && <ProductDetailModal product={selectedProduct} onClose={() => setSelectedProduct(null)} onEdit={() => { setEditingProduct(selectedProduct); setIsFormOpen(true); }} isAdmin={isAdmin} showToast={showToast} isFavorite={favorites.includes(selectedProduct.id)} onToggleFavorite={(e) => toggleFavorite(e, selectedProduct.id)} />}
       {isFormOpen && <ProductFormModal categories={CATEGORIES.filter(c => !c.isSpecial)} initialCategory={activeCategory} existingData={editingProduct} onClose={() => { setIsFormOpen(false); setEditingProduct(null); }} onSave={handleSaveProduct} onDelete={handleDeleteProduct} isFirebaseAvailable={isFirebaseAvailable} />}
@@ -639,7 +603,7 @@ function SpaceDetailView({ space, spaceContent, isAdmin, onBannerUpload, onEditI
   const description = spaceContent.description || "이 공간에 대한 설명이 없습니다.";
   const trend = spaceContent.trend || "";
   const scenes = spaceContent.scenes || [];
-  const copySpaceLink = () => { navigator.clipboard.writeText(`${window.location.origin}${window.location.pathname}?space=${space.id}`); alert("공간 공유 링크가 복사되었습니다."); };
+  const copySpaceLink = () => { navigator.clipboard.writeText(`${window.location.origin}${window.location.pathname}?space=${space.id}`); window.alert("공간 공유 링크가 복사되었습니다."); };
 
   return (
     <div className="mb-12 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -776,15 +740,36 @@ function DashboardView({ products, favorites, setActiveCategory, setSelectedProd
          <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/40 to-transparent z-10"></div>
          {bannerData.url ? <img src={bannerData.url} alt="Dashboard Banner" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" /> : <div className="w-full h-full flex items-center justify-center opacity-20"><img src="/api/placeholder/1200/400" className="w-full h-full object-cover grayscale" alt="Pattern" /></div>}
          <div className="absolute bottom-6 left-6 md:bottom-10 md:left-10 z-20 max-w-2xl">
-            {isAdmin ? (<div className="space-y-2"><input type="text" value={bannerData.title} onChange={(e) => onBannerTextChange('title', e.target.value)} onBlur={onSaveBannerText} className="bg-transparent text-3xl md:text-5xl font-black text-white tracking-tighter w-full outline-none placeholder-zinc-500 border-b border-transparent hover:border-zinc-500 transition-colors" /><input type="text" value={bannerData.subtitle} onChange={(e) => onBannerTextChange('subtitle', e.target.value)} onBlur={onSaveBannerText} className="bg-transparent text-zinc-300 font-medium text-sm md:text-lg w-full outline-none placeholder-zinc-500 border-b border-transparent hover:border-zinc-500 transition-colors" /></div>) : (<><h2 className="text-3xl md:text-5xl font-black text-white tracking-tighter mb-2">{bannerData.title}</h2><p className="text-zinc-300 font-medium text-sm md:text-lg">{bannerData.subtitle}</p></>)}
+            {isAdmin ? (
+              <div className="space-y-2">
+                <input type="text" value={bannerData.title} onChange={(e) => onBannerTextChange('title', e.target.value)} onBlur={onSaveBannerText} className="bg-transparent text-3xl md:text-5xl font-black text-white tracking-tighter w-full outline-none placeholder-zinc-500 border-b border-transparent hover:border-zinc-500 transition-colors" />
+                <input type="text" value={bannerData.subtitle} onChange={(e) => onBannerTextChange('subtitle', e.target.value)} onBlur={onSaveBannerText} className="bg-transparent text-zinc-300 font-medium text-sm md:text-lg w-full outline-none placeholder-zinc-500 border-b border-transparent hover:border-zinc-500 transition-colors" />
+              </div>
+            ) : (
+              <>
+                <h2 className="text-3xl md:text-5xl font-black text-white tracking-tighter mb-2">{bannerData.title}</h2>
+                <p className="text-zinc-300 font-medium text-sm md:text-lg">{bannerData.subtitle}</p>
+              </>
+            )}
          </div>
          {isAdmin && (<><button onClick={() => fileInputRef.current.click()} className="absolute top-4 right-4 z-30 p-2 bg-white/20 backdrop-blur rounded-full text-white hover:bg-white hover:text-black transition-all opacity-0 group-hover:opacity-100" title="Change Banner Image"><Camera className="w-5 h-5" /></button><input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={onBannerUpload} /></>)}
       </div>
+
       <div className="grid grid-cols-3 gap-3 md:gap-6">
-        <div onClick={() => setActiveCategory('ALL')} className="bg-white p-3 md:p-6 rounded-xl md:rounded-2xl border border-zinc-100 shadow-sm hover:shadow-md cursor-pointer group flex flex-col justify-center items-center md:items-start text-center md:text-left h-24 md:h-32"><div className="hidden md:flex justify-between w-full mb-2"><div className="p-3 bg-zinc-50 rounded-xl group-hover:bg-zinc-900 group-hover:text-white transition-colors text-zinc-400"><LayoutGrid className="w-6 h-6" /></div></div><p className="text-[10px] md:text-xs font-bold text-zinc-400 uppercase tracking-wider mb-0 md:mb-1">Total</p><h3 className="text-xl md:text-4xl font-extrabold text-zinc-900">{totalCount}</h3></div>
-        <div onClick={() => setActiveCategory('NEW')} className="bg-white p-3 md:p-6 rounded-xl md:rounded-2xl border border-zinc-100 shadow-sm hover:shadow-md cursor-pointer group flex flex-col justify-center items-center md:items-start text-center md:text-left h-24 md:h-32"><div className="hidden md:flex justify-between w-full mb-2"><div className="p-3 bg-red-50 rounded-xl text-red-500 group-hover:bg-red-500 group-hover:text-white transition-colors"><Zap className="w-6 h-6" /></div></div><p className="text-[10px] md:text-xs font-bold text-red-400 uppercase tracking-wider mb-0 md:mb-1">New</p><h3 className="text-xl md:text-4xl font-extrabold text-zinc-900">{newCount}</h3></div>
-        <div onClick={() => setActiveCategory('MY_PICK')} className="bg-white p-3 md:p-6 rounded-xl md:rounded-2xl border border-zinc-100 shadow-sm hover:shadow-md cursor-pointer group flex flex-col justify-center items-center md:items-start text-center md:text-left h-24 md:h-32"><div className="hidden md:flex justify-between w-full mb-2"><div className="p-3 bg-yellow-50 rounded-xl text-yellow-500 group-hover:bg-yellow-400 group-hover:text-white transition-colors"><Heart className="w-6 h-6 fill-current" /></div></div><p className="text-[10px] md:text-xs font-bold text-yellow-500 uppercase tracking-wider mb-0 md:mb-1">Pick</p><h3 className="text-xl md:text-4xl font-extrabold text-zinc-900">{pickCount}</h3></div>
+        <div onClick={() => setActiveCategory('ALL')} className="bg-white p-3 md:p-6 rounded-xl md:rounded-2xl border border-zinc-100 shadow-sm hover:shadow-md cursor-pointer group flex flex-col justify-center items-center md:items-start text-center md:text-left h-24 md:h-32">
+          <div className="hidden md:flex justify-between w-full mb-2"><div className="p-3 bg-zinc-50 rounded-xl group-hover:bg-zinc-900 group-hover:text-white transition-colors text-zinc-400"><LayoutGrid className="w-6 h-6" /></div></div>
+          <p className="text-[10px] md:text-xs font-bold text-zinc-400 uppercase tracking-wider mb-0 md:mb-1">Total</p><h3 className="text-xl md:text-4xl font-extrabold text-zinc-900">{totalCount}</h3>
+        </div>
+        <div onClick={() => setActiveCategory('NEW')} className="bg-white p-3 md:p-6 rounded-xl md:rounded-2xl border border-zinc-100 shadow-sm hover:shadow-md cursor-pointer group flex flex-col justify-center items-center md:items-start text-center md:text-left h-24 md:h-32">
+          <div className="hidden md:flex justify-between w-full mb-2"><div className="p-3 bg-red-50 rounded-xl text-red-500 group-hover:bg-red-500 group-hover:text-white transition-colors"><Zap className="w-6 h-6" /></div></div>
+          <p className="text-[10px] md:text-xs font-bold text-red-400 uppercase tracking-wider mb-0 md:mb-1">New</p><h3 className="text-xl md:text-4xl font-extrabold text-zinc-900">{newCount}</h3>
+        </div>
+        <div onClick={() => setActiveCategory('MY_PICK')} className="bg-white p-3 md:p-6 rounded-xl md:rounded-2xl border border-zinc-100 shadow-sm hover:shadow-md cursor-pointer group flex flex-col justify-center items-center md:items-start text-center md:text-left h-24 md:h-32">
+          <div className="hidden md:flex justify-between w-full mb-2"><div className="p-3 bg-yellow-50 rounded-xl text-yellow-500 group-hover:bg-yellow-400 group-hover:text-white transition-colors"><Heart className="w-6 h-6 fill-current" /></div></div>
+          <p className="text-[10px] md:text-xs font-bold text-yellow-500 uppercase tracking-wider mb-0 md:mb-1">Pick</p><h3 className="text-xl md:text-4xl font-extrabold text-zinc-900">{pickCount}</h3>
+        </div>
       </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-white p-6 md:p-8 rounded-2xl border border-zinc-100 shadow-sm flex flex-col justify-center min-h-[auto] md:min-h-[360px]"><h3 className="text-base md:text-lg font-bold text-zinc-900 mb-6 flex items-center"><PieChart className="w-5 h-5 mr-2 text-zinc-400" /> Category Distribution</h3>{totalStandardProducts > 0 ? (<div className="flex flex-col sm:flex-row items-center justify-around gap-6 md:gap-8"><div className="relative w-32 h-32 md:w-48 md:h-48 rounded-full shadow-inner flex-shrink-0 aspect-square" style={chartStyle}><div className="absolute inset-0 m-auto w-16 h-16 md:w-24 md:h-24 bg-white rounded-full flex items-center justify-center flex-col shadow-sm"><span className="text-[8px] md:text-[10px] text-zinc-400 uppercase font-bold tracking-widest">Total</span><span className="text-lg md:text-2xl font-extrabold text-zinc-800">{totalStandardProducts}</span></div></div><div className="grid grid-cols-2 gap-x-4 gap-y-2 w-full sm:w-auto">{categoryCounts.map(item => (<div key={item.id} className="flex items-center text-[10px] md:text-xs group cursor-default"><div className="w-2 md:w-2.5 h-2 md:h-2.5 rounded-full mr-2 ring-2 ring-transparent group-hover:ring-zinc-100 transition-all flex-shrink-0" style={{ backgroundColor: item.color }}></div><span className="font-bold text-zinc-600 mr-1">{item.label}</span><span className="text-zinc-400 font-medium">{Math.round((item.count/totalStandardProducts)*100)}%</span></div>))}</div></div>) : <div className="text-center text-zinc-300 text-sm">No data available</div>}</div>
         <div className="bg-white p-6 md:p-8 rounded-2xl border border-zinc-100 shadow-sm flex flex-col min-h-[auto] md:min-h-[360px]"><h3 className="text-base md:text-lg font-bold text-zinc-900 mb-6 flex items-center"><Clock className="w-5 h-5 mr-2 text-zinc-400" /> Recent Updates</h3><div className="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-3">{recentUpdates.length > 0 ? recentUpdates.map(product => (<div key={product.id} onClick={() => setSelectedProduct(product)} className="flex items-center p-3 rounded-xl border border-zinc-100 hover:border-zinc-300 hover:bg-zinc-50 cursor-pointer transition-all group"><div className="w-10 h-10 md:w-12 md:h-12 bg-zinc-100 rounded-lg flex-shrink-0 flex items-center justify-center mr-3 md:mr-4 overflow-hidden border border-zinc-200">{product.images?.[0] ? <img src={product.images[0]} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" alt="" /> : <ImageIcon className="w-5 h-5 text-zinc-300"/>}</div><div className="flex-1 min-w-0"><h4 className="text-sm font-bold text-zinc-800 truncate group-hover:text-blue-600 transition-colors">{product.name}</h4><p className="text-[10px] md:text-[11px] text-zinc-400 mt-0.5 truncate">{new Date(product.updatedAt || product.createdAt).toLocaleDateString()} · {product.category}</p></div><ChevronRight className="w-4 h-4 text-zinc-300 group-hover:text-zinc-600 group-hover:translate-x-1 transition-all" /></div>)) : <div className="text-center text-zinc-300 text-sm py-10">No updates yet.</div>}</div></div>
