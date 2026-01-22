@@ -37,7 +37,7 @@ const YOUR_FIREBASE_CONFIG = {
 // ----------------------------------------------------------------------
 // 상수 및 설정
 // ----------------------------------------------------------------------
-const APP_VERSION = "v0.6.7"; 
+const APP_VERSION = "v0.6.6"; 
 const BUILD_DATE = "2026.01.22";
 const ADMIN_PASSWORD = "adminlcg1"; 
 
@@ -102,15 +102,14 @@ const SPACES = [
   },
 ];
 
-// 스와치(마감재) 정의 - v0.6.7 개편
+// 스와치(마감재) 정의
 const SWATCH_CATEGORIES = [
   { id: 'MESH', label: 'Mesh', color: '#a1a1aa' },
   { id: 'FABRIC', label: 'Fabric', color: '#a1a1aa' },
   { id: 'LEATHER', label: 'Leather', color: '#78350f' },
   { id: 'RESIN', label: 'Resin', color: '#27272a' },
-  { id: 'METAL', label: 'Metal', color: '#64748b' }, // Changed from STEEL
+  { id: 'STEEL', label: 'Steel', color: '#64748b' },
   { id: 'WOOD', label: 'Wood', color: '#92400e' },
-  { id: 'ETC', label: 'Etc', color: '#9ca3af' }, // Added
 ];
 
 export default function App() {
@@ -158,7 +157,7 @@ export default function App() {
   const [managingSpaceProductsId, setManagingSpaceProductsId] = useState(null);
   const [editingScene, setEditingScene] = useState(null);
   const [selectedScene, setSelectedScene] = useState(null);
-  
+
   // Drag & Drop
   const dragItem = useRef(null);
   const dragOverItem = useRef(null);
@@ -339,7 +338,7 @@ export default function App() {
     });
   };
 
-  // --- Actions ---
+  // --- CRUD & Actions ---
   const handleBannerUpload = async (e) => { if (!isAdmin) return; const file = e.target.files[0]; if (!file) return; try { const resizedImage = await processImage(file); const newData = { ...bannerData, url: resizedImage }; if (isFirebaseAvailable && db) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'banner'), newData, { merge: true }); else { localStorage.setItem('patra_banner_data', JSON.stringify(newData)); setBannerData(newData); } showToast("메인 배너가 업데이트되었습니다."); } catch (error) { showToast("이미지 처리 실패", "error"); } };
   const handleBannerTextChange = (key, value) => { if (!isAdmin) return; setBannerData(prev => ({ ...prev, [key]: value })); };
   const saveBannerText = async () => { if (isFirebaseAvailable && db) { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'banner'), bannerData, { merge: true }); showToast("배너 문구가 저장되었습니다."); } };
@@ -350,8 +349,10 @@ export default function App() {
   const handleSpaceProductToggle = async (spaceId, productId, isAdded) => { const product = products.find(p => p.id === productId); if(!product) return; let newSpaces = product.spaces || []; if(isAdded) { if(!newSpaces.includes(spaceId)) newSpaces.push(spaceId); } else { newSpaces = newSpaces.filter(s => s !== spaceId); } if (isFirebaseAvailable && db) { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'products', product.id), { spaces: newSpaces }, { merge: true }); } else { const idx = products.findIndex(p => p.id === productId); const newProds = [...products]; newProds[idx] = { ...product, spaces: newSpaces }; saveToLocalStorage(newProds); } };
   const logActivity = async (action, productName, details = "") => { if (!isFirebaseAvailable || !db) return; try { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'logs'), { action, productName, details, timestamp: Date.now(), adminId: 'admin' }); } catch (e) { console.error(e); } };
   const fetchLogs = async () => { if (!isFirebaseAvailable || !db) return; const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'logs'), orderBy('timestamp', 'desc'), limit(100)); onSnapshot(q, (snapshot) => { setActivityLogs(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))); }); };
+  
   const handleSaveSwatch = async (swatchData) => { const docId = swatchData.id ? String(swatchData.id) : String(Date.now()); const payload = { ...swatchData, id: docId, updatedAt: Date.now() }; if (isFirebaseAvailable && db) { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'swatches', docId), payload, { merge: true }); } else { const idx = swatches.findIndex(s => s.id === docId); let newSwatches = [...swatches]; if (idx >= 0) newSwatches[idx] = payload; else newSwatches = [payload, ...newSwatches]; saveSwatchesToLocal(newSwatches); } showToast("마감재가 저장되었습니다."); };
   const handleDeleteSwatch = async (swatchId) => { if (!window.confirm("정말 삭제하시겠습니까?")) return; if (isFirebaseAvailable && db) { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'swatches', String(swatchId))); } else { saveSwatchesToLocal(swatches.filter(s => s.id !== swatchId)); } showToast("마감재가 삭제되었습니다."); };
+  
   const handleSaveProduct = async (productData) => { const docId = productData.id ? String(productData.id) : String(Date.now()); const isEdit = !!productData.id && products.some(p => String(p.id) === docId); const payload = { ...productData, id: docId, updatedAt: Date.now(), createdAt: isEdit ? (products.find(p => String(p.id) === docId)?.createdAt || Date.now()) : Date.now(), orderIndex: isEdit ? (products.find(p => String(p.id) === docId)?.orderIndex || Date.now()) : Date.now() }; if (isFirebaseAvailable && db) { try { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'products', docId), payload, { merge: true }); } catch (error) { showToast("저장 실패", "error"); return; } } else { const idx = products.findIndex(p => String(p.id) === docId); let newProducts = [...products]; if (idx >= 0) newProducts[idx] = payload; else newProducts = [payload, ...products]; saveToLocalStorage(newProducts); } if (selectedProduct && String(selectedProduct.id) === docId) setSelectedProduct(payload); setIsFormOpen(false); setEditingProduct(null); showToast(isEdit ? "수정 완료" : "등록 완료"); };
   const handleDeleteProduct = async (productId, productName) => { if (!window.confirm('정말 삭제하시겠습니까?')) return; if (isFirebaseAvailable && db) { try { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'products', String(productId))); await logActivity("DELETE", productName, "삭제됨"); } catch (error) { showToast("삭제 실패", "error"); return; } } else { const newProducts = products.filter(p => String(p.id) !== String(productId)); saveToLocalStorage(newProducts); } setSelectedProduct(null); setIsFormOpen(false); showToast("삭제되었습니다."); };
   
@@ -606,6 +607,7 @@ export default function App() {
         />
       )}
       
+      {/* Editing Swatch From Modal Trigger */}
       {editingSwatchFromModal && (
         <SwatchFormModal 
            category={SWATCH_CATEGORIES.find(c => c.id === editingSwatchFromModal.category) || SWATCH_CATEGORIES[0]}
@@ -960,10 +962,6 @@ function PieChartComponent({ data, total }) {
   let cumulativePercent = 0;
   const radius = 0.7; 
 
-  // Sort data descending to find largest easily
-  const sortedData = [...data].sort((a,b) => b.count - a.count);
-  const maxVal = sortedData[0]?.count || 0;
-
   return (
     <div className="relative w-full h-full flex items-center justify-center">
       <svg viewBox="-1.2 -1.2 2.4 2.4" className="w-full h-full transform -rotate-90">
@@ -975,16 +973,8 @@ function PieChartComponent({ data, total }) {
            const startRotation = (cumulativePercent - percent) * 360; 
            cumulativePercent += percent; 
            
-           // Explode the largest slice
-           const isLargest = item.count === maxVal;
-           const strokeWidth = isLargest ? 0.38 : 0.3; 
-           
-           // Calculate translation for explosion effect
-           const midAngle = startRotation + (percent * 360) / 2;
-           const radian = (midAngle * Math.PI) / 180;
-           const explodeDist = isLargest ? 0.08 : 0;
-           const transX = Math.cos(radian) * explodeDist;
-           const transY = Math.sin(radian) * explodeDist;
+           const isLargest = percent === Math.max(...data.map(d => d.count/total));
+           const strokeWidth = isLargest ? 0.35 : 0.3; 
 
            return (
              <React.Fragment key={item.id}>
@@ -995,8 +985,8 @@ function PieChartComponent({ data, total }) {
                   stroke={item.color}
                   strokeWidth={strokeWidth}
                   strokeDasharray={`${dashArray * percent} ${dashArray * (1 - percent)}`}
-                  transform={`translate(${transX}, ${transY}) rotate(${startRotation + (percent*360)} 0 0)`}
-                  className="transition-all duration-500 hover:opacity-80"
+                  transform={`rotate(${startRotation + (percent*360)} 0 0)`}
+                  className="transition-all duration-300 hover:opacity-80"
                   onMouseEnter={() => setHoveredIndex(idx)}
                   onMouseLeave={() => setHoveredIndex(null)}
                 />
@@ -1011,8 +1001,7 @@ function PieChartComponent({ data, total }) {
          const midPercent = prevPercent + percent/2;
          const angleRad = (midPercent * 2 * Math.PI) - (Math.PI / 2); 
          
-         const isLargest = item.count === maxVal;
-         const dist = isLargest ? 1.05 : 0.95; 
+         const dist = 0.95; 
          const x = 50 + (dist * 50 * Math.cos(angleRad));
          const y = 50 + (dist * 50 * Math.sin(angleRad));
          
@@ -1245,8 +1234,7 @@ function ProductCard({ product, onClick, showMoveControls, onMove, isFavorite, o
         </div>
 
         <div className="w-full h-full flex items-center justify-center transition-transform duration-500 group-hover:scale-105">
-            {/* V0.6.7 Fixed: object-cover for full fill */}
-            {mainImage ? <img src={mainImage} alt={product.name} loading="lazy" className="w-full h-full object-cover" /> : <div className="text-center opacity-30"><ImageIcon className="w-8 h-8 text-zinc-400" /></div>}
+            {mainImage ? <img src={mainImage} alt={product.name} loading="lazy" className="w-full h-full object-contain mix-blend-multiply" /> : <div className="text-center opacity-30"><ImageIcon className="w-8 h-8 text-zinc-400" /></div>}
         </div>
         
         {/* Sort Controls */}
@@ -1258,7 +1246,7 @@ function ProductCard({ product, onClick, showMoveControls, onMove, isFavorite, o
         )}
       </div>
       
-      {/* V0.6.7 Refined Layout: Name(Top), Designer(Left), Category(Right) */}
+      {/* V0.6.6 Refined Layout: Name(Top), Designer(Left), Category(Right) */}
       <div className="p-4 flex-1 flex flex-col bg-white">
         <h3 className="text-sm font-extrabold text-zinc-900 leading-tight group-hover:text-blue-600 transition-colors line-clamp-1 mb-3">{product.name}</h3>
         
@@ -1447,17 +1435,12 @@ function ProductDetailModal({ product, spaceContents, onClose, onEdit, isAdmin, 
       {isZoomed && currentImage && (<div className="fixed inset-0 z-[70] bg-black/95 flex items-center justify-center p-8 cursor-zoom-out print:hidden" onClick={() => setIsZoomed(false)}><img src={currentImage} className="max-w-full max-h-full object-contain" alt="Zoomed" /><button className="absolute top-6 right-6 text-white/50 hover:text-white"><X className="w-10 h-10" /></button></div>)}
       <div className="bg-white w-full h-full md:h-[90vh] md:w-full md:max-w-6xl md:rounded-3xl overflow-hidden shadow-2xl flex flex-col md:flex-row relative print:h-auto print:overflow-visible print:shadow-none print:rounded-none">
         
-        {/* Top Right Controls: Edit & Close */}
-        <div className="absolute top-4 right-4 z-[100] flex gap-2">
-            {isAdmin && <button onClick={onEdit} className="p-2 bg-white/50 hover:bg-zinc-100 rounded-full backdrop-blur shadow-sm"><Edit3 className="w-6 h-6 text-zinc-900" /></button>}
-            <button onClick={onClose} className="p-2 bg-white/50 hover:bg-zinc-100 rounded-full backdrop-blur shadow-sm"><X className="w-6 h-6 text-zinc-900" /></button>
-        </div>
+        <button onClick={onClose} className="absolute top-4 right-4 z-[100] p-2 bg-white/50 hover:bg-zinc-100 rounded-full backdrop-blur shadow-sm"><X className="w-6 h-6 text-zinc-900" /></button>
         
         <div className="md:hidden flex items-center justify-between p-4 border-b border-zinc-100 bg-white sticky top-0 z-50 print:hidden">
-           {/* V0.6.7: Favorite Left, Name Center, Close Right(Absolute) */}
-           <div className="flex items-center">
+           <span className="font-bold text-sm truncate max-w-[200px]">{product.name}</span>
+           <div className="flex gap-2 mr-8"> 
               <button onClick={onToggleFavorite}><Star className={`w-6 h-6 ${isFavorite ? 'text-yellow-400 fill-yellow-400' : 'text-zinc-300'}`}/></button>
-              <span className="font-bold text-sm truncate max-w-[200px] ml-3">{product.name}</span>
            </div>
         </div>
 
@@ -1552,6 +1535,7 @@ function ProductDetailModal({ product, spaceContents, onClose, onEdit, isAdmin, 
                         <span className="text-[9px] font-bold">PDF</span>
                     </button>
                  </div>
+                 {isAdmin && <button onClick={onEdit} className="w-full h-12 bg-zinc-900 text-white rounded-xl text-sm font-bold shadow-lg active:scale-95 transition-transform">Edit Product</button>}
               </div>
 
             </div>
@@ -1561,6 +1545,7 @@ function ProductDetailModal({ product, spaceContents, onClose, onEdit, isAdmin, 
                  <button onClick={handleShareImage} className="flex items-center px-5 py-2.5 bg-zinc-100 text-zinc-600 rounded-xl text-sm font-bold hover:bg-zinc-200 transition-colors shadow-sm"><ImgIcon className="w-4 h-4 mr-2" /> Share Image</button>
                  <button onClick={() => window.print()} className="flex items-center px-5 py-2.5 bg-zinc-100 text-zinc-600 rounded-xl text-sm font-bold hover:bg-zinc-200 transition-colors shadow-sm"><Printer className="w-4 h-4 mr-2" /> Print PDF</button>
               </div>
+              {isAdmin && (<button onClick={onEdit} className="flex items-center px-6 py-2.5 bg-zinc-900 text-white rounded-xl text-sm font-bold hover:bg-black hover:shadow-lg transition-all"><Edit2 className="w-4 h-4 mr-2" /> Edit</button>)}
             </div>
           </div>
         </div>
@@ -1853,7 +1838,7 @@ function SceneEditModal({ initialData, allProducts, spaceTags = [], onClose, onS
       <div className="bg-white w-full max-w-2xl rounded-2xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
          <div className="px-6 py-4 border-b border-zinc-100 flex justify-between items-center bg-white z-10">
             <h3 className="text-lg font-bold text-zinc-900">{initialData.isNew ? 'New Scene' : 'Edit Scene'}</h3>
-            <button onClick={onClose} className="p-2 bg-white/50 hover:bg-zinc-100 rounded-full backdrop-blur shadow-sm"><X className="w-5 h-5 text-zinc-400"/></button>
+            <button onClick={onClose}><X className="w-5 h-5 text-zinc-400"/></button>
          </div>
          <div className="flex-1 overflow-y-auto p-6 space-y-8 bg-zinc-50">
             <div className="space-y-4">
@@ -1907,17 +1892,14 @@ function SpaceSceneModal({ scene, products, allProducts, isAdmin, onClose, onEdi
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[60] flex items-center justify-center p-0 md:p-6 animate-in zoom-in-95 duration-200 print:hidden">
       <div className="bg-white w-full h-full md:h-[90vh] md:max-w-6xl md:rounded-3xl overflow-hidden shadow-2xl flex flex-col md:flex-row relative">
-         <div className="absolute top-4 right-4 z-[100] flex gap-2">
-            {isAdmin && <button onClick={onEdit} className="p-2 bg-white/50 hover:bg-zinc-100 rounded-full backdrop-blur shadow-sm"><Edit3 className="w-6 h-6 text-zinc-900" /></button>}
-            <button onClick={onClose} className="p-2 bg-white/50 hover:bg-zinc-100 rounded-full backdrop-blur shadow-sm"><X className="w-6 h-6 text-zinc-900" /></button>
-         </div>
+         <button onClick={onClose} className="absolute top-4 right-4 z-50 p-2 bg-black/20 text-white hover:bg-black/50 rounded-full backdrop-blur"><X className="w-6 h-6"/></button>
          <div className="w-full md:w-2/3 bg-black relative flex flex-col justify-center h-[40vh] md:h-full">
             <img src={images[currentImageIndex]} className="w-full h-full object-contain" alt="Scene" />
             {images.length > 1 && (<div className="absolute bottom-4 left-0 right-0 flex justify-center space-x-2 px-4">{images.map((_, idx) => (<button key={idx} onClick={() => setCurrentImageIndex(idx)} className={`w-2 h-2 rounded-full transition-all ${currentImageIndex === idx ? 'bg-white w-6' : 'bg-white/40 hover:bg-white/80'}`} />))}</div>)}
          </div>
          <div className="w-full md:w-1/3 bg-white flex flex-col border-l border-zinc-100 h-[60vh] md:h-full relative">
             <div className="p-6 md:p-8 border-b border-zinc-50">
-               <div className="flex justify-between items-start mb-4"><div><h2 className="text-2xl md:text-3xl font-black text-zinc-900 mb-2">{scene.title}</h2><p className="text-zinc-500 text-sm leading-relaxed">{scene.description}</p></div></div>
+               <div className="flex justify-between items-start mb-4"><div><h2 className="text-2xl md:text-3xl font-black text-zinc-900 mb-2">{scene.title}</h2><p className="text-zinc-500 text-sm leading-relaxed">{scene.description}</p></div>{isAdmin && <button onClick={onEdit} className="p-2 text-zinc-400 hover:text-zinc-900"><Edit3 className="w-5 h-5"/></button>}</div>
             </div>
             <div className="flex-1 overflow-y-auto p-6 md:p-8 custom-scrollbar bg-zinc-50/50">
                <div className="flex justify-between items-center mb-4"><h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Tagged Products</h3>{isAdmin && <button onClick={() => setProductManagerOpen(!isProductManagerOpen)} className="text-xs font-bold text-indigo-600 hover:text-indigo-800">+ Add Tag</button>}</div>
