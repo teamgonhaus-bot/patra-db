@@ -11,7 +11,7 @@ import {
   ChevronsUp, Camera, ImagePlus, Sofa, Briefcase, Users, Home as HomeIcon, MapPin,
   Edit3, Grid, MoreVertical, MousePointer2, CheckSquare, XCircle, Printer, List, Eye,
   PlayCircle, BarChart3, CornerUpLeft, Grid3X3, Droplet, Coffee, GraduationCap, ShoppingBag, FileDown, FileUp,
-  ArrowLeftRight, SlidersHorizontal, Move, Monitor, Maximize, EyeOff, Type
+  ArrowLeftRight, SlidersHorizontal, Move, Monitor, Maximize, EyeOff
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { 
@@ -37,7 +37,7 @@ const YOUR_FIREBASE_CONFIG = {
 // ----------------------------------------------------------------------
 // 상수 및 설정
 // ----------------------------------------------------------------------
-const APP_VERSION = "v0.7.2"; 
+const APP_VERSION = "v0.7.1"; 
 const BUILD_DATE = "2026.01.22";
 const ADMIN_PASSWORD = "adminlcg1"; 
 
@@ -131,8 +131,7 @@ export default function App() {
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [selectedSwatch, setSelectedSwatch] = useState(null);
   const [compareList, setCompareList] = useState([]);
-  const [isCompareModalOpen, setIsCompareModalOpen] = useState(false); // Legacy modal check
-  const [hiddenCompareIds, setHiddenCompareIds] = useState([]); 
+  const [hiddenCompareIds, setHiddenCompareIds] = useState([]); // Compare Page Toggle
 
   // Edit & Admin
   const [isFormOpen, setIsFormOpen] = useState(false); 
@@ -152,7 +151,6 @@ export default function App() {
   const [sidebarState, setSidebarState] = useState({ spaces: true, collections: true, materials: true });
   const [myPickViewMode, setMyPickViewMode] = useState('grid'); 
   const [bannerData, setBannerData] = useState({ url: null, logoUrl: null, title: 'Design Lab DB', subtitle: 'Integrated Product Database & Archives' });
-  const [appSettings, setAppSettings] = useState({ logo: null, title: 'PATRA', subtitle: 'Design Lab DB' });
   const [spaceContents, setSpaceContents] = useState({}); 
 
   // Space/Scene Editing
@@ -166,7 +164,6 @@ export default function App() {
   const dragOverItem = useRef(null);
 
   const mainContentRef = useRef(null);
-  const sidebarLogoInputRef = useRef(null);
 
   // --- Effects ---
   useEffect(() => {
@@ -185,6 +182,7 @@ export default function App() {
 
   useEffect(() => {
     const handlePopState = (event) => {
+      // Logic to handle back button for layered modals and views
       if (selectedSwatch && selectedProduct) {
           setSelectedSwatch(null); 
           window.history.pushState({ modal: 'product' }, '', window.location.pathname + '?id=' + selectedProduct.id);
@@ -266,10 +264,9 @@ export default function App() {
         setSwatches(loadedSwatches);
       });
       const bannerDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'banner');
-      onSnapshot(bannerDocRef, (doc) => { if (doc.exists()) setBannerData(prev => ({ ...prev, ...doc.data() })); });
-      const appSettingsRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'app');
-      onSnapshot(appSettingsRef, (doc) => { if(doc.exists()) setAppSettings(prev => ({...prev, ...doc.data()})); });
-
+      const unsubBanner = onSnapshot(bannerDocRef, (doc) => {
+        if (doc.exists()) setBannerData(prev => ({ ...prev, ...doc.data() }));
+      });
       SPACES.forEach(space => {
          onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'space_contents', space.id), (docSnapshot) => {
             if(docSnapshot.exists()) {
@@ -277,12 +274,10 @@ export default function App() {
             }
          });
       });
-      return () => { unsubProducts(); unsubSwatches(); };
+      return () => { unsubProducts(); unsubSwatches(); unsubBanner(); };
     } else {
       const localBanner = localStorage.getItem('patra_banner_data');
       if (localBanner) setBannerData(JSON.parse(localBanner));
-      const localAppSettings = localStorage.getItem('patra_app_settings');
-      if(localAppSettings) setAppSettings(JSON.parse(localAppSettings));
       loadFromLocalStorage();
     }
   }, [user]);
@@ -330,9 +325,9 @@ export default function App() {
     if(e) e.stopPropagation();
     if(compareList.find(p => p.id === product.id)) {
         setCompareList(compareList.filter(p => p.id !== product.id));
-        setHiddenCompareIds(prev => prev.filter(id => id !== product.id));
+        setHiddenCompareIds(prev => prev.filter(id => id !== product.id)); // Also remove from hidden
     } else {
-        if(compareList.length >= 8) { showToast("비교는 최대 8개까지 가능합니다.", "error"); return; }
+        if(compareList.length >= 8) { showToast("비교함에는 최대 8개까지 담을 수 있습니다.", "error"); return; }
         setCompareList([...compareList, product]);
     }
   };
@@ -364,30 +359,6 @@ export default function App() {
   const handleLogoUpload = async (e) => { if (!isAdmin) return; const file = e.target.files[0]; if (!file) return; try { const resizedImage = await processImage(file); const newData = { ...bannerData, logoUrl: resizedImage }; if (isFirebaseAvailable && db) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'banner'), newData, { merge: true }); else { localStorage.setItem('patra_banner_data', JSON.stringify(newData)); setBannerData(newData); } showToast("로고가 업데이트되었습니다."); } catch (error) { showToast("이미지 처리 실패", "error"); } };
   const handleBannerTextChange = (key, value) => { if (!isAdmin) return; setBannerData(prev => ({ ...prev, [key]: value })); };
   const saveBannerText = async () => { if (isFirebaseAvailable && db) { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'banner'), bannerData, { merge: true }); showToast("배너 문구가 저장되었습니다."); } };
-  
-  // App Header Settings
-  const handleSidebarLogoUpload = async (e) => {
-      if(!isAdmin) return;
-      const file = e.target.files[0];
-      if(!file) return;
-      try {
-          const resized = await processImage(file);
-          const newData = { ...appSettings, logo: resized };
-          if(isFirebaseAvailable && db) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'app'), newData, {merge: true});
-          else { localStorage.setItem('patra_app_settings', JSON.stringify(newData)); setAppSettings(newData); }
-          showToast("헤더 로고가 변경되었습니다.");
-      } catch(e) { showToast("이미지 처리 실패", "error"); }
-  };
-  const handleSidebarTitleChange = async () => {
-      if(!isAdmin) return;
-      const newTitle = prompt("새로운 타이틀을 입력하세요:", appSettings.title);
-      if(newTitle !== null) {
-          const newData = { ...appSettings, title: newTitle };
-          if(isFirebaseAvailable && db) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'app'), newData, {merge: true});
-          else { localStorage.setItem('patra_app_settings', JSON.stringify(newData)); setAppSettings(newData); }
-      }
-  };
-
   const handleSpaceBannerUpload = async (e, spaceId) => { if (!isAdmin) return; const file = e.target.files[0]; if (!file) return; try { const resizedImage = await processImage(file); const currentContent = spaceContents[spaceId] || {}; const newContent = { ...currentContent, banner: resizedImage }; if (isFirebaseAvailable && db) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'space_contents', spaceId), newContent, { merge: true }); showToast("공간 배너가 업데이트되었습니다."); } catch (error) { showToast("이미지 처리 실패", "error"); } };
   const handleSpaceInfoSave = async (spaceId, info) => { const currentContent = spaceContents[spaceId] || {}; const newContent = { ...currentContent, ...info }; if (isFirebaseAvailable && db) { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'space_contents', spaceId), newContent, { merge: true }); } showToast("공간 정보가 저장되었습니다."); };
   
@@ -459,6 +430,7 @@ export default function App() {
           saveToLocalStorage(newProducts); 
       } 
       
+      // Update local compare list if the product is being compared
       setCompareList(prev => prev.map(p => p.id === docId ? payload : p));
 
       if (selectedProduct && String(selectedProduct.id) === docId) setSelectedProduct(payload); 
@@ -481,6 +453,7 @@ export default function App() {
       showToast("삭제되었습니다."); 
   };
   
+  // --- Duplication Logic ---
   const handleDuplicateProduct = async (product) => {
      if(!isAdmin) return;
      const newProduct = { ...product, id: Date.now().toString(), name: `${product.name} (Copy)`, createdAt: Date.now(), updatedAt: Date.now(), orderIndex: Date.now() };
@@ -568,22 +541,9 @@ export default function App() {
       
       {/* Sidebar */}
       <aside className={`fixed inset-y-0 left-0 z-50 w-72 bg-white/90 backdrop-blur-md border-r border-zinc-200 flex flex-col shadow-2xl md:shadow-none transition-transform duration-300 md:relative md:translate-x-0 print:hidden ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-        <div className="p-6 border-b border-zinc-100 flex items-center justify-between cursor-pointer group relative" onClick={handleHomeClick}>
-          <div className="flex flex-col group/header">
-             <div className="flex items-center space-x-1">
-                 {appSettings.logo ? (
-                     <img src={appSettings.logo} alt="Logo" className="h-8 object-contain" />
-                 ) : (
-                     <span className="text-2xl font-black tracking-tighter text-zinc-900 group-hover:scale-105 transition-transform origin-left">{appSettings.title}</span>
-                 )}
-                 {isAdmin && (
-                     <div className="absolute right-12 top-6 opacity-0 group-hover/header:opacity-100 transition-opacity flex space-x-1">
-                         <button onClick={(e)=>{e.stopPropagation(); sidebarLogoInputRef.current.click()}} className="p-1 bg-zinc-100 rounded hover:bg-zinc-200"><ImageIcon className="w-3 h-3"/></button>
-                         <button onClick={(e)=>{e.stopPropagation(); handleSidebarTitleChange()}} className="p-1 bg-zinc-100 rounded hover:bg-zinc-200"><Type className="w-3 h-3"/></button>
-                         <input type="file" ref={sidebarLogoInputRef} className="hidden" accept="image/*" onChange={handleSidebarLogoUpload}/>
-                     </div>
-                 )}
-             </div>
+        <div className="p-6 border-b border-zinc-100 flex items-center justify-between cursor-pointer group" onClick={handleHomeClick}>
+          <div className="flex flex-col">
+             <div className="flex items-center space-x-1"><span className="text-2xl font-black tracking-tighter text-zinc-900 group-hover:scale-105 transition-transform origin-left">PATRA</span></div>
              <span className="text-[10px] font-medium text-zinc-500 tracking-[0.2em] uppercase mt-0.5">Design Lab DB</span>
           </div>
           <button onClick={(e) => { e.stopPropagation(); setIsMobileMenuOpen(false); }} className="md:hidden text-zinc-400 hover:text-zinc-600"><X className="w-6 h-6" /></button>
@@ -667,7 +627,7 @@ export default function App() {
                       {activeCategory === 'MY_PICK' && myPickViewMode === 'list' ? (
                         <div className="space-y-4 print:space-y-6">
                             <div className="hidden print:block mb-8"><h1 className="text-4xl font-bold mb-2">MY PICK SELECTION</h1><p className="text-zinc-500">{new Date().toLocaleDateString()} · Patra Design Lab</p></div>
-                            {processedProducts.map((product) => (<div key={product.id} className="flex flex-col md:flex-row gap-6 p-6 bg-white rounded-2xl border border-zinc-200 print:border-zinc-300 print:break-inside-avoid"><div className="w-full md:w-48 h-48 bg-zinc-50 rounded-xl overflow-hidden flex-shrink-0 border border-zinc-100 flex items-center justify-center">{product.images?.[0] ? <img src={typeof product.images[0] === 'object' ? product.images[0].url : product.images[0]} className="w-full h-full object-contain mix-blend-multiply" alt={product.name} /> : <ImageIcon className="w-8 h-8 text-zinc-300"/>}</div><div className="flex-1"><div className="flex justify-between items-start"><div><span className="inline-block px-2 py-0.5 bg-zinc-100 text-zinc-600 text-xs font-bold rounded mb-2">{product.category}</span><h3 className="text-2xl font-bold text-zinc-900 mb-1">{product.name}</h3><p className="text-zinc-500 font-medium text-sm mb-4">Designed by {product.designer || 'Patra Design Lab'}</p></div><button onClick={(e) => toggleFavorite(e, product.id)} className="print:hidden text-yellow-400 hover:scale-110 transition-transform"><Star className="w-6 h-6 fill-current"/></button></div><div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm"><div className="bg-zinc-50 p-3 rounded-lg"><span className="font-bold block text-xs text-zinc-400 uppercase mb-1">Specs</span>{product.specs}</div><div className="space-y-2"><div><span className="font-bold text-xs text-zinc-400 uppercase">Options</span> <span className="text-zinc-700">{product.options?.join(', ')}</span></div><div><span className="font-bold text-xs text-zinc-400 uppercase block mb-1">Colors</span> <div className="flex gap-2 mb-1"><span className="text-xs text-zinc-400 w-16">Body:</span><div className="flex gap-1">{product.bodyColors?.map((c, i) => <SwatchDisplay key={i} color={c} size="small" />)}</div></div><div className="flex gap-2"><span className="text-xs text-zinc-400 w-16">Upholstery:</span><div className="flex gap-1">{product.upholsteryColors?.map((c, i) => <SwatchDisplay key={i} color={c} size="small" />)}</div></div></div></div></div></div></div>))}
+                            {processedProducts.map((product) => (<div key={product.id} className="flex flex-col md:flex-row gap-6 p-6 bg-white rounded-2xl border border-zinc-200 print:border-zinc-300 print:break-inside-avoid"><div className="w-full md:w-48 h-48 bg-zinc-50 rounded-xl overflow-hidden flex-shrink-0 border border-zinc-100 flex items-center justify-center">{product.images?.[0] ? <img src={product.images[0]} className="w-full h-full object-contain mix-blend-multiply" alt={product.name} /> : <ImageIcon className="w-8 h-8 text-zinc-300"/>}</div><div className="flex-1"><div className="flex justify-between items-start"><div><span className="inline-block px-2 py-0.5 bg-zinc-100 text-zinc-600 text-xs font-bold rounded mb-2">{product.category}</span><h3 className="text-2xl font-bold text-zinc-900 mb-1">{product.name}</h3><p className="text-zinc-500 font-medium text-sm mb-4">Designed by {product.designer || 'Patra Design Lab'}</p></div><button onClick={(e) => toggleFavorite(e, product.id)} className="print:hidden text-yellow-400 hover:scale-110 transition-transform"><Star className="w-6 h-6 fill-current"/></button></div><div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm"><div className="bg-zinc-50 p-3 rounded-lg"><span className="font-bold block text-xs text-zinc-400 uppercase mb-1">Specs</span>{product.specs}</div><div className="space-y-2"><div><span className="font-bold text-xs text-zinc-400 uppercase">Options</span> <span className="text-zinc-700">{product.options?.join(', ')}</span></div><div><span className="font-bold text-xs text-zinc-400 uppercase block mb-1">Colors</span> <div className="flex gap-2 mb-1"><span className="text-xs text-zinc-400 w-16">Body:</span><div className="flex gap-1">{product.bodyColors?.map((c, i) => <SwatchDisplay key={i} color={c} size="small" />)}</div></div><div className="flex gap-2"><span className="text-xs text-zinc-400 w-16">Upholstery:</span><div className="flex gap-1">{product.upholsteryColors?.map((c, i) => <SwatchDisplay key={i} color={c} size="small" />)}</div></div></div></div></div></div></div>))}
                         </div>
                       ) : (
                         <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-6 pb-20 print:grid-cols-3 print:gap-4">
@@ -692,12 +652,6 @@ export default function App() {
 
       {toast && <div className="fixed bottom-8 right-8 bg-zinc-900 text-white px-5 py-3.5 rounded-xl shadow-2xl flex items-center space-x-3 animate-in slide-in-from-bottom-10 fade-in z-[90] print:hidden">{toast.type === 'success' ? <Check className="w-5 h-5 text-green-400" /> : <Info className="w-5 h-5 text-red-400" />}<span className="text-sm font-bold tracking-wide">{toast.message}</span></div>}
       
-      {isCompareModalOpen && (
-         <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[100] flex items-center justify-center p-4 animate-in zoom-in-95">
-            {/* Legacy modal - keep for safety, but compare view is now a page */}
-         </div>
-      )}
-
       {selectedProduct && (
         <ProductDetailModal 
           product={selectedProduct} 
@@ -715,7 +669,7 @@ export default function App() {
           onNavigateSpace={(spaceId) => { setSelectedProduct(null); setActiveCategory(spaceId); }} 
           onNavigateScene={(scene) => { setSelectedProduct(null); setActiveCategory(scene.spaceId || scene.id); setSelectedScene({...scene, spaceId: scene.spaceId || 'UNKNOWN'}); }}
           onNavigateProduct={(product) => setSelectedProduct(product)}
-          onNavigateSwatch={(swatch) => { setSelectedSwatch(swatch); /* Layer on top */ }}
+          onNavigateSwatch={(swatch) => { setSelectedSwatch(swatch); /* Don't close product modal, just open swatch on top */ }}
         />
       )}
       
@@ -874,7 +828,7 @@ function CompareView({ products, hiddenIds, onToggleVisibility, onRemove, onEdit
                                 <th key={p.id} className="w-72 bg-white border-b border-r border-zinc-100 p-4 align-top sticky top-0 z-10">
                                     <div className="relative group">
                                         <div className="aspect-[4/3] bg-zinc-50 rounded-xl mb-4 flex items-center justify-center overflow-hidden border border-zinc-100 relative">
-                                            {p.images?.[0] ? <img src={typeof p.images[0] === 'object' ? p.images[0].url : p.images[0]} className="w-full h-full object-cover mix-blend-multiply" /> : <ImageIcon className="text-zinc-300"/>}
+                                            {p.images?.[0] ? <img src={p.images[0]} className="w-full h-full object-cover mix-blend-multiply" /> : <ImageIcon className="text-zinc-300"/>}
                                             <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors"></div>
                                         </div>
                                         <h4 className="font-bold text-lg text-zinc-900 mb-1">{p.name}</h4>
@@ -882,7 +836,7 @@ function CompareView({ products, hiddenIds, onToggleVisibility, onRemove, onEdit
                                     </div>
                                 </th>
                             ))}
-                            {/* Empty Placeholders */}
+                            {/* Empty Placeholders to keep layout if few items */}
                             {visibleProducts.length < 4 && Array(4 - visibleProducts.length).fill(0).map((_, i) => <th key={`ph-${i}`} className="w-72 bg-zinc-50/10 border-b border-zinc-50"></th>)}
                         </tr>
                     </thead>
@@ -1144,7 +1098,7 @@ function SwatchDetailModal({ swatch, allProducts, swatches, onClose, onNavigateP
                                  {relatedProducts.length > 0 ? relatedProducts.map(p => (
                                      <button key={p.id} onClick={() => onNavigateProduct(p)} className="flex items-center p-2 rounded-lg border border-zinc-100 hover:border-zinc-300 hover:bg-zinc-50 transition-all text-left group">
                                          <div className="w-10 h-10 rounded-md bg-zinc-100 overflow-hidden mr-3 flex-shrink-0">
-                                            {p.images?.[0] ? <img src={typeof p.images[0] === 'object' ? p.images[0].url : p.images[0]} className="w-full h-full object-cover" /> : <div className="w-full h-full bg-zinc-200"></div>}
+                                            {p.images?.[0] ? <img src={p.images[0]} className="w-full h-full object-cover" /> : <div className="w-full h-full bg-zinc-200"></div>}
                                          </div>
                                          <div className="min-w-0">
                                              <div className="text-xs font-bold text-zinc-900 truncate group-hover:text-blue-600">{p.name}</div>
@@ -1509,7 +1463,7 @@ function DashboardView({ products, favorites, setActiveCategory, setSelectedProd
                               <span className="text-xl font-black text-zinc-900">{sliceDetails.awardCount}</span>
                            </div>
                            <div className="bg-zinc-50 p-3 rounded-xl border border-zinc-100">
-                              <span className="text-[10px] text-zinc-400 uppercase font-bold block mb-1">Launching</span>
+                              <span className="text-[10px] text-zinc-400 uppercase font-bold block mb-1">Since</span>
                               <span className="text-xs font-bold text-zinc-900 truncate" title={sliceDetails.years}>{sliceDetails.years.substring(0,12)}...</span>
                            </div>
                         </div>
@@ -1524,11 +1478,11 @@ function DashboardView({ products, favorites, setActiveCategory, setSelectedProd
                             </div>
                         </div>
 
-                        <div className="flex-1 overflow-y-auto max-h-60 custom-scrollbar bg-zinc-50 p-3 rounded-xl border border-zinc-100">
+                        <div className="flex-1 overflow-y-auto max-h-40 custom-scrollbar bg-zinc-50 p-3 rounded-xl border border-zinc-100">
                             <span className="text-[10px] text-zinc-400 uppercase font-bold block mb-2 sticky top-0 bg-zinc-50">Product List</span>
                             <div className="grid grid-cols-2 gap-2">
                                 {sliceDetails.products.map(p => (
-                                    <div key={p.id} className="text-xs truncate text-zinc-600 hover:text-black cursor-pointer p-1 hover:bg-zinc-100 rounded" onClick={() => setSelectedProduct(p)}>• {p.name}</div>
+                                    <div key={p.id} className="text-xs truncate text-zinc-600 hover:text-black cursor-pointer" onClick={() => setSelectedProduct(p)}>• {p.name}</div>
                                 ))}
                             </div>
                         </div>
@@ -1573,7 +1527,7 @@ function DashboardView({ products, favorites, setActiveCategory, setSelectedProd
                   <div className="aspect-[4/3] bg-zinc-100 rounded-lg flex items-center justify-center overflow-hidden border border-zinc-200 mb-2 relative">
                      {/* Multiple Mix Blend Mode Overlay */}
                      <div className="absolute inset-0 bg-zinc-100/50 mix-blend-multiply z-10 pointer-events-none"></div>
-                     {product.images?.[0] ? <img src={typeof product.images[0] === 'object' ? product.images[0].url : product.images[0]} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" alt="" /> : <ImageIcon className="w-6 h-6 text-zinc-300"/>}
+                     {product.images?.[0] ? <img src={product.images[0]} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" alt="" /> : <ImageIcon className="w-6 h-6 text-zinc-300"/>}
                   </div>
                   <h4 className="text-xs font-bold text-zinc-900 truncate">{product.name}</h4>
                   <div className="flex justify-between items-center mt-1">
@@ -1588,10 +1542,69 @@ function DashboardView({ products, favorites, setActiveCategory, setSelectedProd
   );
 }
 
+function SpaceDetailView({ space, spaceContent, activeTag, setActiveTag, isAdmin, onBannerUpload, onEditInfo, onManageProducts, onAddScene, onViewScene, productCount }) {
+  const banner = spaceContent.banner;
+  const description = spaceContent.description || "이 공간에 대한 설명이 없습니다.";
+  const trend = spaceContent.trend || "";
+  const scenes = spaceContent.scenes || [];
+  const tags = spaceContent.tags || space.defaultTags || []; 
+
+  const filteredScenes = activeTag === 'ALL' ? scenes : scenes.filter(s => s.tags && s.tags.includes(activeTag));
+
+  const copySpaceLink = () => { navigator.clipboard.writeText(`${window.location.origin}${window.location.pathname}?space=${space.id}`); window.alert("공간 공유 링크가 복사되었습니다."); };
+
+  return (
+    <div className="mb-12 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      <div className="relative rounded-3xl overflow-hidden h-72 md:h-96 shadow-lg group mb-8 bg-zinc-900 print:hidden">
+        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent z-10"></div>
+        {banner ? <img src={banner} className="w-full h-full object-cover transition-transform duration-1000" alt="Space Banner" /> : <div className="w-full h-full flex items-center justify-center opacity-30"><span className="text-white text-4xl font-bold uppercase">{space.label}</span></div>}
+        <div className="absolute bottom-8 left-8 md:bottom-12 md:left-12 z-20 text-white max-w-3xl">
+           <div className="flex items-center space-x-3 mb-3"><div className="p-2 bg-white/20 backdrop-blur-md rounded-xl">{React.createElement(space.icon, { className: "w-6 h-6" })}</div><span className="text-sm font-bold uppercase tracking-widest opacity-90">Space Curation</span></div>
+           <h2 className="text-4xl md:text-6xl font-black mb-4 tracking-tight leading-tight">{space.label}</h2>
+           <p className="text-zinc-200 text-sm md:text-lg leading-relaxed font-light">{description}</p>
+           {trend && (<div className="mt-6 pl-4 border-l-2 border-indigo-500"><p className="text-indigo-300 text-xs font-bold uppercase mb-1">Design Trend</p><p className="text-zinc-300 text-sm italic">"{trend}"</p></div>)}
+        </div>
+        <div className="absolute top-6 right-6 z-30 flex space-x-3">
+           <button onClick={copySpaceLink} className="p-2.5 bg-white/20 backdrop-blur rounded-full text-white hover:bg-white hover:text-black transition-all"><Share2 className="w-5 h-5" /></button>
+           {isAdmin && (<><label className="p-2.5 bg-black/40 backdrop-blur rounded-full text-white hover:bg-white hover:text-black transition-all cursor-pointer"><Camera className="w-5 h-5" /><input type="file" className="hidden" accept="image/*" onChange={onBannerUpload} /></label><button onClick={onEditInfo} className="p-2.5 bg-black/40 backdrop-blur rounded-full text-white hover:bg-white hover:text-black transition-all"><Edit3 className="w-5 h-5" /></button></>)}
+        </div>
+      </div>
+
+      <div className="mb-8 flex gap-2 overflow-x-auto pb-2 custom-scrollbar">
+         <button onClick={() => setActiveTag('ALL')} className={`px-4 py-2 rounded-full text-sm font-bold whitespace-nowrap transition-colors border ${activeTag === 'ALL' ? 'bg-black text-white border-black' : 'bg-white text-zinc-500 border-zinc-200 hover:bg-zinc-100'}`}>ALL</button>
+         {tags.map((tag, idx) => (
+            <button key={idx} onClick={() => setActiveTag(tag)} className={`px-4 py-2 rounded-full text-sm font-bold whitespace-nowrap transition-colors border ${activeTag === tag ? 'bg-black text-white border-black' : 'bg-white text-zinc-500 border-zinc-200 hover:bg-zinc-100'}`}>{tag}</button>
+         ))}
+      </div>
+
+      <div className="mb-12 print:hidden">
+        <div className="flex items-center justify-between mb-6"><h3 className="text-2xl font-extrabold text-zinc-900 flex items-center"><ImageIcon className="w-6 h-6 mr-2 text-indigo-500" /> Space Scenes ({filteredScenes.length})</h3>{isAdmin && (<button onClick={onAddScene} className="flex items-center text-sm font-bold bg-zinc-900 text-white px-4 py-2 rounded-lg hover:bg-black transition-colors shadow-lg"><Plus className="w-4 h-4 mr-2" /> Add Scene</button>)}</div>
+        {filteredScenes.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {filteredScenes.map((scene) => (
+              <div key={scene.id} onClick={() => onViewScene(scene)} className="group relative aspect-[4/3] rounded-2xl overflow-hidden bg-zinc-100 shadow-md hover:shadow-xl transition-all cursor-pointer">
+                <img src={scene.image} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" alt={scene.title} />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-80 group-hover:opacity-100 transition-opacity"></div>
+                {scene.productIds && scene.productIds.length > 0 && <div className="absolute top-4 right-4 bg-black/60 backdrop-blur text-white text-[10px] font-bold px-2 py-1 rounded-lg flex items-center"><Tag className="w-3 h-3 mr-1" /> {scene.productIds.length} Products</div>}
+                <div className="absolute bottom-5 left-5 right-5 text-white transform translate-y-2 group-hover:translate-y-0 transition-transform">
+                  <h4 className="text-xl font-bold mb-1 truncate">{scene.title}</h4>
+                  <p className="text-xs text-zinc-300 line-clamp-1">{scene.description}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (<div className="text-center py-12 bg-zinc-50 rounded-2xl border border-dashed border-zinc-200 text-zinc-400"><ImageIcon className="w-12 h-12 mx-auto mb-3 opacity-20" /><p className="text-sm">등록된 공간 장면이 없습니다.</p></div>)}
+      </div>
+      <div className="flex items-center justify-between mb-6 border-t border-zinc-100 pt-12 print:border-none print:pt-0">
+         <h3 className="text-xl font-bold text-zinc-900 flex items-center"><Tag className="w-5 h-5 mr-2 text-zinc-400" /> All Curated Products <span className="ml-2 text-sm font-medium text-zinc-400 bg-zinc-100 px-2 py-0.5 rounded-full">{productCount}</span></h3>
+         {isAdmin && (<button onClick={onManageProducts} className="flex items-center text-sm font-bold text-zinc-500 hover:text-zinc-900 bg-white border border-zinc-200 px-4 py-2 rounded-lg hover:border-zinc-400 transition-colors"><Settings className="w-4 h-4 mr-2" /> Manage List</button>)}
+      </div>
+    </div>
+  );
+}
+
 function ProductCard({ product, onClick, showMoveControls, onMove, isFavorite, onToggleFavorite, onCompareToggle, isCompared, isAdmin, onDuplicate }) {
-  const mainImageEntry = product.images && product.images.length > 0 ? product.images[0] : null;
-  // Handle both string URL and object {url, caption}
-  const mainImageUrl = mainImageEntry ? (typeof mainImageEntry === 'object' ? mainImageEntry.url : mainImageEntry) : null;
+  const mainImage = product.images && product.images.length > 0 ? product.images[0] : null;
   const awardCount = product.awards?.length || 0;
   
   return (
@@ -1618,7 +1631,7 @@ function ProductCard({ product, onClick, showMoveControls, onMove, isFavorite, o
         </div>
 
         <div className="w-full h-full flex items-center justify-center transition-transform duration-500 group-hover:scale-105">
-            {mainImageUrl ? <img src={mainImageUrl} alt={product.name} loading="lazy" className="w-full h-full object-cover" /> : <div className="text-center opacity-30"><ImageIcon className="w-8 h-8 text-zinc-400" /></div>}
+            {mainImage ? <img src={mainImage} alt={product.name} loading="lazy" className="w-full h-full object-cover" /> : <div className="text-center opacity-30"><ImageIcon className="w-8 h-8 text-zinc-400" /></div>}
         </div>
         
         {/* Sort Controls */}
@@ -1643,6 +1656,7 @@ function ProductCard({ product, onClick, showMoveControls, onMove, isFavorite, o
 }
 
 function ProductDetailModal({ product, allProducts, swatches, spaceContents, onClose, onEdit, isAdmin, showToast, isFavorite, onToggleFavorite, onNavigateSpace, onNavigateScene, onNavigateNext, onNavigatePrev, onNavigateProduct, onNavigateSwatch }) {
+  // 1. Declare all Hooks at the top level unconditionally
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [isZoomed, setIsZoomed] = useState(false);
   const canvasRef = useRef(null);
@@ -1655,8 +1669,10 @@ function ProductDetailModal({ product, allProducts, swatches, spaceContents, onC
       return () => window.removeEventListener('click', closePopup);
   }, []);
 
+  // 2. Early return check
   if (!product) return null;
 
+  // 3. Derived data & Handlers
   const handleTouchStart = (e) => { touchStart.current = e.targetTouches[0].clientX; };
   const handleTouchEnd = (e) => {
      if(!touchStart.current) return;
@@ -1670,11 +1686,7 @@ function ProductDetailModal({ product, allProducts, swatches, spaceContents, onC
   };
 
   const images = product.images || [];
-  // Handle Object vs String for Images
-  const currentImageEntry = images.length > 0 ? images[currentImageIndex] : null;
-  const currentImageUrl = currentImageEntry ? (typeof currentImageEntry === 'object' ? currentImageEntry.url : currentImageEntry) : null;
-  const currentImageCaption = currentImageEntry && typeof currentImageEntry === 'object' ? currentImageEntry.caption : '';
-
+  const currentImage = images.length > 0 ? images[currentImageIndex] : null;
   const contentImages = product.contentImages || [];
   
   const relatedSpaces = SPACES.filter(s => product.spaces && product.spaces.includes(s.id));
@@ -1690,6 +1702,7 @@ function ProductDetailModal({ product, allProducts, swatches, spaceContents, onC
     });
   }
 
+  // Related Products (Manually tagged)
   const relatedItems = allProducts.filter(p => product.relatedProductIds?.includes(p.id));
 
   const copyToClipboard = () => { navigator.clipboard.writeText(`[${product.name}]\n${product.specs}`); showToast("Copied to clipboard"); };
@@ -1698,36 +1711,15 @@ function ProductDetailModal({ product, allProducts, swatches, spaceContents, onC
   const handleSwatchClick = (e, color) => {
       e.stopPropagation();
       const rect = e.currentTarget.getBoundingClientRect();
+      const code = typeof color === 'object' ? color.materialCode || 'NO CODE' : color;
+      const name = typeof color === 'object' ? color.name : '';
       
-      // Resolve Material Code
-      let code = 'NO CODE';
-      let name = '';
-      let swatchId = null;
-
-      if (typeof color === 'object') {
-          // If the product data itself has the code, use it.
-          // Otherwise try to find it in the global swatches list by ID
-          swatchId = color.id;
-          const globalSwatch = swatches.find(s => s.id === swatchId);
-          
-          if(globalSwatch && globalSwatch.materialCode) code = globalSwatch.materialCode;
-          else if (color.materialCode) code = color.materialCode; // Fallback to local data
-          
-          name = color.name || '';
-      } else {
-          // If color is just a hex string
-          code = color; 
-      }
-      
+      const swatchId = typeof color === 'object' ? color.id : null;
       const foundSwatch = swatches.find(s => s.id === swatchId) || (typeof color === 'object' ? color : null);
       
-      // Calculate Position: Center Horizontally above the circle
-      const centerX = rect.left + rect.width / 2;
-      const topY = rect.top;
-
       setSwatchPopup({
-          x: centerX,
-          y: topY,
+          x: rect.left,
+          y: rect.top,
           code: code,
           name: name,
           swatchObj: foundSwatch
@@ -1749,21 +1741,18 @@ function ProductDetailModal({ product, allProducts, swatches, spaceContents, onC
   return (
     <div key={product.id} className="fixed inset-0 bg-black/60 backdrop-blur-md z-50 flex items-center justify-center p-0 md:p-4 animate-in fade-in duration-300 slide-in-animation print:fixed print:inset-0 print:z-[100] print:bg-white print:h-auto print:overflow-visible" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
       <canvas ref={canvasRef} style={{ display: 'none' }} />
-      {/* Zoom view removed as per v0.7.0 requirement, leaving clean image */}
-      
+      {isZoomed && currentImage && (<div className="fixed inset-0 z-[120] bg-black/95 flex items-center justify-center p-8 cursor-zoom-out print:hidden" onClick={() => setIsZoomed(false)}><img src={currentImage} className="max-w-full max-h-full object-contain" alt="Zoomed" /><button className="absolute top-6 right-6 text-white/50 hover:text-white"><X className="w-10 h-10" /></button></div>)}
+      {isZoomed && typeof isZoomed === 'string' && (<div className="fixed inset-0 z-[120] bg-black/95 flex items-center justify-center p-8 cursor-zoom-out print:hidden" onClick={() => setIsZoomed(false)}><img src={isZoomed} className="max-w-full max-h-full object-contain" alt="Zoomed Content" /><button className="absolute top-6 right-6 text-white/50 hover:text-white"><X className="w-10 h-10" /></button></div>)}
+
       {swatchPopup && (
           <div 
-             className="fixed z-[160] bg-black/60 backdrop-blur-sm text-white px-3 py-2 rounded-lg shadow-lg cursor-pointer hover:bg-black/80 transition-colors border border-white/10 pointer-events-auto"
-             style={{ 
-                 top: swatchPopup.y - 10, 
-                 left: swatchPopup.x, 
-                 transform: 'translate(-50%, -100%)' 
-             }}
+             className="fixed z-[130] bg-black/60 backdrop-blur-md text-white px-4 py-3 rounded-xl shadow-2xl cursor-pointer hover:bg-black/80 transition-colors border border-white/10"
+             style={{ top: swatchPopup.y - 60, left: swatchPopup.x, transform: 'translateX(-50%)' }}
              onClick={(e) => { e.stopPropagation(); navigateToSwatch(); }}
           >
-              <div className="text-sm font-bold tracking-tight leading-none mb-0.5 text-center">{swatchPopup.code}</div>
-              {swatchPopup.name && <div className="text-[10px] font-medium text-white/80 text-center">{swatchPopup.name}</div>}
-              <div className="absolute bottom-[-4px] left-1/2 -translate-x-1/2 w-2 h-2 bg-black/60 backdrop-blur-sm border-r border-b border-white/10 rotate-45"></div>
+              <div className="text-lg font-black tracking-tight leading-none mb-1">{swatchPopup.code}</div>
+              <div className="text-[10px] font-medium text-white/70">{swatchPopup.name}</div>
+              <div className="absolute bottom-[-6px] left-1/2 -translate-x-1/2 w-3 h-3 bg-black/60 backdrop-blur-md border-r border-b border-white/10 rotate-45"></div>
           </div>
       )}
 
@@ -1785,20 +1774,10 @@ function ProductDetailModal({ product, allProducts, swatches, spaceContents, onC
         <div className="flex-1 overflow-y-auto custom-scrollbar flex flex-col md:flex-row h-full pb-safe print:overflow-visible print:h-auto">
           <div className="w-full md:w-1/2 bg-zinc-50 p-6 md:p-8 flex flex-col border-b md:border-b-0 md:border-r border-zinc-100 md:sticky md:top-0 print:static print:bg-white print:border-none">
             <div className="flex-1 w-full bg-white rounded-2xl flex items-center justify-center shadow-sm border border-zinc-100 overflow-hidden p-8 mb-4 relative group min-h-[300px] print:shadow-none print:border-zinc-200">
-               {currentImageUrl ? (
-                   <div className="relative w-full h-full flex items-center justify-center">
-                       <img src={currentImageUrl} alt="Main" className="w-full h-full object-contain mix-blend-multiply" />
-                       {/* Image Caption Overlay */}
-                       {currentImageCaption && (
-                           <div className="absolute bottom-4 left-4 right-4 bg-black/50 backdrop-blur-md text-white text-xs p-3 rounded-xl text-center">
-                               {currentImageCaption}
-                           </div>
-                       )}
-                   </div>
-               ) : <ImageIcon className="w-20 h-20 opacity-20 text-zinc-400" />}
+               {currentImage ? (<img src={currentImage} alt="Main" className="w-full h-full object-contain cursor-zoom-in mix-blend-multiply" onClick={() => setIsZoomed(true)} />) : <ImageIcon className="w-20 h-20 opacity-20 text-zinc-400" />}
                <button onClick={onToggleFavorite} className="absolute top-4 left-4 p-3 bg-white rounded-full shadow-sm border border-zinc-100 hover:border-zinc-300 transition-all hidden md:flex print:hidden"><Star className={`w-5 h-5 ${isFavorite ? 'text-yellow-400 fill-yellow-400' : 'text-zinc-300'}`} /></button>
             </div>
-            {images.length > 0 && (<div className="flex space-x-2 md:space-x-3 overflow-x-auto custom-scrollbar pb-1 px-1 print:hidden">{images.map((img, idx) => (<button key={idx} onClick={() => setCurrentImageIndex(idx)} className={`flex-shrink-0 w-10 h-10 md:w-20 md:h-20 rounded-lg md:rounded-xl overflow-hidden border-2 transition-all ${currentImageIndex === idx ? 'border-zinc-900 ring-2 ring-zinc-200' : 'border-transparent opacity-60 hover:opacity-100 bg-white'}`}><img src={typeof img === 'object' ? img.url : img} alt={`Thumbnail ${idx}`} className="w-full h-full object-cover" /></button>))}</div>)}
+            {images.length > 0 && (<div className="flex space-x-2 md:space-x-3 overflow-x-auto custom-scrollbar pb-1 px-1 print:hidden">{images.map((img, idx) => (<button key={idx} onClick={() => setCurrentImageIndex(idx)} className={`flex-shrink-0 w-10 h-10 md:w-20 md:h-20 rounded-lg md:rounded-xl overflow-hidden border-2 transition-all ${currentImageIndex === idx ? 'border-zinc-900 ring-2 ring-zinc-200' : 'border-transparent opacity-60 hover:opacity-100 bg-white'}`}><img src={img} alt={`Thumbnail ${idx}`} className="w-full h-full object-cover" /></button>))}</div>)}
           </div>
           <div className="w-full md:w-1/2 p-6 md:p-12 bg-white pb-12 print:pb-0">
             <div className="mb-6 md:mb-10">
@@ -1877,7 +1856,7 @@ function ProductDetailModal({ product, allProducts, swatches, spaceContents, onC
                         {relatedItems.map(p => (
                             <button key={p.id} onClick={() => onNavigateProduct(p)} className="flex items-center p-2 rounded-lg border border-zinc-100 hover:border-zinc-300 hover:bg-zinc-50 transition-all text-left group">
                                 <div className="w-10 h-10 rounded-md bg-zinc-100 overflow-hidden mr-3 flex-shrink-0">
-                                    {p.images?.[0] ? <img src={typeof p.images[0] === 'object' ? p.images[0].url : p.images[0]} className="w-full h-full object-cover" /> : <div className="w-full h-full bg-zinc-200"></div>}
+                                    {p.images?.[0] ? <img src={p.images[0]} className="w-full h-full object-cover" /> : <div className="w-full h-full bg-zinc-200"></div>}
                                 </div>
                                 <div className="min-w-0">
                                     <div className="text-xs font-bold text-zinc-900 truncate group-hover:text-blue-600">{p.name}</div>
@@ -1889,12 +1868,7 @@ function ProductDetailModal({ product, allProducts, swatches, spaceContents, onC
                   </div>
               )}
 
-              {contentImages.length > 0 && (<div className="pt-8 border-t border-zinc-100 space-y-4"><h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Detail View</h3><div className="flex flex-col gap-4">{contentImages.map((img, idx) => (
-                  <div key={idx} className="relative">
-                      <img src={typeof img === 'object' ? img.url : img} alt={`Detail ${idx+1}`} className="w-full h-auto rounded-xl border border-zinc-100 print:border-none cursor-zoom-in" onClick={() => setIsZoomed(typeof img === 'object' ? img.url : img)} />
-                      {typeof img === 'object' && img.caption && <div className="absolute bottom-3 left-3 right-3 bg-black/60 text-white text-xs p-2 rounded-lg text-center backdrop-blur-sm">{img.caption}</div>}
-                  </div>
-              ))}</div></div>)}
+              {contentImages.length > 0 && (<div className="pt-8 border-t border-zinc-100 space-y-4"><h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Detail View</h3><div className="flex flex-col gap-4">{contentImages.map((img, idx) => (<img key={idx} src={img} alt={`Detail ${idx+1}`} className="w-full h-auto rounded-xl border border-zinc-100 print:border-none cursor-zoom-in" onClick={() => setIsZoomed(img)} />))}</div></div>)}
 
               <div className="md:hidden mt-8 pt-8 border-t border-zinc-100 pb-10 print:hidden">
                  <div className="flex justify-center gap-4 mb-4">
@@ -1971,9 +1945,6 @@ function ProductFormModal({ categories, swatches = [], allProducts = [], existin
   const [isProcessingImage, setIsProcessingImage] = useState(false);
   const [relatedFilter, setRelatedFilter] = useState('');
 
-  // Helper to normalize images to objects
-  const normalizeImages = (imgs) => imgs.map(img => typeof img === 'string' ? { url: img, caption: '' } : img);
-
   useEffect(() => {
     if (existingData) {
       setFormData({ 
@@ -1981,9 +1952,7 @@ function ProductFormModal({ categories, swatches = [], allProducts = [], existin
         featuresString: existingData.features?.join(', ') || '', optionsString: existingData.options?.join(', ') || '', materialsString: existingData.materials?.join(', ') || '',
         awardsString: existingData.awards?.join(', ') || '', productLink: existingData.productLink || '', isNew: existingData.isNew, 
         launchDate: existingData.launchDate ? existingData.launchDate.substring(0,4) : new Date().getFullYear().toString(),
-        images: normalizeImages(existingData.images || []), 
-        attachments: existingData.attachments || [], 
-        contentImages: normalizeImages(existingData.contentImages || []),
+        images: existingData.images || [], attachments: existingData.attachments || [], contentImages: existingData.contentImages || [],
         spaces: existingData.spaces || [], spaceTags: existingData.spaceTags || [],
         bodyColors: existingData.bodyColors || [],
         upholsteryColors: existingData.upholsteryColors || [],
@@ -1993,36 +1962,8 @@ function ProductFormModal({ categories, swatches = [], allProducts = [], existin
   }, [existingData]);
 
   const processImage = (file) => { return new Promise((resolve) => { const reader = new FileReader(); reader.onload = (e) => { const img = new Image(); img.onload = () => { const canvas = document.createElement('canvas'); const MAX_WIDTH = 1000; let width = img.width; let height = img.height; if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; } canvas.width = width; canvas.height = height; const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0, width, height); resolve(canvas.toDataURL('image/jpeg', 0.8)); }; img.src = e.target.result; }; reader.readAsDataURL(file); }); };
-  
-  const handleImageUpload = async (e) => { 
-      const files = Array.from(e.target.files); 
-      if (files.length > 0) { 
-          setIsProcessingImage(true); 
-          const newImgs = []; 
-          for (const file of files) { try { newImgs.push({ url: await processImage(file), caption: '' }); } catch (e) {} } 
-          setFormData(prev => ({ ...prev, images: [...prev.images, ...newImgs] })); 
-          setIsProcessingImage(false); 
-      } 
-  };
-  const handleContentImageUpload = async (e) => { 
-      const files = Array.from(e.target.files); 
-      if (files.length > 0) { 
-          setIsProcessingImage(true); 
-          const newImgs = []; 
-          for (const file of files) { try { newImgs.push({ url: await processImage(file), caption: '' }); } catch (e) {} } 
-          setFormData(prev => ({ ...prev, contentImages: [...prev.contentImages, ...newImgs] })); 
-          setIsProcessingImage(false); 
-      } 
-  };
-
-  const handleCaptionChange = (index, value, type) => {
-      setFormData(prev => {
-          const list = type === 'main' ? [...prev.images] : [...prev.contentImages];
-          list[index] = { ...list[index], caption: value };
-          return type === 'main' ? { ...prev, images: list } : { ...prev, contentImages: list };
-      });
-  };
-
+  const handleImageUpload = async (e) => { const files = Array.from(e.target.files); if (files.length > 0) { setIsProcessingImage(true); const newUrls = []; for (const file of files) { try { newUrls.push(await processImage(file)); } catch (e) {} } setFormData(prev => ({ ...prev, images: [...prev.images, ...newUrls] })); setIsProcessingImage(false); } };
+  const handleContentImageUpload = async (e) => { const files = Array.from(e.target.files); if (files.length > 0) { setIsProcessingImage(true); const newUrls = []; for (const file of files) { try { newUrls.push(await processImage(file)); } catch (e) {} } setFormData(prev => ({ ...prev, contentImages: [...prev.contentImages, ...newUrls] })); setIsProcessingImage(false); } };
   const handleAttachmentUpload = (e) => { const files = Array.from(e.target.files); files.forEach(file => { if (file.size > 300*1024) return window.alert("Too large"); const reader = new FileReader(); reader.onload = (e) => setFormData(p => ({...p, attachments: [...p.attachments, {name: file.name, url: e.target.result}]})); reader.readAsDataURL(file); }); };
   const handleAddLinkAttachment = () => { const url = window.prompt("URL:"); const name = window.prompt("Name:"); if(url && name) setFormData(p => ({...p, attachments: [...p.attachments, {name, url}]})); };
   const removeImage = (i) => setFormData(p => ({...p, images: p.images.filter((_, idx) => idx !== i)}));
@@ -2063,37 +2004,13 @@ function ProductFormModal({ categories, swatches = [], allProducts = [], existin
           <div className="bg-zinc-50 p-6 rounded-xl border border-zinc-200">
              <div className="flex justify-between mb-4"><span className="font-bold text-sm">Product Images (Main)</span><div className="space-x-2"><button type="button" onClick={() => fileInputRef.current.click()} className="text-xs bg-white border px-3 py-1 rounded-lg font-medium hover:bg-zinc-100">Upload</button></div><input ref={fileInputRef} type="file" multiple className="hidden" onChange={handleImageUpload} accept="image/*"/></div>
              <div className="grid grid-cols-3 sm:grid-cols-5 gap-3">
-               {formData.images.map((img, i) => (
-                   <div key={i} className="relative aspect-square bg-white rounded-lg border overflow-hidden group">
-                       <img src={img.url || img} className="w-full h-full object-cover" />
-                       <input 
-                           className="absolute bottom-0 w-full text-[9px] bg-white/90 border-t p-1 outline-none opacity-0 group-hover:opacity-100 transition-opacity" 
-                           placeholder="Caption..." 
-                           value={img.caption || ''} 
-                           onChange={(e) => handleCaptionChange(i, e.target.value, 'main')}
-                       />
-                       <button type="button" onClick={()=>removeImage(i)} className="absolute top-1 right-1 bg-red-500 text-white p-1 rounded-full opacity-0 group-hover:opacity-100"><X className="w-3 h-3"/></button>
-                       {i===0 && <span className="absolute top-1 left-1 bg-black text-white text-[9px] px-1 rounded">MAIN</span>}
-                       {i!==0 && <button type="button" onClick={()=>setMainImage(i)} className="absolute top-1 left-1 bg-white text-black text-[9px] px-1 rounded opacity-0 group-hover:opacity-100">Set Main</button>}
-                   </div>
-               ))}
+               {formData.images.map((img, i) => (<div key={i} className="relative aspect-square bg-white rounded-lg border overflow-hidden group"><img src={img} className="w-full h-full object-cover" /><button type="button" onClick={()=>removeImage(i)} className="absolute top-1 right-1 bg-red-500 text-white p-1 rounded-full opacity-0 group-hover:opacity-100"><X className="w-3 h-3"/></button>{i===0 && <span className="absolute bottom-1 left-1 bg-black text-white text-[9px] px-1 rounded">MAIN</span>}{i!==0 && <button type="button" onClick={()=>setMainImage(i)} className="absolute bottom-1 left-1 bg-white text-black text-[9px] px-1 rounded opacity-0 group-hover:opacity-100">Set Main</button>}</div>))}
              </div>
           </div>
           <div className="bg-zinc-50 p-6 rounded-xl border border-zinc-200">
              <div className="flex justify-between mb-4"><span className="font-bold text-sm">Detailed Content Images (Vertical Scroll)</span><div className="space-x-2"><button type="button" onClick={() => contentInputRef.current.click()} className="text-xs bg-white border px-3 py-1 rounded-lg font-medium hover:bg-zinc-100">Upload</button></div><input ref={contentInputRef} type="file" multiple className="hidden" onChange={handleContentImageUpload} accept="image/*"/></div>
              <div className="grid grid-cols-3 sm:grid-cols-5 gap-3">
-               {formData.contentImages.map((img, i) => (
-                   <div key={i} className="relative aspect-[3/4] bg-white rounded-lg border overflow-hidden group">
-                       <img src={img.url || img} className="w-full h-full object-cover" />
-                       <input 
-                           className="absolute bottom-0 w-full text-[9px] bg-white/90 border-t p-1 outline-none opacity-0 group-hover:opacity-100 transition-opacity" 
-                           placeholder="Caption..." 
-                           value={img.caption || ''} 
-                           onChange={(e) => handleCaptionChange(i, e.target.value, 'content')}
-                       />
-                       <button type="button" onClick={()=>removeContentImage(i)} className="absolute top-1 right-1 bg-red-500 text-white p-1 rounded-full opacity-0 group-hover:opacity-100"><X className="w-3 h-3"/></button>
-                   </div>
-               ))}
+               {formData.contentImages.map((img, i) => (<div key={i} className="relative aspect-[3/4] bg-white rounded-lg border overflow-hidden group"><img src={img} className="w-full h-full object-cover" /><button type="button" onClick={()=>removeContentImage(i)} className="absolute top-1 right-1 bg-red-500 text-white p-1 rounded-full opacity-0 group-hover:opacity-100"><X className="w-3 h-3"/></button></div>))}
              </div>
           </div>
           
@@ -2172,7 +2089,7 @@ function SwatchSelector({ label, selected, swatches, onChange }) {
      // Snapshot essential data
      const snapshot = { 
          id: swatch.id, name: swatch.name, hex: swatch.hex, image: swatch.image, 
-         category: swatch.category, textureType: swatch.textureType, materialCode: swatch.materialCode 
+         category: swatch.category, textureType: swatch.textureType 
      };
      // Check if ID already exists in selected
      if(!selected.find(s => (typeof s === 'object' ? s.id === swatch.id : false))) {
@@ -2268,7 +2185,7 @@ function SpaceProductManager({ spaceId, products, onClose, onToggle }) {
       <div className="bg-white w-full max-w-3xl rounded-2xl overflow-hidden shadow-2xl flex flex-col max-h-[85vh]">
         <div className="px-6 py-4 border-b border-zinc-100 flex justify-between items-center bg-indigo-50"><div><h3 className="text-lg font-bold text-indigo-900">Manage Products</h3><p className="text-xs text-indigo-600">Select products to display in {spaceId}</p></div><button onClick={onClose}><X className="w-5 h-5 text-indigo-400" /></button></div>
         <div className="p-4 border-b border-zinc-100"><input type="text" placeholder="Filter products..." className="w-full px-4 py-2 bg-zinc-50 rounded-lg border border-zinc-200 text-sm focus:outline-none focus:border-indigo-500" value={filter} onChange={(e) => setFilter(e.target.value)} /></div>
-        <div className="flex-1 overflow-y-auto p-4 grid grid-cols-1 md:grid-cols-2 gap-3 custom-scrollbar">{products.filter(p => p.name.toLowerCase().includes(filter.toLowerCase())).map(product => { const isAdded = product.spaces && product.spaces.includes(spaceId); return (<div key={product.id} className={`flex items-center p-3 rounded-xl border cursor-pointer transition-all ${isAdded ? 'border-indigo-500 bg-indigo-50' : 'border-zinc-200 hover:border-zinc-300'}`} onClick={() => onToggle(product.id, !isAdded)}><div className={`w-5 h-5 rounded border flex items-center justify-center mr-3 ${isAdded ? 'bg-indigo-500 border-indigo-500' : 'bg-white border-zinc-300'}`}>{isAdded && <Check className="w-3.5 h-3.5 text-white" />}</div>{product.images?.[0] && <img src={typeof product.images[0] === 'object' ? product.images[0].url : product.images[0]} className="w-10 h-10 rounded-lg object-cover mr-3" />}<div><div className="text-sm font-bold text-zinc-900">{product.name}</div><div className="text-xs text-zinc-500">{product.category}</div></div></div>); })}</div>
+        <div className="flex-1 overflow-y-auto p-4 grid grid-cols-1 md:grid-cols-2 gap-3 custom-scrollbar">{products.filter(p => p.name.toLowerCase().includes(filter.toLowerCase())).map(product => { const isAdded = product.spaces && product.spaces.includes(spaceId); return (<div key={product.id} className={`flex items-center p-3 rounded-xl border cursor-pointer transition-all ${isAdded ? 'border-indigo-500 bg-indigo-50' : 'border-zinc-200 hover:border-zinc-300'}`} onClick={() => onToggle(product.id, !isAdded)}><div className={`w-5 h-5 rounded border flex items-center justify-center mr-3 ${isAdded ? 'bg-indigo-500 border-indigo-500' : 'bg-white border-zinc-300'}`}>{isAdded && <Check className="w-3.5 h-3.5 text-white" />}</div>{product.images?.[0] && <img src={product.images[0]} className="w-10 h-10 rounded-lg object-cover mr-3" />}<div><div className="text-sm font-bold text-zinc-900">{product.name}</div><div className="text-xs text-zinc-500">{product.category}</div></div></div>); })}</div>
       </div>
     </div>
   );
@@ -2280,8 +2197,6 @@ function SceneEditModal({ initialData, allProducts, spaceTags = [], spaceOptions
   const mainInputRef = useRef(null);
   const galleryInputRef = useRef(null);
   
-  const normalizeImages = (imgs) => imgs.map(img => typeof img === 'string' ? { url: img, caption: '' } : img);
-
   useEffect(() => {
     if(initialData) {
       setData({ 
@@ -2289,7 +2204,7 @@ function SceneEditModal({ initialData, allProducts, spaceTags = [], spaceOptions
         title: initialData.title || '', 
         description: initialData.description || '', 
         image: initialData.image || null, 
-        images: normalizeImages(initialData.images || []), 
+        images: initialData.images || [], 
         productIds: initialData.productIds || [], 
         tags: initialData.tags || [],
         spaceId: initialData.spaceId 
@@ -2298,25 +2213,8 @@ function SceneEditModal({ initialData, allProducts, spaceTags = [], spaceOptions
   }, [initialData]);
 
   const processImage = (file) => { return new Promise((resolve) => { const reader = new FileReader(); reader.onload = (e) => { const img = new Image(); img.onload = () => { const canvas = document.createElement('canvas'); const MAX_WIDTH = 1200; let width = img.width; let height = img.height; if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; } canvas.width = width; canvas.height = height; const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0, width, height); resolve(canvas.toDataURL('image/jpeg', 0.8)); }; img.src = e.target.result; }; reader.readAsDataURL(file); }); };
-  
   const handleMainImage = async (e) => { const file = e.target.files[0]; if (file) { const imageUrl = await processImage(file); setData(prev => ({ ...prev, image: imageUrl })); } };
-  const handleGalleryUpload = async (e) => { 
-      const files = Array.from(e.target.files); 
-      if(files.length > 0) { 
-          const newUrls = []; 
-          for(const file of files) { try { newUrls.push({ url: await processImage(file), caption: '' }); } catch(e) {} } 
-          setData(prev => ({ ...prev, images: [...prev.images, ...newUrls] })); 
-      } 
-  };
-  
-  const handleCaptionChange = (index, val) => {
-      setData(prev => {
-          const newImgs = [...prev.images];
-          newImgs[index] = { ...newImgs[index], caption: val };
-          return { ...prev, images: newImgs };
-      });
-  };
-
+  const handleGalleryUpload = async (e) => { const files = Array.from(e.target.files); if(files.length > 0) { const newUrls = []; for(const file of files) { try { newUrls.push(await processImage(file)); } catch(e) {} } setData(prev => ({ ...prev, images: [...prev.images, ...newUrls] })); } };
   const toggleProduct = (pid) => { setData(prev => { const ids = prev.productIds || []; return ids.includes(pid) ? { ...prev, productIds: ids.filter(id => id !== pid) } : { ...prev, productIds: [...ids, pid] }; }); };
   const toggleTag = (tag) => { setData(prev => { const tags = prev.tags || []; if (tags.includes(tag)) return { ...prev, tags: tags.filter(t => t !== tag) }; else return { ...prev, tags: [...tags, tag] }; }); };
 
@@ -2360,13 +2258,7 @@ function SceneEditModal({ initialData, allProducts, spaceTags = [], spaceOptions
 
               <div>
                  <div className="flex justify-between items-center mb-2"><label className="block text-xs font-bold text-zinc-500 uppercase">Additional Images</label><button type="button" onClick={() => galleryInputRef.current.click()} className="text-[10px] bg-white border px-2 py-1 rounded hover:bg-zinc-100">+ Add</button><input type="file" ref={galleryInputRef} multiple className="hidden" accept="image/*" onChange={handleGalleryUpload} /></div>
-                 {data.images.length > 0 && <div className="grid grid-cols-5 gap-2">{data.images.map((img, i) => (
-                     <div key={i} className="relative aspect-square rounded-lg overflow-hidden group border border-zinc-200">
-                         <img src={img.url || img} className="w-full h-full object-cover" />
-                         <input className="absolute bottom-0 w-full text-[8px] bg-white/90 p-1 opacity-0 group-hover:opacity-100" value={img.caption || ''} onChange={e => handleCaptionChange(i, e.target.value)} placeholder="Caption"/>
-                         <button onClick={() => setData(prev => ({...prev, images: prev.images.filter((_, idx) => idx !== i)}))} className="absolute top-0.5 right-0.5 bg-red-500 text-white p-0.5 rounded-full opacity-0 group-hover:opacity-100"><X className="w-3 h-3"/></button>
-                     </div>
-                 ))}</div>}
+                 {data.images.length > 0 && <div className="grid grid-cols-5 gap-2">{data.images.map((img, i) => (<div key={i} className="relative aspect-square rounded-lg overflow-hidden group border border-zinc-200"><img src={img} className="w-full h-full object-cover" /><button onClick={() => setData(prev => ({...prev, images: prev.images.filter((_, idx) => idx !== i)}))} className="absolute top-0.5 right-0.5 bg-red-500 text-white p-0.5 rounded-full opacity-0 group-hover:opacity-100"><X className="w-3 h-3"/></button></div>))}</div>}
               </div>
               <div className="grid grid-cols-1 gap-4">
                 <div><label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Title</label><input className="w-full border border-zinc-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-zinc-900 outline-none" value={data.title} onChange={e=>setData({...data, title: e.target.value})} placeholder="e.g. Modern Office Lounge" /></div>
@@ -2377,7 +2269,7 @@ function SceneEditModal({ initialData, allProducts, spaceTags = [], spaceOptions
                <div className="flex justify-between items-end mb-3"><div><h4 className="text-sm font-bold text-zinc-900">Related Products</h4><p className="text-[10px] text-zinc-500">Select products visible in this scene</p></div><span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded-full">{data.productIds.length} selected</span></div>
                <div className="bg-white rounded-xl border border-zinc-200 overflow-hidden shadow-sm">
                   <div className="p-2 border-b border-zinc-100 bg-zinc-50/50"><div className="flex items-center bg-white border border-zinc-200 rounded-lg px-2"><Search className="w-4 h-4 text-zinc-400 mr-2"/><input className="w-full py-2 text-xs outline-none bg-transparent" placeholder="Search product name..." value={filter} onChange={e => setFilter(e.target.value)} /></div></div>
-                  <div className="h-48 overflow-y-auto p-2 space-y-1 custom-scrollbar">{allProducts.filter(p => p.name.toLowerCase().includes(filter.toLowerCase())).map(p => { const isSelected = data.productIds.includes(p.id); return (<div key={p.id} onClick={() => toggleProduct(p.id)} className={`flex items-center p-2 rounded-lg cursor-pointer transition-colors ${isSelected ? 'bg-indigo-50 border border-indigo-100' : 'hover:bg-zinc-50 border border-transparent'}`}><div className={`w-4 h-4 rounded border flex items-center justify-center mr-3 flex-shrink-0 ${isSelected ? 'bg-indigo-500 border-indigo-500' : 'bg-white border-zinc-300'}`}>{isSelected && <Check className="w-3 h-3 text-white"/>}</div>{p.images?.[0] && <img src={typeof p.images[0] === 'object' ? p.images[0].url : p.images[0]} className="w-8 h-8 rounded object-cover mr-3 bg-zinc-100" />}<div className="min-w-0"><div className={`text-xs font-bold truncate ${isSelected ? 'text-indigo-900' : 'text-zinc-700'}`}>{p.name}</div><div className="text-[10px] text-zinc-400 truncate">{p.category}</div></div></div>) })}</div>
+                  <div className="h-48 overflow-y-auto p-2 space-y-1 custom-scrollbar">{allProducts.filter(p => p.name.toLowerCase().includes(filter.toLowerCase())).map(p => { const isSelected = data.productIds.includes(p.id); return (<div key={p.id} onClick={() => toggleProduct(p.id)} className={`flex items-center p-2 rounded-lg cursor-pointer transition-colors ${isSelected ? 'bg-indigo-50 border border-indigo-100' : 'hover:bg-zinc-50 border border-transparent'}`}><div className={`w-4 h-4 rounded border flex items-center justify-center mr-3 flex-shrink-0 ${isSelected ? 'bg-indigo-500 border-indigo-500' : 'bg-white border-zinc-300'}`}>{isSelected && <Check className="w-3 h-3 text-white"/>}</div>{p.images?.[0] && <img src={p.images[0]} className="w-8 h-8 rounded object-cover mr-3 bg-zinc-100" />}<div className="min-w-0"><div className={`text-xs font-bold truncate ${isSelected ? 'text-indigo-900' : 'text-zinc-700'}`}>{p.name}</div><div className="text-[10px] text-zinc-400 truncate">{p.category}</div></div></div>) })}</div>
                </div>
             </div>
          </div>
@@ -2410,13 +2302,9 @@ function SpaceSceneModal({ scene, products, allProducts, isAdmin, onClose, onEdi
       touchStart.current = null;
   };
 
-  const currentImgObj = images[currentImageIndex];
-  const currentImgUrl = typeof currentImgObj === 'object' ? currentImgObj.url : currentImgObj;
-  const currentImgCaption = typeof currentImgObj === 'object' ? currentImgObj.caption : '';
-
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[60] flex items-center justify-center p-0 md:p-6 animate-in zoom-in-95 duration-200 print:hidden" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
-      {isZoomed && currentImgUrl && (<div className="fixed inset-0 z-[120] bg-black/95 flex items-center justify-center p-8 cursor-zoom-out print:hidden" onClick={() => setIsZoomed(false)}><img src={currentImgUrl} className="max-w-full max-h-full object-contain" alt="Zoomed" /><button className="absolute top-6 right-6 text-white/50 hover:text-white"><X className="w-10 h-10" /></button></div>)}
+      {isZoomed && images[currentImageIndex] && (<div className="fixed inset-0 z-[120] bg-black/95 flex items-center justify-center p-8 cursor-zoom-out print:hidden" onClick={() => setIsZoomed(false)}><img src={images[currentImageIndex]} className="max-w-full max-h-full object-contain" alt="Zoomed" /><button className="absolute top-6 right-6 text-white/50 hover:text-white"><X className="w-10 h-10" /></button></div>)}
       
       <div className="bg-white w-full h-full md:h-[90vh] md:max-w-6xl md:rounded-3xl overflow-hidden shadow-2xl flex flex-col md:flex-row relative">
          <div className="absolute top-4 right-4 z-[100] flex gap-2">
@@ -2424,10 +2312,7 @@ function SpaceSceneModal({ scene, products, allProducts, isAdmin, onClose, onEdi
             <button onClick={onClose} className="p-2 bg-white/50 hover:bg-zinc-100 rounded-full backdrop-blur shadow-sm"><X className="w-6 h-6 text-zinc-900" /></button>
          </div>
          <div className="w-full md:w-2/3 bg-black relative flex flex-col justify-center h-[40vh] md:h-full">
-            <div className="relative w-full h-full">
-                <img src={currentImgUrl} className="w-full h-full object-contain cursor-zoom-in" alt="Scene" onClick={() => setIsZoomed(true)} />
-                {currentImgCaption && <div className="absolute bottom-8 left-0 right-0 text-center text-white/90 text-sm bg-black/40 backdrop-blur-sm p-2 mx-auto max-w-md rounded-xl">{currentImgCaption}</div>}
-            </div>
+            <img src={images[currentImageIndex]} className="w-full h-full object-contain cursor-zoom-in" alt="Scene" onClick={() => setIsZoomed(true)} />
             {images.length > 1 && (<div className="absolute bottom-4 left-0 right-0 flex justify-center space-x-2 px-4">{images.map((_, idx) => (<button key={idx} onClick={() => setCurrentImageIndex(idx)} className={`w-2 h-2 rounded-full transition-all ${currentImageIndex === idx ? 'bg-white w-6' : 'bg-white/40 hover:bg-white/80'}`} />))}</div>)}
          </div>
          <div className="w-full md:w-1/3 bg-white flex flex-col border-l border-zinc-100 h-[60vh] md:h-full relative">
@@ -2445,7 +2330,7 @@ function SpaceSceneModal({ scene, products, allProducts, isAdmin, onClose, onEdi
                     <div className="max-h-32 overflow-y-auto space-y-1 custom-scrollbar">{allProducts.filter(p => p.name.toLowerCase().includes(productFilter.toLowerCase())).map(p => { const isTagged = scene.productIds?.includes(p.id); return (<div key={p.id} onClick={() => onProductToggle(p.id, !isTagged)} className={`flex items-center p-1.5 rounded cursor-pointer ${isTagged ? 'bg-indigo-50 text-indigo-700' : 'hover:bg-zinc-50'}`}><div className={`w-3 h-3 border rounded mr-2 flex items-center justify-center ${isTagged ? 'bg-indigo-500 border-indigo-500' : 'border-zinc-300'}`}>{isTagged && <Check className="w-2 h-2 text-white"/>}</div><span className="text-xs truncate">{p.name}</span></div>) })}</div>
                  </div>
                )}
-               <div className="space-y-3">{products.length > 0 ? products.map(product => (<div key={product.id} onClick={() => onNavigateProduct(product)} className="flex items-center p-3 bg-white rounded-xl border border-zinc-100 shadow-sm hover:border-zinc-300 transition-all cursor-pointer group"><div className="w-12 h-12 bg-zinc-50 rounded-lg flex-shrink-0 flex items-center justify-center mr-3 overflow-hidden">{product.images?.[0] ? <img src={typeof product.images[0] === 'object' ? product.images[0].url : product.images[0]} className="w-full h-full object-cover" /> : <ImageIcon className="w-5 h-5 text-zinc-300"/>}</div><div className="flex-1 min-w-0"><h4 className="text-sm font-bold text-zinc-900 truncate group-hover:text-blue-600">{product.name}</h4><p className="text-xs text-zinc-500">{product.category}</p></div><ChevronRight className="w-4 h-4 text-zinc-300 group-hover:text-zinc-600"/></div>)) : (<div className="text-center py-8 text-zinc-400 text-xs">연관된 제품이 없습니다.</div>)}</div>
+               <div className="space-y-3">{products.length > 0 ? products.map(product => (<div key={product.id} onClick={() => onNavigateProduct(product)} className="flex items-center p-3 bg-white rounded-xl border border-zinc-100 shadow-sm hover:border-zinc-300 transition-all cursor-pointer group"><div className="w-12 h-12 bg-zinc-50 rounded-lg flex-shrink-0 flex items-center justify-center mr-3 overflow-hidden">{product.images?.[0] ? <img src={product.images[0]} className="w-full h-full object-cover" /> : <ImageIcon className="w-5 h-5 text-zinc-300"/>}</div><div className="flex-1 min-w-0"><h4 className="text-sm font-bold text-zinc-900 truncate group-hover:text-blue-600">{product.name}</h4><p className="text-xs text-zinc-500">{product.category}</p></div><ChevronRight className="w-4 h-4 text-zinc-300 group-hover:text-zinc-600"/></div>)) : (<div className="text-center py-8 text-zinc-400 text-xs">연관된 제품이 없습니다.</div>)}</div>
             </div>
          </div>
       </div>
