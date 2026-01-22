@@ -10,8 +10,7 @@ import {
   Share2, Download, Maximize2, LayoutGrid, Zap, GripHorizontal, ImageIcon as ImgIcon,
   ChevronsUp, Camera, ImagePlus, Sofa, Briefcase, Users, Home as HomeIcon, MapPin,
   Edit3, Grid, MoreVertical, MousePointer2, CheckSquare, XCircle, Printer, List, Eye,
-  PlayCircle, BarChart3, CornerUpLeft, Grid3X3, Droplet, Coffee, GraduationCap, ShoppingBag, FileDown, FileUp,
-  ArrowLeftRight, SlidersHorizontal
+  PlayCircle, BarChart3, CornerUpLeft, Grid3X3, Droplet, Coffee, GraduationCap, ShoppingBag, FileDown, FileUp
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { 
@@ -37,7 +36,7 @@ const YOUR_FIREBASE_CONFIG = {
 // ----------------------------------------------------------------------
 // 상수 및 설정
 // ----------------------------------------------------------------------
-const APP_VERSION = "v0.6.5"; 
+const APP_VERSION = "v0.6.4"; 
 const BUILD_DATE = "2026.01.22";
 const ADMIN_PASSWORD = "adminlcg1"; 
 
@@ -67,7 +66,7 @@ try {
   console.warn("Firebase Init Failed. Falling back to Local Storage.", e);
 }
 
-// 카테고리 정의
+// 카테고리 (컬렉션) 정의
 const CATEGORIES = [
   { id: 'ALL', label: 'Total View', isSpecial: true, color: '#18181b' },
   { id: 'NEW', label: 'New Arrivals', isSpecial: true, color: '#ef4444' },
@@ -120,49 +119,35 @@ export default function App() {
   const [activeSpaceTag, setActiveSpaceTag] = useState('ALL'); 
   const [searchTerm, setSearchTerm] = useState('');
   
-  // Sorting & Filtering
   const [sortOption, setSortOption] = useState('manual'); 
   const [sortDirection, setSortDirection] = useState('desc'); 
-  const [filters, setFilters] = useState({ year: '', color: '', isNew: false });
-  const [isFilterOpen, setIsFilterOpen] = useState(false);
-
-  // Selection & Compare
+  
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [selectedSwatch, setSelectedSwatch] = useState(null);
-  const [compareList, setCompareList] = useState([]);
-  const [isCompareModalOpen, setIsCompareModalOpen] = useState(false);
-
-  // Edit & Admin
   const [isFormOpen, setIsFormOpen] = useState(false); 
   const [editingProduct, setEditingProduct] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [showScrollTop, setShowScrollTop] = useState(false);
+  
   const [isAdmin, setIsAdmin] = useState(false);
   const [showAdminDashboard, setShowAdminDashboard] = useState(false);
   const [activityLogs, setActivityLogs] = useState([]);
   const [toast, setToast] = useState(null);
   const [favorites, setFavorites] = useState([]);
   
-  // UI State
   const [sidebarState, setSidebarState] = useState({ spaces: true, collections: true, materials: true });
   const [myPickViewMode, setMyPickViewMode] = useState('grid'); 
+
   const [bannerData, setBannerData] = useState({ url: null, title: 'Design Lab DB', subtitle: 'Integrated Product Database & Archives' });
   const [spaceContents, setSpaceContents] = useState({}); 
 
-  // Space/Scene Editing
   const [editingSpaceInfoId, setEditingSpaceInfoId] = useState(null);
   const [managingSpaceProductsId, setManagingSpaceProductsId] = useState(null);
   const [editingScene, setEditingScene] = useState(null);
   const [selectedScene, setSelectedScene] = useState(null);
 
-  // Drag & Drop
-  const dragItem = useRef(null);
-  const dragOverItem = useRef(null);
-
   const mainContentRef = useRef(null);
-
-  // --- Effects ---
   useEffect(() => {
     const handleScroll = () => {
       if (mainContentRef.current.scrollTop > 300) setShowScrollTop(true);
@@ -172,6 +157,10 @@ export default function App() {
     if (div) div.addEventListener('scroll', handleScroll);
     return () => div && div.removeEventListener('scroll', handleScroll);
   }, []);
+
+  const scrollToTop = () => {
+    mainContentRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   useEffect(() => {
     const handlePopState = (event) => {
@@ -198,6 +187,12 @@ export default function App() {
   useEffect(() => {
      setActiveSpaceTag('ALL');
   }, [activeCategory]);
+
+  const handleHomeClick = () => {
+    setActiveCategory('DASHBOARD');
+    setIsMobileMenuOpen(false);
+    window.history.pushState({}, '', window.location.pathname);
+  };
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -249,6 +244,7 @@ export default function App() {
         const loadedSwatches = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         setSwatches(loadedSwatches);
       });
+
       const bannerDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'banner');
       const unsubBanner = onSnapshot(bannerDocRef, (doc) => {
         if (doc.exists()) setBannerData(prev => ({ ...prev, ...doc.data() }));
@@ -267,14 +263,6 @@ export default function App() {
       loadFromLocalStorage();
     }
   }, [user]);
-
-  // --- Handlers ---
-
-  const handleHomeClick = () => {
-    setActiveCategory('DASHBOARD');
-    setIsMobileMenuOpen(false);
-    window.history.pushState({}, '', window.location.pathname);
-  };
 
   const loadFromLocalStorage = () => {
     const saved = localStorage.getItem('patra_products');
@@ -315,16 +303,6 @@ export default function App() {
     localStorage.setItem('patra_favorites', JSON.stringify(newFavs));
   };
 
-  const toggleCompare = (e, product) => {
-    if(e) e.stopPropagation();
-    if(compareList.find(p => p.id === product.id)) {
-        setCompareList(compareList.filter(p => p.id !== product.id));
-    } else {
-        if(compareList.length >= 4) { showToast("비교는 최대 4개까지 가능합니다.", "error"); return; }
-        setCompareList([...compareList, product]);
-    }
-  };
-
   const processImage = (file) => {
     return new Promise((resolve) => {
       const reader = new FileReader();
@@ -341,7 +319,6 @@ export default function App() {
     });
   };
 
-  // --- CRUD & Actions ---
   const handleBannerUpload = async (e) => { if (!isAdmin) return; const file = e.target.files[0]; if (!file) return; try { const resizedImage = await processImage(file); const newData = { ...bannerData, url: resizedImage }; if (isFirebaseAvailable && db) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'banner'), newData, { merge: true }); else { localStorage.setItem('patra_banner_data', JSON.stringify(newData)); setBannerData(newData); } showToast("메인 배너가 업데이트되었습니다."); } catch (error) { showToast("이미지 처리 실패", "error"); } };
   const handleBannerTextChange = (key, value) => { if (!isAdmin) return; setBannerData(prev => ({ ...prev, [key]: value })); };
   const saveBannerText = async () => { if (isFirebaseAvailable && db) { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'banner'), bannerData, { merge: true }); showToast("배너 문구가 저장되었습니다."); } };
@@ -350,14 +327,37 @@ export default function App() {
   const handleSceneSave = async (spaceId, sceneData) => { const currentContent = spaceContents[spaceId] || { scenes: [] }; let newScenes = [...(currentContent.scenes || [])]; if (sceneData.id) { const idx = newScenes.findIndex(s => s.id === sceneData.id); if (idx >= 0) newScenes[idx] = sceneData; else newScenes.push(sceneData); } else { sceneData.id = Date.now().toString(); newScenes.push(sceneData); } if (isFirebaseAvailable && db) { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'space_contents', spaceId), { scenes: newScenes }, { merge: true }); } showToast("장면(Scene)이 저장되었습니다."); };
   const handleSceneDelete = async (spaceId, sceneId) => { if(!window.confirm("이 장면을 삭제하시겠습니까?")) return; const currentContent = spaceContents[spaceId] || { scenes: [] }; const newScenes = (currentContent.scenes || []).filter(s => s.id !== sceneId); if (isFirebaseAvailable && db) { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'space_contents', spaceId), { scenes: newScenes }, { merge: true }); } showToast("장면이 삭제되었습니다."); };
   const handleSpaceProductToggle = async (spaceId, productId, isAdded) => { const product = products.find(p => p.id === productId); if(!product) return; let newSpaces = product.spaces || []; if(isAdded) { if(!newSpaces.includes(spaceId)) newSpaces.push(spaceId); } else { newSpaces = newSpaces.filter(s => s !== spaceId); } if (isFirebaseAvailable && db) { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'products', product.id), { spaces: newSpaces }, { merge: true }); } else { const idx = products.findIndex(p => p.id === productId); const newProds = [...products]; newProds[idx] = { ...product, spaces: newSpaces }; saveToLocalStorage(newProds); } };
+  
   const logActivity = async (action, productName, details = "") => { if (!isFirebaseAvailable || !db) return; try { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'logs'), { action, productName, details, timestamp: Date.now(), adminId: 'admin' }); } catch (e) { console.error(e); } };
   const fetchLogs = async () => { if (!isFirebaseAvailable || !db) return; const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'logs'), orderBy('timestamp', 'desc'), limit(100)); onSnapshot(q, (snapshot) => { setActivityLogs(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))); }); };
-  const handleSaveSwatch = async (swatchData) => { const docId = swatchData.id ? String(swatchData.id) : String(Date.now()); const payload = { ...swatchData, id: docId, updatedAt: Date.now() }; if (isFirebaseAvailable && db) { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'swatches', docId), payload, { merge: true }); } else { const idx = swatches.findIndex(s => s.id === docId); let newSwatches = [...swatches]; if (idx >= 0) newSwatches[idx] = payload; else newSwatches = [payload, ...newSwatches]; saveSwatchesToLocal(newSwatches); } showToast("마감재가 저장되었습니다."); };
-  const handleDeleteSwatch = async (swatchId) => { if (!window.confirm("정말 삭제하시겠습니까?")) return; if (isFirebaseAvailable && db) { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'swatches', String(swatchId))); } else { saveSwatchesToLocal(swatches.filter(s => s.id !== swatchId)); } showToast("마감재가 삭제되었습니다."); };
+  
+  const handleSaveSwatch = async (swatchData) => {
+    const docId = swatchData.id ? String(swatchData.id) : String(Date.now());
+    const payload = { ...swatchData, id: docId, updatedAt: Date.now() };
+    if (isFirebaseAvailable && db) {
+      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'swatches', docId), payload, { merge: true });
+    } else {
+      const idx = swatches.findIndex(s => s.id === docId);
+      let newSwatches = [...swatches];
+      if (idx >= 0) newSwatches[idx] = payload; else newSwatches = [payload, ...newSwatches];
+      saveSwatchesToLocal(newSwatches);
+    }
+    showToast("마감재가 저장되었습니다.");
+  };
+
+  const handleDeleteSwatch = async (swatchId) => {
+    if (!window.confirm("정말 삭제하시겠습니까?")) return;
+    if (isFirebaseAvailable && db) {
+      await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'swatches', String(swatchId)));
+    } else {
+      saveSwatchesToLocal(swatches.filter(s => s.id !== swatchId));
+    }
+    showToast("마감재가 삭제되었습니다.");
+  };
+
   const handleSaveProduct = async (productData) => { const docId = productData.id ? String(productData.id) : String(Date.now()); const isEdit = !!productData.id && products.some(p => String(p.id) === docId); const payload = { ...productData, id: docId, updatedAt: Date.now(), createdAt: isEdit ? (products.find(p => String(p.id) === docId)?.createdAt || Date.now()) : Date.now(), orderIndex: isEdit ? (products.find(p => String(p.id) === docId)?.orderIndex || Date.now()) : Date.now() }; if (isFirebaseAvailable && db) { try { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'products', docId), payload, { merge: true }); } catch (error) { showToast("저장 실패", "error"); return; } } else { const idx = products.findIndex(p => String(p.id) === docId); let newProducts = [...products]; if (idx >= 0) newProducts[idx] = payload; else newProducts = [payload, ...products]; saveToLocalStorage(newProducts); } if (selectedProduct && String(selectedProduct.id) === docId) setSelectedProduct(payload); setIsFormOpen(false); setEditingProduct(null); showToast(isEdit ? "수정 완료" : "등록 완료"); };
   const handleDeleteProduct = async (productId, productName) => { if (!window.confirm('정말 삭제하시겠습니까?')) return; if (isFirebaseAvailable && db) { try { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'products', String(productId))); await logActivity("DELETE", productName, "삭제됨"); } catch (error) { showToast("삭제 실패", "error"); return; } } else { const newProducts = products.filter(p => String(p.id) !== String(productId)); saveToLocalStorage(newProducts); } setSelectedProduct(null); setIsFormOpen(false); showToast("삭제되었습니다."); };
   
-  // --- Data & Filters ---
   const getProcessedProducts = () => {
     let filtered = products.filter(product => {
       let matchesCategory = true;
@@ -376,28 +376,20 @@ export default function App() {
       
       const searchLower = searchTerm.toLowerCase();
       const searchFields = [
-         product.name, product.specs, product.designer, 
-         ...(product.features || []), ...(product.options || []), ...(product.awards || []), ...(product.materials || []),
+         product.name, 
+         product.specs, 
+         product.designer, 
+         ...(product.features || []), 
+         ...(product.options || []), 
+         ...(product.awards || []),
+         ...(product.materials || []),
          ...(product.bodyColors || []).map(c => typeof c === 'object' ? c.name : c),
          ...(product.upholsteryColors || []).map(c => typeof c === 'object' ? c.name : c)
       ];
-      const matchesSearch = !searchTerm || searchFields.join(' ').toLowerCase().includes(searchLower);
-
-      // Advanced Filters
-      let matchesFilter = true;
-      if(filters.isNew && !product.isNew) matchesFilter = false;
-      if(filters.year && !product.launchDate?.startsWith(filters.year)) matchesFilter = false;
-      if(filters.color) {
-         const colorMatch = [...(product.bodyColors||[]), ...(product.upholsteryColors||[])].some(c => {
-            const name = typeof c === 'object' ? c.name : c;
-            return name.toLowerCase().includes(filters.color.toLowerCase());
-         });
-         if(!colorMatch) matchesFilter = false;
-      }
-
-      return matchesCategory && matchesSearch && matchesFilter;
+      const allText = searchFields.join(' ').toLowerCase();
+      const matchesSearch = !searchTerm || allText.includes(searchLower);
+      return matchesCategory && matchesSearch;
     });
-
     filtered.sort((a, b) => {
       let comparison = 0;
       if (sortOption === 'name') comparison = a.name.localeCompare(b.name);
@@ -409,62 +401,20 @@ export default function App() {
     return filtered;
   };
   const processedProducts = getProcessedProducts();
+  const handleMoveProduct = async (index, direction) => { if (!processedProducts || processedProducts.length <= 1) return; const targetIndex = direction === 'left' ? index - 1 : index + 1; if (targetIndex < 0 || targetIndex >= processedProducts.length) return; const currentItem = processedProducts[index]; const swapItem = processedProducts[targetIndex]; const currentOrder = currentItem.orderIndex !== undefined ? currentItem.orderIndex : currentItem.createdAt; const swapOrder = swapItem.orderIndex !== undefined ? swapItem.orderIndex : swapItem.createdAt; if (isFirebaseAvailable && db) { try { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'products', currentItem.id), { orderIndex: swapOrder }, { merge: true }); await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'products', swapItem.id), { orderIndex: currentOrder }, { merge: true }); } catch (e) { showToast("순서 변경 실패", "error"); } } else { const newProducts = [...products]; const p1 = newProducts.find(p => p.id === currentItem.id); const p2 = newProducts.find(p => p.id === swapItem.id); if (p1 && p2) { p1.orderIndex = swapOrder; p2.orderIndex = currentOrder; saveToLocalStorage(newProducts); } } };
 
-  // --- Drag & Drop (Manual Sort) ---
-  const handleDragStart = (e, index) => {
-     dragItem.current = index;
-  };
-  const handleDragEnter = (e, index) => {
-     dragOverItem.current = index;
-  };
-  const handleDragEnd = async () => {
-     const _products = [...processedProducts];
-     const dragIndex = dragItem.current;
-     const dragOverIndex = dragOverItem.current;
-
-     if(dragIndex === null || dragOverIndex === null || dragIndex === dragOverIndex) return;
-
-     // Reorder Locally
-     const draggedItemContent = _products[dragIndex];
-     _products.splice(dragIndex, 1);
-     _products.splice(dragOverIndex, 0, draggedItemContent);
-
-     if(isFirebaseAvailable && db) {
-        // Real DB reordering requires batch logic which is complex for this snippet.
-        // We will simulate effect and notify user.
-        showToast("순서가 변경되었습니다. (DB 반영은 전체 업데이트 필요)");
-     } else {
-        saveToLocalStorage(_products); 
-     }
-     setProducts(_products); 
-     dragItem.current = null;
-     dragOverItem.current = null;
-  };
-
-  // --- Navigation (Swipe) Helpers ---
-  const handleNavigateNext = () => {
-     if(!selectedProduct) return;
-     const currentIndex = processedProducts.findIndex(p => p.id === selectedProduct.id);
-     if(currentIndex >= 0 && currentIndex < processedProducts.length - 1) {
-        setSelectedProduct(processedProducts[currentIndex + 1]);
-     }
-  };
-  const handleNavigatePrev = () => {
-     if(!selectedProduct) return;
-     const currentIndex = processedProducts.findIndex(p => p.id === selectedProduct.id);
-     if(currentIndex > 0) {
-        setSelectedProduct(processedProducts[currentIndex - 1]);
-     }
-  };
-
-  // Import/Export
+  // Data Import/Export Handlers
   const handleExportData = () => {
-    const dataStr = JSON.stringify({ products, swatches, spaces: spaceContents, version: APP_VERSION }, null, 2);
+    const dataStr = JSON.stringify({ products, swatches, spaces: spaceContents, version: APP_VERSION, date: new Date().toISOString() }, null, 2);
     const blob = new Blob([dataStr], { type: "application/json" });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href = url; a.download = `patra_db_backup_${new Date().toISOString().slice(0,10)}.json`; a.click();
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `patra_db_backup_${new Date().toISOString().slice(0,10)}.json`;
+    a.click();
     showToast("데이터 백업이 완료되었습니다.");
   };
+
   const handleImportData = (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -472,12 +422,22 @@ export default function App() {
     reader.onload = async (event) => {
       try {
         const imported = JSON.parse(event.target.result);
-        if (window.confirm(`총 ${imported.products?.length || 0}개 제품, ${imported.swatches?.length || 0}개 스와치를 불러오시겠습니까?`)) {
-           if (!isFirebaseAvailable) { saveToLocalStorage(imported.products || []); saveSwatchesToLocal(imported.swatches || []); window.location.reload(); } 
-           else { setProducts(imported.products || []); setSwatches(imported.swatches || []); }
+        if (window.confirm(`총 ${imported.products?.length || 0}개 제품, ${imported.swatches?.length || 0}개 스와치를 불러오시겠습니까? 기존 데이터에 덮어씌워집니다.`)) {
+           if (!isFirebaseAvailable) {
+              saveToLocalStorage(imported.products || []);
+              saveSwatchesToLocal(imported.swatches || []);
+              window.location.reload();
+           } else {
+              // Note: Production should use batch writes. This is a simulation for the viewer context.
+              alert("DB Import requires backend batch script for safety. In this viewer, we loaded it into memory.");
+              setProducts(imported.products || []);
+              setSwatches(imported.swatches || []);
+           }
            showToast("데이터 복원 완료 (메모리 로드)");
         }
-      } catch (err) { showToast("파일 형식이 올바르지 않습니다.", "error"); }
+      } catch (err) {
+        showToast("파일 형식이 올바르지 않습니다.", "error");
+      }
     };
     reader.readAsText(file);
   };
@@ -486,11 +446,12 @@ export default function App() {
     <div className="flex h-screen bg-zinc-50 font-sans text-zinc-900 overflow-hidden relative selection:bg-black selection:text-white print:overflow-visible print:h-auto print:bg-white">
       {isMobileMenuOpen && <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 md:hidden animate-in fade-in" onClick={() => setIsMobileMenuOpen(false)} />}
       
-      {/* Sidebar */}
       <aside className={`fixed inset-y-0 left-0 z-50 w-72 bg-white/90 backdrop-blur-md border-r border-zinc-200 flex flex-col shadow-2xl md:shadow-none transition-transform duration-300 md:relative md:translate-x-0 print:hidden ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         <div className="p-6 border-b border-zinc-100 flex items-center justify-between cursor-pointer group" onClick={handleHomeClick}>
           <div className="flex flex-col">
-             <div className="flex items-center space-x-1"><span className="text-2xl font-black tracking-tighter text-zinc-900 group-hover:scale-105 transition-transform origin-left">PATRA</span></div>
+             <div className="flex items-center space-x-1">
+                <span className="text-2xl font-black tracking-tighter text-zinc-900 group-hover:scale-105 transition-transform origin-left">PATRA</span>
+             </div>
              <span className="text-[10px] font-medium text-zinc-500 tracking-[0.2em] uppercase mt-0.5">Design Lab DB</span>
           </div>
           <button onClick={(e) => { e.stopPropagation(); setIsMobileMenuOpen(false); }} className="md:hidden text-zinc-400 hover:text-zinc-600"><X className="w-6 h-6" /></button>
@@ -500,7 +461,6 @@ export default function App() {
             {CATEGORIES.filter(c => c.isSpecial).map((cat) => (<button key={cat.id} onClick={() => { setActiveCategory(cat.id); setIsMobileMenuOpen(false); }} className={`w-full text-left px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 flex items-center justify-between group border ${activeCategory === cat.id ? 'bg-zinc-900 text-white shadow-lg border-zinc-900' : 'bg-white text-zinc-600 border-zinc-100 hover:bg-zinc-50 hover:border-zinc-300'}`}><div className="flex items-center">{cat.id === 'ALL' && <LayoutGrid className="w-4 h-4 mr-3 opacity-70" />}{cat.id === 'NEW' && <Zap className="w-4 h-4 mr-3 opacity-70" />}<span className="font-bold tracking-tight">{cat.label}</span></div>{cat.id === 'NEW' && <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse ml-auto"></span>}</button>))}
           </div>
           
-          {/* SPACES */}
           <div className="py-2">
              <button onClick={() => setSidebarState(p => ({...p, spaces: !p.spaces}))} className={`w-full text-left px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 flex items-center justify-between group border bg-white text-zinc-600 border-zinc-100 hover:bg-zinc-50 hover:border-zinc-300 mb-1 shadow-sm`}>
                 <span className="font-bold tracking-tight">SPACES</span>
@@ -509,7 +469,6 @@ export default function App() {
              {sidebarState.spaces && (<div className="space-y-1 mt-2 pl-2 animate-in slide-in-from-top-2 duration-200">{SPACES.map((space) => (<button key={space.id} onClick={() => { setActiveCategory(space.id); setIsMobileMenuOpen(false); }} className={`w-full text-left px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 flex items-center justify-between group ${activeCategory === space.id ? 'bg-zinc-800 text-white font-bold' : 'text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900'}`}><div className="flex items-center"><space.icon className={`w-3.5 h-3.5 mr-3 ${activeCategory === space.id ? 'text-white' : 'text-zinc-400'}`} />{space.label}</div>{activeCategory === space.id && <div className="w-1.5 h-1.5 rounded-full bg-green-500"></div>}</button>))}</div>)}
           </div>
 
-          {/* COLLECTIONS */}
           <div className="py-2">
              <button onClick={() => setSidebarState(p => ({...p, collections: !p.collections}))} className={`w-full text-left px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 flex items-center justify-between group border bg-white text-zinc-600 border-zinc-100 hover:bg-zinc-50 hover:border-zinc-300 mb-1 shadow-sm`}>
                 <div className="flex items-center"><span className="font-bold tracking-tight">COLLECTIONS</span>{isFirebaseAvailable ? <Cloud className="w-3 h-3 ml-2 text-green-500" /> : <CloudOff className="w-3 h-3 ml-2 text-zinc-300" />}</div>
@@ -518,7 +477,6 @@ export default function App() {
              {sidebarState.collections && (<div className="space-y-0.5 mt-2 pl-2 animate-in slide-in-from-top-2 duration-200">{CATEGORIES.filter(c => !c.isSpecial).map((cat) => (<button key={cat.id} onClick={() => { setActiveCategory(cat.id); setIsMobileMenuOpen(false); }} className={`w-full text-left px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center justify-between group ${activeCategory === cat.id ? 'bg-zinc-100 text-zinc-900 font-bold' : 'text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900'}`}>{cat.label}</button>))}</div>)}
           </div>
 
-          {/* MATERIALS */}
           <div className="py-2">
              <button onClick={() => setSidebarState(p => ({...p, materials: !p.materials}))} className={`w-full text-left px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 flex items-center justify-between group border bg-white text-zinc-600 border-zinc-100 hover:bg-zinc-50 hover:border-zinc-300 mb-1 shadow-sm`}>
                 <div className="flex items-center"><span className="font-bold tracking-tight">MATERIALS</span></div>
@@ -542,21 +500,8 @@ export default function App() {
             <button onClick={() => setIsMobileMenuOpen(true)} className="md:hidden p-2 -ml-2 text-zinc-600 hover:bg-zinc-100 rounded-lg active:scale-95 transition-transform"><Menu className="w-6 h-6" /></button>
             <div className="relative w-full max-w-md group"><Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-zinc-400 w-4 h-4 group-focus-within:text-zinc-800 transition-colors" /><input type="text" placeholder="Search..." value={searchTerm} onChange={(e) => { setSearchTerm(e.target.value); if (activeCategory === 'DASHBOARD' && e.target.value) setActiveCategory('ALL'); }} className="w-full pl-10 pr-4 py-2 bg-zinc-50/50 border border-transparent focus:bg-white focus:border-zinc-200 focus:ring-4 focus:ring-zinc-50 rounded-full text-sm transition-all outline-none" /></div>
           </div>
-          
-          {/* Header Controls */}
           <div className="flex items-center space-x-2">
-             {/* Compare Toggle */}
-             {compareList.length > 0 && (
-                <button onClick={() => setIsCompareModalOpen(true)} className="flex items-center px-3 py-1.5 bg-zinc-900 text-white rounded-full text-xs font-bold animate-in fade-in hover:bg-black mr-2 shadow-lg">
-                   <ArrowLeftRight className="w-3 h-3 mr-1.5"/> Compare ({compareList.length})
-                </button>
-             )}
-             
-             {/* Filter Toggle */}
-             <button onClick={() => setIsFilterOpen(!isFilterOpen)} className={`p-2 rounded-full transition-all ${isFilterOpen ? 'bg-zinc-200 text-black' : 'hover:bg-zinc-100 text-zinc-500'}`} title="Filters"><SlidersHorizontal className="w-5 h-5" /></button>
-
              <button onClick={() => setActiveCategory('MY_PICK')} className={`hidden md:flex p-2 rounded-full transition-all items-center space-x-1 ${activeCategory === 'MY_PICK' ? 'bg-yellow-100 text-yellow-600' : 'hover:bg-zinc-100 text-zinc-400 hover:text-zinc-600'}`} title="My Pick"><Heart className={`w-5 h-5 ${activeCategory === 'MY_PICK' ? 'fill-yellow-500 text-yellow-500' : ''}`} /></button>
-             
              <div className="flex items-center bg-zinc-100 rounded-lg p-1">
                 <select value={sortOption} onChange={(e) => setSortOption(e.target.value)} className="bg-transparent text-xs font-bold text-zinc-600 outline-none px-2 py-1 max-w-[80px] md:max-w-none cursor-pointer"><option value="manual">Manual</option><option value="launchDate">Launch</option><option value="createdAt">Added</option><option value="name">Name</option></select>
                 <button onClick={() => setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc')} className="p-1.5 rounded-md hover:bg-white hover:shadow-sm transition-all text-zinc-500" title="Sort">{sortDirection === 'asc' ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />}</button>
@@ -564,16 +509,6 @@ export default function App() {
             {isAdmin && (<button onClick={() => { setEditingProduct(null); setIsFormOpen(true); }} className="flex items-center justify-center w-8 h-8 md:w-auto md:h-auto md:px-4 md:py-2 bg-zinc-900 text-white rounded-full hover:bg-black transition-all shadow-lg hover:shadow-xl active:scale-95 flex-shrink-0"><Plus className="w-4 h-4 md:mr-1.5" /><span className="hidden md:inline text-sm font-bold">New</span></button>)}
           </div>
         </header>
-
-        {/* Filter Panel (Expandable) */}
-        {isFilterOpen && (
-           <div className="bg-zinc-50 border-b border-zinc-200 p-4 flex gap-4 overflow-x-auto items-center animate-in slide-in-from-top-5">
-              <div className="flex items-center space-x-2"><span className="text-xs font-bold text-zinc-500">Year:</span><input type="number" placeholder="YYYY" className="px-2 py-1 rounded border text-xs" value={filters.year} onChange={e=>setFilters({...filters, year: e.target.value})} /></div>
-              <div className="flex items-center space-x-2"><span className="text-xs font-bold text-zinc-500">Color:</span><input type="text" placeholder="Red, Blue..." className="px-2 py-1 rounded border text-xs" value={filters.color} onChange={e=>setFilters({...filters, color: e.target.value})} /></div>
-              <label className="flex items-center space-x-2 text-xs font-bold text-zinc-600 cursor-pointer"><input type="checkbox" checked={filters.isNew} onChange={e=>setFilters({...filters, isNew: e.target.checked})} /> <span>New Only</span></label>
-              <button onClick={() => setFilters({year:'', color:'', isNew:false})} className="text-xs text-red-500 hover:underline ml-auto">Reset</button>
-           </div>
-        )}
 
         <div ref={mainContentRef} className="flex-1 overflow-y-auto p-4 md:p-8 custom-scrollbar relative print:overflow-visible print:p-0">
           {activeCategory === 'DASHBOARD' && !searchTerm ? (
@@ -678,26 +613,7 @@ export default function App() {
                         </div>
                       ) : (
                         <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-6 pb-20 print:grid-cols-3 print:gap-4">
-                            {processedProducts.map((product, idx) => (
-                               <div 
-                                  key={product.id}
-                                  draggable={isAdmin && sortOption === 'manual'}
-                                  onDragStart={(e) => handleDragStart(e, idx)}
-                                  onDragEnter={(e) => handleDragEnter(e, idx)}
-                                  onDragEnd={handleDragEnd}
-                                  className={isAdmin && sortOption === 'manual' ? 'cursor-move active:opacity-50 transition-all' : ''}
-                               >
-                                  <ProductCard 
-                                     product={product} 
-                                     onClick={() => setSelectedProduct(product)} 
-                                     isAdmin={isAdmin} 
-                                     isFavorite={favorites.includes(product.id)} 
-                                     onToggleFavorite={(e) => toggleFavorite(e, product.id)}
-                                     onCompareToggle={(e) => toggleCompare(e, product)}
-                                     isCompared={!!compareList.find(p=>p.id===product.id)}
-                                  />
-                               </div>
-                            ))}
+                            {processedProducts.map((product, idx) => (<ProductCard key={product.id} product={product} onClick={() => setSelectedProduct(product)} isAdmin={isAdmin} showMoveControls={isAdmin && sortOption === 'manual'} onMove={(dir) => handleMoveProduct(idx, dir)} isFavorite={favorites.includes(product.id)} onToggleFavorite={(e) => toggleFavorite(e, product.id)} />))}
                             {isAdmin && activeCategory !== 'MY_PICK' && activeCategory !== 'NEW' && !SPACES.find(s => s.id === activeCategory) && (<button onClick={() => { setEditingProduct(null); setIsFormOpen(true); }} className="border-2 border-dashed border-zinc-200 rounded-2xl flex flex-col items-center justify-center min-h-[250px] md:min-h-[300px] text-zinc-400 hover:border-zinc-400 hover:text-zinc-600 hover:bg-zinc-50 transition-all group print:hidden"><div className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-zinc-100 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform"><Plus className="w-6 h-6" /></div><span className="text-xs md:text-sm font-bold">Add Product</span></button>)}
                         </div>
                       )}
@@ -715,35 +631,6 @@ export default function App() {
 
       {toast && <div className="fixed bottom-8 right-8 bg-zinc-900 text-white px-5 py-3.5 rounded-xl shadow-2xl flex items-center space-x-3 animate-in slide-in-from-bottom-10 fade-in z-[90] print:hidden">{toast.type === 'success' ? <Check className="w-5 h-5 text-green-400" /> : <Info className="w-5 h-5 text-red-400" />}<span className="text-sm font-bold tracking-wide">{toast.message}</span></div>}
       
-      {/* Compare Modal */}
-      {isCompareModalOpen && (
-         <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[100] flex items-center justify-center p-4 animate-in zoom-in-95">
-            <div className="bg-white w-full max-w-6xl h-[80vh] rounded-3xl overflow-hidden shadow-2xl flex flex-col">
-               <div className="flex justify-between items-center p-6 border-b">
-                  <h3 className="text-xl font-black">Compare Products</h3>
-                  <button onClick={() => setIsCompareModalOpen(false)}><X className="w-6 h-6"/></button>
-               </div>
-               <div className="flex-1 overflow-auto p-6 grid grid-cols-2 md:grid-cols-4 gap-4">
-                  {compareList.map(p => (
-                     <div key={p.id} className="border border-zinc-200 rounded-xl p-4 flex flex-col">
-                        <div className="aspect-square bg-zinc-50 rounded-lg mb-4 flex items-center justify-center overflow-hidden">
-                           {p.images?.[0] ? <img src={p.images[0]} className="w-full h-full object-contain mix-blend-multiply" /> : <ImageIcon/>}
-                        </div>
-                        <h4 className="font-bold text-lg mb-1">{p.name}</h4>
-                        <span className="text-xs text-zinc-500 mb-4">{p.category}</span>
-                        <div className="space-y-2 text-xs flex-1">
-                           <p><span className="font-bold text-zinc-400 block">Designer</span>{p.designer}</p>
-                           <p><span className="font-bold text-zinc-400 block">Launch</span>{p.launchDate}</p>
-                           <p><span className="font-bold text-zinc-400 block">Specs</span>{p.specs}</p>
-                        </div>
-                        <button onClick={() => setCompareList(compareList.filter(item=>item.id!==p.id))} className="mt-4 w-full py-2 bg-zinc-100 hover:bg-zinc-200 rounded-lg text-xs font-bold">Remove</button>
-                     </div>
-                  ))}
-               </div>
-            </div>
-         </div>
-      )}
-
       {selectedProduct && (
         <ProductDetailModal 
           product={selectedProduct} 
@@ -754,8 +641,6 @@ export default function App() {
           showToast={showToast} 
           isFavorite={favorites.includes(selectedProduct.id)} 
           onToggleFavorite={(e) => toggleFavorite(e, selectedProduct.id)} 
-          onNavigateNext={handleNavigateNext}
-          onNavigatePrev={handleNavigatePrev}
           onNavigateSpace={(spaceId) => { setSelectedProduct(null); setActiveCategory(spaceId); }} 
           onNavigateScene={(scene) => { setSelectedProduct(null); setActiveCategory(scene.spaceId || scene.id); setSelectedScene({...scene, spaceId: scene.spaceId || 'UNKNOWN'}); }} 
         />
@@ -807,7 +692,6 @@ export default function App() {
         <SceneEditModal 
            initialData={editingScene} 
            allProducts={products}
-           spaceTags={SPACES.find(s => s.id === editingScene.spaceId)?.defaultTags || (spaceContents[editingScene.spaceId]?.tags) || []}
            onClose={() => setEditingScene(null)} 
            onSave={(data) => { handleSceneSave(editingScene.spaceId, data); setEditingScene(null); }} 
            onDelete={(id) => { handleSceneDelete(editingScene.spaceId, id); setEditingScene(null); }} 
@@ -869,7 +753,7 @@ export default function App() {
 }
 
 // ----------------------------------------------------------------------
-// Helper Components (Updated V0.6.5)
+// Helper Components (Updated V0.6.4)
 // ----------------------------------------------------------------------
 
 function SwatchDisplay({ color, size = 'medium', className = '' }) {
@@ -881,7 +765,7 @@ function SwatchDisplay({ color, size = 'medium', className = '' }) {
 
   return (
     <div className={`group relative inline-block ${className}`} title={name}>
-       <div className={`${sizeClass} rounded-full overflow-hidden flex items-center justify-center bg-zinc-50 print:border-gray-400 box-border`} style={{boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.1)'}}>
+       <div className={`${sizeClass} rounded-full border border-zinc-300 overflow-hidden flex items-center justify-center bg-zinc-50 print:border-gray-400 box-border`}>
          {image ? (
             <img src={image} alt={name} className="w-full h-full object-cover scale-110" />
          ) : (
@@ -1325,8 +1209,6 @@ function SpaceDetailView({ space, spaceContent, activeTag, setActiveTag, isAdmin
   const scenes = spaceContent.scenes || [];
   const tags = spaceContent.tags || space.defaultTags || []; 
 
-  const filteredScenes = activeTag === 'ALL' ? scenes : scenes.filter(s => s.tags && s.tags.includes(activeTag));
-
   const copySpaceLink = () => { navigator.clipboard.writeText(`${window.location.origin}${window.location.pathname}?space=${space.id}`); window.alert("공간 공유 링크가 복사되었습니다."); };
 
   return (
@@ -1354,10 +1236,10 @@ function SpaceDetailView({ space, spaceContent, activeTag, setActiveTag, isAdmin
       </div>
 
       <div className="mb-12 print:hidden">
-        <div className="flex items-center justify-between mb-6"><h3 className="text-2xl font-extrabold text-zinc-900 flex items-center"><ImageIcon className="w-6 h-6 mr-2 text-indigo-500" /> Space Scenes ({filteredScenes.length})</h3>{isAdmin && (<button onClick={onAddScene} className="flex items-center text-sm font-bold bg-zinc-900 text-white px-4 py-2 rounded-lg hover:bg-black transition-colors shadow-lg"><Plus className="w-4 h-4 mr-2" /> Add Scene</button>)}</div>
-        {filteredScenes.length > 0 ? (
+        <div className="flex items-center justify-between mb-6"><h3 className="text-2xl font-extrabold text-zinc-900 flex items-center"><ImageIcon className="w-6 h-6 mr-2 text-indigo-500" /> Space Scenes</h3>{isAdmin && (<button onClick={onAddScene} className="flex items-center text-sm font-bold bg-zinc-900 text-white px-4 py-2 rounded-lg hover:bg-black transition-colors shadow-lg"><Plus className="w-4 h-4 mr-2" /> Add Scene</button>)}</div>
+        {scenes.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredScenes.map((scene) => (
+            {scenes.map((scene) => (
               <div key={scene.id} onClick={() => onViewScene(scene)} className="group relative aspect-[4/3] rounded-2xl overflow-hidden bg-zinc-100 shadow-md hover:shadow-xl transition-all cursor-pointer">
                 <img src={scene.image} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" alt={scene.title} />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-80 group-hover:opacity-100 transition-opacity"></div>
@@ -1379,27 +1261,19 @@ function SpaceDetailView({ space, spaceContent, activeTag, setActiveTag, isAdmin
   );
 }
 
-function ProductCard({ product, onClick, showMoveControls, onMove, isFavorite, onToggleFavorite, onCompareToggle, isCompared, isAdmin }) {
+function ProductCard({ product, onClick, showMoveControls, onMove, isFavorite, onToggleFavorite }) {
   const mainImage = product.images && product.images.length > 0 ? product.images[0] : null;
   const awardCount = product.awards?.length || 0;
   
   return (
     <div onClick={onClick} className="bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer group border border-zinc-100 relative flex flex-col h-full print:break-inside-avoid print:shadow-none print:border-zinc-200">
-      <div className="relative aspect-square bg-zinc-50 p-6 flex items-center justify-center overflow-hidden">
-        <div className="absolute top-2 left-2 flex flex-wrap gap-1.5 z-10 items-start max-w-[80%]">
-           {product.isNew && <span className="bg-black text-white text-[8px] font-extrabold px-1.5 py-0.5 rounded shadow-sm tracking-wide">NEW</span>}
+      <div className="relative h-32 md:h-64 bg-zinc-50 p-2 md:p-6 flex items-center justify-center overflow-hidden">
+        <div className="absolute top-2 left-2 md:top-4 md:left-4 flex flex-wrap gap-1.5 z-10 items-start max-w-[80%]">
+           {product.isNew && <span className="bg-black text-white text-[8px] md:text-[9px] font-extrabold px-1.5 py-0.5 md:px-2 md:py-1 rounded shadow-sm tracking-wide">NEW</span>}
         </div>
-        
-        {/* Buttons: Favorite & Compare */}
-        <div className="absolute top-2 right-2 flex gap-1 z-20">
-           <button onClick={(e) => onCompareToggle(e)} className={`p-1.5 rounded-full transition-all ${isCompared ? 'bg-zinc-900 text-white' : 'bg-white/80 text-zinc-400 hover:text-zinc-900'}`} title="Compare">
-              <ArrowLeftRight className="w-3.5 h-3.5" />
-           </button>
-           <button onClick={onToggleFavorite} className="p-1.5 bg-white/80 rounded-full text-zinc-300 hover:text-yellow-400 hover:scale-110 transition-all"><Star className={`w-3.5 h-3.5 ${isFavorite ? 'fill-yellow-400 text-yellow-400' : ''}`} /></button>
-        </div>
-
+        <button onClick={onToggleFavorite} className="absolute top-2 right-2 md:top-4 md:right-4 z-20 text-zinc-300 hover:text-yellow-400 hover:scale-110 transition-all print:hidden"><Star className={`w-4 h-4 md:w-5 md:h-5 ${isFavorite ? 'text-yellow-400 fill-yellow-400' : ''}`} /></button>
         <div className="w-full h-full flex items-center justify-center transition-transform duration-500 group-hover:scale-105">
-            {mainImage ? <img src={mainImage} alt={product.name} loading="lazy" className="w-full h-full object-contain mix-blend-multiply" /> : <div className="text-center opacity-30"><ImageIcon className="w-8 h-8 text-zinc-400" /></div>}
+            {mainImage ? <img src={mainImage} alt={product.name} loading="lazy" className="w-full h-full object-contain mix-blend-multiply" /> : <div className="text-center opacity-30"><ImageIcon className="w-8 h-8 md:w-10 md:h-10 mx-auto mb-2 text-zinc-400" /></div>}
         </div>
         {showMoveControls && (
           <div className="absolute bottom-1 md:bottom-2 left-0 right-0 flex justify-center gap-2 z-20 print:hidden">
@@ -1409,39 +1283,39 @@ function ProductCard({ product, onClick, showMoveControls, onMove, isFavorite, o
         )}
       </div>
       
-      <div className="p-4 flex-1 flex flex-col bg-white">
-        <div className="mb-2">
-           <h3 className="text-sm font-extrabold text-zinc-900 leading-tight group-hover:text-blue-600 transition-colors line-clamp-1">{product.name}</h3>
+      <div className="p-3 md:p-5 flex-1 flex flex-col bg-white">
+        <h3 className="text-sm md:text-lg font-extrabold text-zinc-900 mb-1 leading-tight group-hover:text-blue-600 transition-colors line-clamp-1">{product.name}</h3>
+        <div className="flex justify-between items-center mb-2">
+          <span className="text-[9px] md:text-[10px] font-bold text-zinc-400 bg-zinc-50 px-1.5 py-0.5 rounded uppercase tracking-wider">{product.category}</span>
+          {awardCount > 0 && (
+             <div className="flex items-center text-[9px] font-bold text-yellow-600 bg-yellow-50 px-1.5 py-0.5 rounded">
+                <Trophy className="w-2.5 h-2.5 mr-1" />
+                <span>{awardCount}</span>
+             </div>
+          )}
         </div>
         
-        <div className="flex justify-between items-end mt-auto">
-           <span className="text-[10px] font-medium text-zinc-400">{product.designer || 'Patra'}</span>
-           <span className="text-[9px] font-bold text-zinc-500 bg-zinc-50 px-1.5 py-0.5 rounded uppercase tracking-wider">{product.category}</span>
+        <div className="mt-auto pt-2 md:pt-4 border-t border-zinc-50 space-y-2">
+          <div className="flex items-center gap-1 md:gap-2">
+             <div className="flex -space-x-1">
+                {product.bodyColors?.slice(0, 4).map((c, i) => <SwatchDisplay key={i} color={c} size="small" className="ring-1 ring-white" />)}
+             </div>
+             {product.upholsteryColors?.length > 0 && <span className="text-zinc-200 text-[10px] mx-0.5">|</span>}
+             <div className="flex -space-x-1">
+                {product.upholsteryColors?.slice(0, 4).map((c, i) => <SwatchDisplay key={i} color={c} size="small" className="ring-1 ring-white rounded-sm" />)}
+             </div>
+          </div>
         </div>
       </div>
     </div>
   );
 }
 
-function ProductDetailModal({ product, spaceContents, onClose, onEdit, isAdmin, showToast, isFavorite, onToggleFavorite, onNavigateSpace, onNavigateScene, onNavigateNext, onNavigatePrev }) {
+function ProductDetailModal({ product, spaceContents, onClose, onEdit, isAdmin, showToast, isFavorite, onToggleFavorite, onNavigateSpace, onNavigateScene }) {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [isZoomed, setIsZoomed] = useState(false);
   const canvasRef = useRef(null);
   
-  // Swipe Logic
-  const touchStart = useRef(null);
-  const handleTouchStart = (e) => { touchStart.current = e.targetTouches[0].clientX; };
-  const handleTouchEnd = (e) => {
-     if(!touchStart.current) return;
-     const currentX = e.changedTouches[0].clientX;
-     const diff = touchStart.current - currentX;
-     if(Math.abs(diff) > 50) {
-        if(diff > 0) onNavigateNext(); 
-        else onNavigatePrev();
-     }
-     touchStart.current = null;
-  };
-
   if (!product) return null;
   const images = product.images || [];
   const currentImage = images.length > 0 ? images[currentImageIndex] : null;
@@ -1461,7 +1335,28 @@ function ProductDetailModal({ product, spaceContents, onClose, onEdit, isAdmin, 
   }
 
   const copyToClipboard = () => { navigator.clipboard.writeText(`[${product.name}]\n${product.specs}`); showToast("Copied to clipboard"); };
+  
   const launchYear = product.launchDate ? product.launchDate.substring(0, 4) : '';
+
+  const wrapText = (ctx, text, x, y, maxWidth, lineHeight) => {
+     if(!text) return y;
+     const words = text.split(' ');
+     let line = '';
+     for(let n = 0; n < words.length; n++) {
+       const testLine = line + words[n] + ' ';
+       const metrics = ctx.measureText(testLine);
+       const testWidth = metrics.width;
+       if (testWidth > maxWidth && n > 0) {
+         ctx.fillText(line, x, y);
+         line = words[n] + ' ';
+         y += lineHeight;
+       } else {
+         line = testLine;
+       }
+     }
+     ctx.fillText(line, x, y);
+     return y + lineHeight;
+  };
 
   const handleShareImage = async () => {
     const canvas = canvasRef.current; if (!canvas) return; const ctx = canvas.getContext('2d');
@@ -1511,18 +1406,6 @@ function ProductDetailModal({ product, spaceContents, onClose, onEdit, isAdmin, 
             
             ctx.font = '26px sans-serif'; ctx.fillStyle = '#52525b';
             const specText = product.specs.split('\n');
-            const wrapText = (ctx, text, x, y, maxWidth, lineHeight) => {
-                if(!text) return y;
-                const words = text.split(' ');
-                let line = '';
-                for(let n = 0; n < words.length; n++) {
-                  const testLine = line + words[n] + ' ';
-                  const metrics = ctx.measureText(testLine);
-                  if (metrics.width > maxWidth && n > 0) { ctx.fillText(line, x, y); line = words[n] + ' '; y += lineHeight; } else { line = testLine; }
-                }
-                ctx.fillText(line, x, y);
-                return y + lineHeight;
-            };
             specText.forEach(line => { 
                 cursorY = wrapText(ctx, line, 100, cursorY, w - 200, 40);
             });
@@ -1594,7 +1477,7 @@ function ProductDetailModal({ product, spaceContents, onClose, onEdit, isAdmin, 
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-50 flex items-center justify-center p-0 md:p-4 animate-in fade-in duration-200 print:fixed print:inset-0 print:z-[100] print:bg-white print:h-auto print:overflow-visible" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-50 flex items-center justify-center p-0 md:p-4 animate-in fade-in duration-200 print:fixed print:inset-0 print:z-[100] print:bg-white print:h-auto print:overflow-visible">
       <canvas ref={canvasRef} style={{ display: 'none' }} />
       {isZoomed && currentImage && (<div className="fixed inset-0 z-[70] bg-black/95 flex items-center justify-center p-8 cursor-zoom-out print:hidden" onClick={() => setIsZoomed(false)}><img src={currentImage} className="max-w-full max-h-full object-contain" alt="Zoomed" /><button className="absolute top-6 right-6 text-white/50 hover:text-white"><X className="w-10 h-10" /></button></div>)}
       <div className="bg-white w-full h-full md:h-[90vh] md:w-full md:max-w-6xl md:rounded-3xl overflow-hidden shadow-2xl flex flex-col md:flex-row relative print:h-auto print:overflow-visible print:shadow-none print:rounded-none">
@@ -1795,7 +1678,7 @@ function ProductFormModal({ categories, swatches = [], existingData, onClose, on
     e.preventDefault();
     onSave({ 
       ...formData,
-      launchDate: formData.launchDate, 
+      launchDate: formData.launchDate, // Just Year String
       features: formData.featuresString.split(',').map(s=>s.trim()).filter(Boolean),
       options: formData.optionsString.split(',').map(s=>s.trim()).filter(Boolean),
       materials: formData.materialsString.split(',').map(s=>s.trim()).filter(Boolean),
@@ -1977,8 +1860,8 @@ function SpaceProductManager({ spaceId, products, onClose, onToggle }) {
   );
 }
 
-function SceneEditModal({ initialData, allProducts, spaceTags = [], onClose, onSave, onDelete }) {
-  const [data, setData] = useState({ id: null, title: '', description: '', image: null, images: [], productIds: [], tags: [] });
+function SceneEditModal({ initialData, allProducts, onClose, onSave, onDelete }) {
+  const [data, setData] = useState({ id: null, title: '', description: '', image: null, images: [], productIds: [] });
   const [filter, setFilter] = useState('');
   const mainInputRef = useRef(null);
   const galleryInputRef = useRef(null);
@@ -1986,7 +1869,7 @@ function SceneEditModal({ initialData, allProducts, spaceTags = [], onClose, onS
   useEffect(() => {
     if(initialData && !initialData.isNew) {
       setData({ 
-        id: initialData.id, title: initialData.title || '', description: initialData.description || '', image: initialData.image || null, images: initialData.images || [], productIds: initialData.productIds || [], tags: initialData.tags || [] 
+        id: initialData.id, title: initialData.title || '', description: initialData.description || '', image: initialData.image || null, images: initialData.images || [], productIds: initialData.productIds || [] 
       });
     }
   }, [initialData]);
@@ -1995,7 +1878,6 @@ function SceneEditModal({ initialData, allProducts, spaceTags = [], onClose, onS
   const handleMainImage = async (e) => { const file = e.target.files[0]; if (file) { const imageUrl = await processImage(file); setData(prev => ({ ...prev, image: imageUrl })); } };
   const handleGalleryUpload = async (e) => { const files = Array.from(e.target.files); if(files.length > 0) { const newUrls = []; for(const file of files) { try { newUrls.push(await processImage(file)); } catch(e) {} } setData(prev => ({ ...prev, images: [...prev.images, ...newUrls] })); } };
   const toggleProduct = (pid) => { setData(prev => { const ids = prev.productIds || []; return ids.includes(pid) ? { ...prev, productIds: ids.filter(id => id !== pid) } : { ...prev, productIds: [...ids, pid] }; }); };
-  const toggleTag = (tag) => { setData(prev => { const tags = prev.tags || []; if (tags.includes(tag)) return { ...prev, tags: tags.filter(t => t !== tag) }; else return { ...prev, tags: [...tags, tag] }; }); };
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[80] flex items-center justify-center p-4">
@@ -2007,21 +1889,6 @@ function SceneEditModal({ initialData, allProducts, spaceTags = [], onClose, onS
          <div className="flex-1 overflow-y-auto p-6 space-y-8 bg-zinc-50">
             <div className="space-y-4">
               <div><label className="block text-xs font-bold text-zinc-500 uppercase mb-2">Main Image</label><div onClick={() => mainInputRef.current.click()} className="w-full h-48 bg-white rounded-xl flex items-center justify-center cursor-pointer border border-dashed border-zinc-300 overflow-hidden relative hover:border-zinc-400 transition-colors shadow-sm">{data.image ? <img src={data.image} className="w-full h-full object-cover" /> : <div className="flex flex-col items-center text-zinc-400"><ImagePlus className="w-8 h-8 mb-2"/><span className="text-xs">Upload Main</span></div>}</div><input type="file" ref={mainInputRef} className="hidden" accept="image/*" onChange={handleMainImage} /></div>
-              
-              {/* Space Tags for Scene */}
-              {spaceTags.length > 0 && (
-                 <div>
-                    <label className="block text-xs font-bold text-zinc-500 uppercase mb-2">Space Tags (Filter)</label>
-                    <div className="flex flex-wrap gap-2">
-                       {spaceTags.map(tag => (
-                          <button key={tag} onClick={() => toggleTag(tag)} className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-colors ${data.tags?.includes(tag) ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-500 border-zinc-200'}`}>
-                             {tag}
-                          </button>
-                       ))}
-                    </div>
-                 </div>
-              )}
-
               <div>
                  <div className="flex justify-between items-center mb-2"><label className="block text-xs font-bold text-zinc-500 uppercase">Additional Images</label><button type="button" onClick={() => galleryInputRef.current.click()} className="text-[10px] bg-white border px-2 py-1 rounded hover:bg-zinc-100">+ Add</button><input type="file" ref={galleryInputRef} multiple className="hidden" accept="image/*" onChange={handleGalleryUpload} /></div>
                  {data.images.length > 0 && <div className="grid grid-cols-5 gap-2">{data.images.map((img, i) => (<div key={i} className="relative aspect-square rounded-lg overflow-hidden group border border-zinc-200"><img src={img} className="w-full h-full object-cover" /><button onClick={() => setData(prev => ({...prev, images: prev.images.filter((_, idx) => idx !== i)}))} className="absolute top-0.5 right-0.5 bg-red-500 text-white p-0.5 rounded-full opacity-0 group-hover:opacity-100"><X className="w-3 h-3"/></button></div>))}</div>}
