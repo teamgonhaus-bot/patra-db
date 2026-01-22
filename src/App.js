@@ -135,7 +135,6 @@ export default function App() {
   // Edit & Admin
   const [isFormOpen, setIsFormOpen] = useState(false); 
   const [editingProduct, setEditingProduct] = useState(null);
-  // Swatch Editing via Manager
   const [editingSwatchFromModal, setEditingSwatchFromModal] = useState(null);
 
   const [isLoading, setIsLoading] = useState(true);
@@ -158,7 +157,7 @@ export default function App() {
   const [managingSpaceProductsId, setManagingSpaceProductsId] = useState(null);
   const [editingScene, setEditingScene] = useState(null);
   const [selectedScene, setSelectedScene] = useState(null);
-  
+
   // Drag & Drop
   const dragItem = useRef(null);
   const dragOverItem = useRef(null);
@@ -339,7 +338,7 @@ export default function App() {
     });
   };
 
-  // --- Actions ---
+  // --- CRUD & Actions ---
   const handleBannerUpload = async (e) => { if (!isAdmin) return; const file = e.target.files[0]; if (!file) return; try { const resizedImage = await processImage(file); const newData = { ...bannerData, url: resizedImage }; if (isFirebaseAvailable && db) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'banner'), newData, { merge: true }); else { localStorage.setItem('patra_banner_data', JSON.stringify(newData)); setBannerData(newData); } showToast("메인 배너가 업데이트되었습니다."); } catch (error) { showToast("이미지 처리 실패", "error"); } };
   const handleBannerTextChange = (key, value) => { if (!isAdmin) return; setBannerData(prev => ({ ...prev, [key]: value })); };
   const saveBannerText = async () => { if (isFirebaseAvailable && db) { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'banner'), bannerData, { merge: true }); showToast("배너 문구가 저장되었습니다."); } };
@@ -434,7 +433,7 @@ export default function App() {
     <div className="flex h-screen bg-zinc-50 font-sans text-zinc-900 overflow-hidden relative selection:bg-black selection:text-white print:overflow-visible print:h-auto print:bg-white">
       {isMobileMenuOpen && <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 md:hidden animate-in fade-in" onClick={() => setIsMobileMenuOpen(false)} />}
       
-      {/* Sidebar (Compact) */}
+      {/* Sidebar */}
       <aside className={`fixed inset-y-0 left-0 z-50 w-72 bg-white/90 backdrop-blur-md border-r border-zinc-200 flex flex-col shadow-2xl md:shadow-none transition-transform duration-300 md:relative md:translate-x-0 print:hidden ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         <div className="p-6 border-b border-zinc-100 flex items-center justify-between cursor-pointer group" onClick={handleHomeClick}>
           <div className="flex flex-col">
@@ -713,7 +712,6 @@ function SwatchDisplay({ color, size = 'medium', className = '' }) {
   const name = isObject ? color.name : color;
   const sizeClass = size === 'large' ? 'w-10 h-10' : size === 'small' ? 'w-4 h-4' : 'w-6 h-6';
 
-  // Fixed: Removed tooltip, using box-shadow for cleaner border
   return (
     <div className={`group relative inline-block ${className}`} title={name}>
        <div className={`${sizeClass} rounded-full overflow-hidden flex items-center justify-center bg-zinc-50 box-border`} style={{boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.1)'}}>
@@ -1918,4 +1916,3 @@ function SpaceSceneModal({ scene, products, allProducts, isAdmin, onClose, onEdi
     </div>
   );
 }
-```
