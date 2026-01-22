@@ -1110,9 +1110,7 @@ function PieChartComponent({ data, total, selectedIndex, onSelect }) {
   let cumulativePercent = 0;
   const radius = 0.7; 
 
-  const sortedData = [...data]; // No sorting for consistent colors order? or keep it sorted. Let's keep input order or sort by count.
-  // Ideally sort by count descending for better visualization, but need to maintain index for colors.
-  // Let's use the provided order but ensure colors match.
+  const sortedData = [...data]; 
   
   return (
     <div className="relative w-full h-full flex items-center justify-center">
@@ -1132,7 +1130,6 @@ function PieChartComponent({ data, total, selectedIndex, onSelect }) {
            const largeArcFlag = percent > 0.5 ? 1 : 0;
            const pathData = `M ${x1} ${y1} A ${radius} ${radius} 0 ${largeArcFlag} 1 ${x2} ${y2}`;
 
-           // Explode logic (Click or Hover)
            const isSelected = selectedIndex === idx;
            const isHovered = hoveredIndex === idx;
            const midAngle = startAngle + (endAngle - startAngle) / 2;
@@ -1160,7 +1157,6 @@ function PieChartComponent({ data, total, selectedIndex, onSelect }) {
         })}
       </svg>
       
-      {/* Center Text */}
       <div className="absolute inset-0 flex items-center justify-center flex-col pointer-events-none transition-all duration-300">
          {selectedIndex !== null ? (
             <>
@@ -1454,12 +1450,23 @@ function ProductCard({ product, onClick, showMoveControls, onMove, isFavorite, o
 }
 
 function ProductDetailModal({ product, allProducts, swatches, spaceContents, onClose, onEdit, isAdmin, showToast, isFavorite, onToggleFavorite, onNavigateSpace, onNavigateScene, onNavigateNext, onNavigatePrev, onNavigateProduct, onNavigateSwatch }) {
+  // 1. Declare all Hooks at the top level unconditionally
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [isZoomed, setIsZoomed] = useState(false);
   const canvasRef = useRef(null);
-  
-  // Swipe Logic
   const touchStart = useRef(null);
+  const [swatchPopup, setSwatchPopup] = useState(null); 
+
+  useEffect(() => {
+      const closePopup = () => setSwatchPopup(null);
+      window.addEventListener('click', closePopup);
+      return () => window.removeEventListener('click', closePopup);
+  }, []);
+
+  // 2. Early return check
+  if (!product) return null;
+
+  // 3. Derived data & Handlers
   const handleTouchStart = (e) => { touchStart.current = e.targetTouches[0].clientX; };
   const handleTouchEnd = (e) => {
      if(!touchStart.current) return;
@@ -1472,7 +1479,6 @@ function ProductDetailModal({ product, allProducts, swatches, spaceContents, onC
      touchStart.current = null;
   };
 
-  if (!product) return null;
   const images = product.images || [];
   const currentImage = images.length > 0 ? images[currentImageIndex] : null;
   const contentImages = product.contentImages || [];
@@ -1496,15 +1502,11 @@ function ProductDetailModal({ product, allProducts, swatches, spaceContents, onC
   const copyToClipboard = () => { navigator.clipboard.writeText(`[${product.name}]\n${product.specs}`); showToast("Copied to clipboard"); };
   const launchYear = product.launchDate ? product.launchDate.substring(0, 4) : '';
 
-  // Swatch Click Logic
-  const [swatchPopup, setSwatchPopup] = useState(null); // { x, y, code, swatchObj }
-
   const handleSwatchClick = (e, color) => {
       e.stopPropagation();
       const rect = e.currentTarget.getBoundingClientRect();
       const code = typeof color === 'object' ? color.materialCode || color.name : color;
       
-      // Try to find the swatch object in global swatches
       const swatchId = typeof color === 'object' ? color.id : null;
       const foundSwatch = swatches.find(s => s.id === swatchId) || (typeof color === 'object' ? color : null);
       
@@ -1518,23 +1520,15 @@ function ProductDetailModal({ product, allProducts, swatches, spaceContents, onC
 
   const navigateToSwatch = () => {
       if(swatchPopup && swatchPopup.swatchObj && swatchPopup.swatchObj.id) {
-         // Find full swatch object from global state to ensure we have all data
          const fullSwatch = swatches.find(s => s.id === swatchPopup.swatchObj.id);
          if(fullSwatch) onNavigateSwatch(fullSwatch);
-         else onNavigateSwatch(swatchPopup.swatchObj); // Fallback
+         else onNavigateSwatch(swatchPopup.swatchObj);
          setSwatchPopup(null);
       }
   };
 
-  // Close popup on click outside
-  useEffect(() => {
-      const closePopup = () => setSwatchPopup(null);
-      window.addEventListener('click', closePopup);
-      return () => window.removeEventListener('click', closePopup);
-  }, []);
-
-  // Image Generation Logic (Simplified for brevity)
-  const handleShareImage = async () => { /* Same as previous logic */ };
+  // Image Generation Logic (Simplified)
+  const handleShareImage = async () => { /* ... */ };
 
   return (
     <div key={product.id} className="fixed inset-0 bg-black/60 backdrop-blur-md z-50 flex items-center justify-center p-0 md:p-4 animate-in fade-in duration-300 slide-in-animation print:fixed print:inset-0 print:z-[100] print:bg-white print:h-auto print:overflow-visible" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
@@ -1679,7 +1673,6 @@ function ProductDetailModal({ product, allProducts, swatches, spaceContents, onC
                         <span className="text-[9px] font-bold">PDF</span>
                     </button>
                  </div>
-                 {/* Removed Edit Button Here as requested */}
               </div>
 
             </div>
@@ -1689,7 +1682,6 @@ function ProductDetailModal({ product, allProducts, swatches, spaceContents, onC
                  <button onClick={handleShareImage} className="flex items-center px-5 py-2.5 bg-zinc-100 text-zinc-600 rounded-xl text-sm font-bold hover:bg-zinc-200 transition-colors shadow-sm"><ImgIcon className="w-4 h-4 mr-2" /> Share Image</button>
                  <button onClick={() => window.print()} className="flex items-center px-5 py-2.5 bg-zinc-100 text-zinc-600 rounded-xl text-sm font-bold hover:bg-zinc-200 transition-colors shadow-sm"><Printer className="w-4 h-4 mr-2" /> Print PDF</button>
               </div>
-              {/* Removed Edit Button Here as requested */}
             </div>
           </div>
         </div>
