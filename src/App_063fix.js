@@ -10,7 +10,7 @@ import {
   Share2, Download, Maximize2, LayoutGrid, Zap, GripHorizontal, ImageIcon as ImgIcon,
   ChevronsUp, Camera, ImagePlus, Sofa, Briefcase, Users, Home as HomeIcon, MapPin,
   Edit3, Grid, MoreVertical, MousePointer2, CheckSquare, XCircle, Printer, List, Eye,
-  PlayCircle, BarChart3, CornerUpLeft, Grid3X3, Droplet, Coffee, GraduationCap, ShoppingBag, FileDown, FileUp
+  PlayCircle, BarChart3, CornerUpLeft, Grid3X3, Droplet, Coffee, GraduationCap, ShoppingBag
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { 
@@ -36,7 +36,7 @@ const YOUR_FIREBASE_CONFIG = {
 // ----------------------------------------------------------------------
 // 상수 및 설정
 // ----------------------------------------------------------------------
-const APP_VERSION = "v0.6.4"; 
+const APP_VERSION = "v0.6.3-fix"; 
 const BUILD_DATE = "2026.01.22";
 const ADMIN_PASSWORD = "adminlcg1"; 
 
@@ -81,7 +81,7 @@ const CATEGORIES = [
   { id: 'ETC', label: 'Etc', color: '#9ca3af' }
 ];
 
-// 공간 (Spaces) 정의
+// 공간 (Spaces) 정의 - v0.6.3 개편 (O, T, L, C)
 const SPACES = [
   { 
     id: 'OFFICE', label: 'Office', icon: Briefcase, 
@@ -403,45 +403,6 @@ export default function App() {
   const processedProducts = getProcessedProducts();
   const handleMoveProduct = async (index, direction) => { if (!processedProducts || processedProducts.length <= 1) return; const targetIndex = direction === 'left' ? index - 1 : index + 1; if (targetIndex < 0 || targetIndex >= processedProducts.length) return; const currentItem = processedProducts[index]; const swapItem = processedProducts[targetIndex]; const currentOrder = currentItem.orderIndex !== undefined ? currentItem.orderIndex : currentItem.createdAt; const swapOrder = swapItem.orderIndex !== undefined ? swapItem.orderIndex : swapItem.createdAt; if (isFirebaseAvailable && db) { try { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'products', currentItem.id), { orderIndex: swapOrder }, { merge: true }); await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'products', swapItem.id), { orderIndex: currentOrder }, { merge: true }); } catch (e) { showToast("순서 변경 실패", "error"); } } else { const newProducts = [...products]; const p1 = newProducts.find(p => p.id === currentItem.id); const p2 = newProducts.find(p => p.id === swapItem.id); if (p1 && p2) { p1.orderIndex = swapOrder; p2.orderIndex = currentOrder; saveToLocalStorage(newProducts); } } };
 
-  // Data Import/Export Handlers
-  const handleExportData = () => {
-    const dataStr = JSON.stringify({ products, swatches, spaces: spaceContents, version: APP_VERSION, date: new Date().toISOString() }, null, 2);
-    const blob = new Blob([dataStr], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `patra_db_backup_${new Date().toISOString().slice(0,10)}.json`;
-    a.click();
-    showToast("데이터 백업이 완료되었습니다.");
-  };
-
-  const handleImportData = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = async (event) => {
-      try {
-        const imported = JSON.parse(event.target.result);
-        if (window.confirm(`총 ${imported.products?.length || 0}개 제품, ${imported.swatches?.length || 0}개 스와치를 불러오시겠습니까? 기존 데이터에 덮어씌워집니다.`)) {
-           if (!isFirebaseAvailable) {
-              saveToLocalStorage(imported.products || []);
-              saveSwatchesToLocal(imported.swatches || []);
-              window.location.reload();
-           } else {
-              // Note: Production should use batch writes. This is a simulation for the viewer context.
-              alert("DB Import requires backend batch script for safety. In this viewer, we loaded it into memory.");
-              setProducts(imported.products || []);
-              setSwatches(imported.swatches || []);
-           }
-           showToast("데이터 복원 완료 (메모리 로드)");
-        }
-      } catch (err) {
-        showToast("파일 형식이 올바르지 않습니다.", "error");
-      }
-    };
-    reader.readAsText(file);
-  };
-
   return (
     <div className="flex h-screen bg-zinc-50 font-sans text-zinc-900 overflow-hidden relative selection:bg-black selection:text-white print:overflow-visible print:h-auto print:bg-white">
       {isMobileMenuOpen && <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 md:hidden animate-in fade-in" onClick={() => setIsMobileMenuOpen(false)} />}
@@ -723,28 +684,7 @@ export default function App() {
               <h3 className="text-lg font-bold flex items-center"><ShieldAlert className="w-5 h-5 mr-2" /> Admin Console</h3>
               <button onClick={() => setShowAdminDashboard(false)}><X className="w-5 h-5 text-zinc-400 hover:text-white transition-colors" /></button>
             </div>
-            <div className="flex-1 flex flex-col items-center justify-center p-10 text-zinc-400 space-y-6">
-               <div className="text-center">
-                  <Activity className="w-12 h-12 mb-3 mx-auto text-zinc-300"/>
-                  <p className="text-lg font-bold text-zinc-600">System Status: Active</p>
-               </div>
-               
-               <div className="w-full max-w-md bg-zinc-50 border border-zinc-200 rounded-2xl p-6">
-                  <h4 className="text-sm font-bold text-zinc-500 uppercase mb-4 flex items-center"><Database className="w-4 h-4 mr-2"/> Data Management (Backup / Restore)</h4>
-                  <div className="grid grid-cols-2 gap-4">
-                     <button onClick={handleExportData} className="flex flex-col items-center justify-center p-4 bg-white border border-zinc-200 rounded-xl hover:border-zinc-400 transition-all hover:shadow-md group">
-                        <FileDown className="w-8 h-8 text-zinc-400 group-hover:text-blue-600 mb-2"/>
-                        <span className="text-xs font-bold text-zinc-600">Export Backup (JSON)</span>
-                     </button>
-                     <label className="flex flex-col items-center justify-center p-4 bg-white border border-zinc-200 rounded-xl hover:border-zinc-400 transition-all hover:shadow-md group cursor-pointer">
-                        <FileUp className="w-8 h-8 text-zinc-400 group-hover:text-red-600 mb-2"/>
-                        <span className="text-xs font-bold text-zinc-600">Import Restore (JSON)</span>
-                        <input type="file" accept=".json" onChange={handleImportData} className="hidden" />
-                     </label>
-                  </div>
-                  <p className="text-[10px] text-zinc-400 mt-3 text-center">* Import overwrites existing local data. Use with caution.</p>
-               </div>
-            </div>
+            <div className="flex-1 flex flex-col items-center justify-center p-10 text-zinc-400"><Activity className="w-10 h-10 mb-2"/><p>Dashboard active.</p></div>
           </div>
         </div>
       )}
@@ -753,7 +693,7 @@ export default function App() {
 }
 
 // ----------------------------------------------------------------------
-// Helper Components (Updated V0.6.4)
+// Helper Components
 // ----------------------------------------------------------------------
 
 function SwatchDisplay({ color, size = 'medium', className = '' }) {
@@ -765,13 +705,16 @@ function SwatchDisplay({ color, size = 'medium', className = '' }) {
 
   return (
     <div className={`group relative inline-block ${className}`} title={name}>
-       <div className={`${sizeClass} rounded-full border border-zinc-300 overflow-hidden flex items-center justify-center bg-zinc-50 print:border-gray-400 box-border`}>
+       <div className={`${sizeClass} rounded-full border border-zinc-200 shadow-sm overflow-hidden flex items-center justify-center bg-zinc-50 print:border-gray-400`}>
          {image ? (
-            <img src={image} alt={name} className="w-full h-full object-cover scale-110" />
+            <img src={image} alt={name} className="w-full h-full object-cover scale-150" />
          ) : (
             <div className="w-full h-full" style={{ backgroundColor: hex }} />
          )}
        </div>
+       <span className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 px-2 py-1 bg-black text-white text-[10px] rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10 pointer-events-none print:hidden shadow-lg">
+          {name}
+       </span>
     </div>
   );
 }
@@ -824,10 +767,10 @@ function SwatchManager({ category, swatches, isAdmin, onSave, onDelete, onSelect
                    )}
                 </div>
                 <div className="p-3">
-                   <h4 className="font-bold text-sm truncate mb-1">{swatch.name}</h4>
-                   <div className="flex justify-between items-end">
-                      <span className="text-[10px] text-zinc-400 uppercase font-medium">{swatch.category}</span>
-                      <span className="text-lg font-extrabold text-zinc-900 tracking-tight">{swatch.materialCode || '-'}</span>
+                   <h4 className="font-bold text-sm truncate">{swatch.name}</h4>
+                   <div className="flex justify-between items-center mt-1">
+                      <p className="text-[10px] text-zinc-400 uppercase font-medium">{swatch.category}</p>
+                      <p className="text-[10px] text-zinc-400 font-mono bg-zinc-50 px-1 rounded">{swatch.hex}</p>
                    </div>
                 </div>
              </div>
@@ -877,12 +820,9 @@ function SwatchDetailModal({ swatch, allProducts, onClose, onNavigateProduct }) 
                 <div className="w-full md:w-7/12 bg-white p-8 md:p-10 flex flex-col overflow-y-auto">
                     <div className="mb-6">
                         <span className="inline-block px-2.5 py-0.5 bg-zinc-900 text-white text-[10px] font-bold rounded uppercase tracking-widest mb-2">{swatch.category}</span>
-                        <div className="flex flex-col">
-                           <span className="text-4xl font-black text-zinc-900 tracking-tighter mb-1">{swatch.materialCode || 'NO CODE'}</span>
-                           <h2 className="text-xl font-bold text-zinc-500">{swatch.name}</h2>
-                        </div>
-                        <div className="flex items-center mt-3 text-zinc-400 font-mono text-xs">
-                            <span className="w-3 h-3 rounded-full mr-2 border border-zinc-200" style={{backgroundColor: swatch.hex}}></span>
+                        <h2 className="text-3xl font-black text-zinc-900">{swatch.name}</h2>
+                        <div className="flex items-center mt-2 text-zinc-500 font-mono text-sm">
+                            <span className="w-4 h-4 rounded-full mr-2 border border-zinc-200" style={{backgroundColor: swatch.hex}}></span>
                             {swatch.hex}
                         </div>
                     </div>
@@ -924,11 +864,11 @@ function SwatchDetailModal({ swatch, allProducts, onClose, onNavigateProduct }) 
 }
 
 function SwatchFormModal({ category, existingData, onClose, onSave }) {
-  const [data, setData] = useState({ id: null, name: '', category: category.id, hex: '#000000', image: null, description: '', materialCode: '' });
+  const [data, setData] = useState({ id: null, name: '', category: category.id, hex: '#000000', image: null, description: '' });
   const fileRef = useRef(null);
 
   useEffect(() => {
-     if(existingData) setData({ ...existingData, description: existingData.description || '', materialCode: existingData.materialCode || '' });
+     if(existingData) setData({ ...existingData, description: existingData.description || '' });
   }, [existingData]);
 
   const processImage = (file) => {
@@ -975,11 +915,6 @@ function SwatchFormModal({ category, existingData, onClose, onSave }) {
                 <input type="file" ref={fileRef} className="hidden" accept="image/*" onChange={handleUpload} />
              </div>
              
-             <div>
-                <label className="text-xs font-bold text-zinc-500 uppercase block mb-1">Material Code (Required)</label>
-                <input value={data.materialCode} onChange={e=>setData({...data, materialCode: e.target.value})} className="w-full border rounded-lg p-2 text-sm outline-none focus:border-black font-mono font-bold" placeholder="e.g. F-GY01" />
-             </div>
-
              <div>
                 <label className="text-xs font-bold text-zinc-500 uppercase block mb-1">Name</label>
                 <input value={data.name} onChange={e=>setData({...data, name: e.target.value})} className="w-full border rounded-lg p-2 text-sm outline-none focus:border-black" placeholder="Material Name" />
