@@ -414,6 +414,7 @@ export default function App() {
   const handleBannerTextChange = (key, value) => { if (!isAdmin) return; setBannerData(prev => ({ ...prev, [key]: value })); };
   const saveBannerText = async () => { if (isFirebaseAvailable && db) { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'banner'), bannerData, { merge: true }); showToast("배너 문구가 저장되었습니다."); } };
   
+  // App Header Settings
   const handleSidebarLogoUpload = async (e) => {
       if(!isAdmin) return;
       const file = e.target.files[0];
@@ -2087,801 +2088,529 @@ function ProductDetailModal({ product, allProducts, swatches, spaceContents, onC
   );
 }
 
-// ----------------------------------------------------------------------
-// Helper Components
-// ----------------------------------------------------------------------
+function SpaceInfoEditModal({ spaceId, currentData = {}, defaultTags, onClose, onSave }) {
+  const [data, setData] = useState({ description: '', trend: '', tagsString: '' });
+  useEffect(() => { 
+     const tags = currentData.tags || defaultTags || [];
+     setData({ 
+        description: currentData.description || '', 
+        trend: currentData.trend || '',
+        tagsString: tags.join(', ')
+     }); 
+  }, [currentData, defaultTags]);
 
-function CompareView({ products, hiddenIds, onToggleVisibility, onRemove, onEdit, isAdmin }) {
-    const visibleProducts = products.filter(p => !hiddenIds.includes(p.id));
-
-    return (
-        <div className="animate-in fade-in h-full flex flex-col">
-            <div className="bg-white border-b border-zinc-200 p-4 sticky top-0 z-20 shadow-sm flex items-center gap-4 overflow-x-auto custom-scrollbar">
-                <span className="text-sm font-bold text-zinc-500 uppercase flex-shrink-0 mr-2">Visibility</span>
-                {products.map(p => (
-                    <label key={p.id} className="flex items-center space-x-2 text-xs font-bold bg-zinc-50 px-3 py-1.5 rounded-lg border border-zinc-200 cursor-pointer hover:bg-zinc-100 flex-shrink-0">
-                        <input 
-                            type="checkbox" 
-                            checked={!hiddenIds.includes(p.id)} 
-                            onChange={() => onToggleVisibility(p.id)}
-                            className="rounded text-zinc-900 focus:ring-zinc-900"
-                        />
-                        <span className={`truncate max-w-[100px] ${hiddenIds.includes(p.id) ? 'text-zinc-400 line-through' : 'text-zinc-800'}`}>{p.name}</span>
-                    </label>
-                ))}
-            </div>
-
-            <div className="flex-1 overflow-auto bg-white relative">
-                <table className="w-full table-fixed border-collapse">
-                    <thead>
-                        <tr>
-                            {/* Fixed Header Column */}
-                            <th className="w-20 md:w-32 bg-zinc-50 border-b border-r border-zinc-100 p-2 md:p-4 text-left text-[10px] md:text-xs font-bold text-zinc-400 uppercase sticky top-0 left-0 z-30 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">Feature</th>
-                            {visibleProducts.map(p => (
-                                <th key={p.id} className="w-36 md:w-72 bg-white border-b border-r border-zinc-100 p-2 md:p-4 align-top sticky top-0 z-10">
-                                    <div className="relative group">
-                                        <div className="aspect-[4/3] bg-zinc-50 rounded-xl mb-2 md:mb-4 flex items-center justify-center overflow-hidden border border-zinc-100 relative max-h-24 md:max-h-full">
-                                            {p.images?.[0] ? <img src={typeof p.images[0] === 'object' ? p.images[0].url : p.images[0]} className="w-full h-full object-contain mix-blend-multiply" /> : <ImageIcon className="text-zinc-300"/>}
-                                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors"></div>
-                                        </div>
-                                        <h4 className="font-bold text-xs md:text-lg text-zinc-900 mb-1 truncate">{p.name}</h4>
-                                        <button onClick={() => onRemove(p.id)} className="absolute top-0 right-0 bg-white rounded-full p-1 shadow-sm hover:text-red-500 border border-zinc-100"><X className="w-3 h-3 md:w-4 md:h-4"/></button>
-                                    </div>
-                                </th>
-                            ))}
-                            {/* Empty Placeholders */}
-                            {visibleProducts.length < 2 && Array(2 - visibleProducts.length).fill(0).map((_, i) => <th key={`ph-${i}`} className="w-36 md:w-72 bg-zinc-50/10 border-b border-zinc-50"></th>)}
-                        </tr>
-                    </thead>
-                    <tbody className="text-xs md:text-sm">
-                        <tr>
-                            <td className="bg-zinc-50 border-r border-b border-zinc-100 p-2 md:p-4 font-bold text-zinc-500 sticky left-0 z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">Category</td>
-                            {visibleProducts.map(p => <td key={p.id} className="border-r border-b border-zinc-100 p-2 md:p-4 text-zinc-700 font-medium truncate">{p.category}</td>)}
-                            {visibleProducts.length < 2 && Array(2 - visibleProducts.length).fill(0).map((_, i) => <td key={i} className="border-b border-zinc-50"></td>)}
-                        </tr>
-                        <tr>
-                            <td className="bg-zinc-50 border-r border-b border-zinc-100 p-2 md:p-4 font-bold text-zinc-500 sticky left-0 z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">Designer</td>
-                            {visibleProducts.map(p => <td key={p.id} className="border-r border-b border-zinc-100 p-2 md:p-4 text-zinc-700 truncate">{p.designer || '-'}</td>)}
-                            {visibleProducts.length < 2 && Array(2 - visibleProducts.length).fill(0).map((_, i) => <td key={i} className="border-b border-zinc-50"></td>)}
-                        </tr>
-                        <tr>
-                            <td className="bg-zinc-50 border-r border-b border-zinc-100 p-2 md:p-4 font-bold text-zinc-500 sticky left-0 z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">Launch</td>
-                            {visibleProducts.map(p => <td key={p.id} className="border-r border-b border-zinc-100 p-2 md:p-4 text-zinc-700">{p.launchDate ? p.launchDate.substring(0,4) : '-'}</td>)}
-                            {visibleProducts.length < 2 && Array(2 - visibleProducts.length).fill(0).map((_, i) => <td key={i} className="border-b border-zinc-50"></td>)}
-                        </tr>
-                        <tr>
-                            <td className="bg-zinc-50 border-r border-b border-zinc-100 p-2 md:p-4 font-bold text-zinc-500 sticky left-0 z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">Specs</td>
-                            {visibleProducts.map(p => <td key={p.id} className="border-r border-b border-zinc-100 p-2 md:p-4 text-zinc-600 text-[10px] md:text-xs leading-relaxed whitespace-pre-wrap">{p.specs}</td>)}
-                            {visibleProducts.length < 2 && Array(2 - visibleProducts.length).fill(0).map((_, i) => <td key={i} className="border-b border-zinc-50"></td>)}
-                        </tr>
-                        <tr>
-                            <td className="bg-zinc-50 border-r border-b border-zinc-100 p-2 md:p-4 font-bold text-zinc-500 sticky left-0 z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">Options</td>
-                            {visibleProducts.map(p => (
-                                <td key={p.id} className="border-r border-b border-zinc-100 p-2 md:p-4">
-                                    <div className="flex flex-wrap gap-1">
-                                        {p.options?.map((opt, i) => <span key={i} className="px-1.5 py-0.5 bg-blue-50 text-blue-700 rounded text-[9px] md:text-[10px] font-bold border border-blue-100">{opt}</span>)}
-                                    </div>
-                                </td>
-                            ))}
-                            {visibleProducts.length < 2 && Array(2 - visibleProducts.length).fill(0).map((_, i) => <td key={i} className="border-b border-zinc-50"></td>)}
-                        </tr>
-                        <tr>
-                            <td className="bg-zinc-50 border-r border-b border-zinc-100 p-2 md:p-4 font-bold text-zinc-500 sticky left-0 z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">Colors</td>
-                            {visibleProducts.map(p => (
-                                <td key={p.id} className="border-r border-b border-zinc-100 p-2 md:p-4">
-                                    <div className="flex flex-wrap gap-1">
-                                        {[...(p.bodyColors||[]), ...(p.upholsteryColors||[])].slice(0, 8).map((c, i) => <SwatchDisplay key={i} color={c} size="small"/>)}
-                                        {([...(p.bodyColors||[]), ...(p.upholsteryColors||[])].length > 8) && <span className="text-[9px] text-zinc-400">+</span>}
-                                    </div>
-                                </td>
-                            ))}
-                            {visibleProducts.length < 2 && Array(2 - visibleProducts.length).fill(0).map((_, i) => <td key={i} className="border-b border-zinc-50"></td>)}
-                        </tr>
-                        
-                        {/* Edit Row for Admins */}
-                        {isAdmin && (
-                            <tr>
-                                <td className="bg-zinc-50 border-r border-b border-zinc-100 p-2 md:p-4 font-bold text-zinc-500 sticky left-0 z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">Actions</td>
-                                {visibleProducts.map(p => (
-                                    <td key={p.id} className="border-r border-b border-zinc-100 p-2 md:p-4 text-center">
-                                        <button onClick={() => onEdit(p)} className="px-3 py-1.5 bg-zinc-900 text-white text-[10px] md:text-xs font-bold rounded-lg hover:bg-black transition-colors flex items-center justify-center w-full">
-                                            <Edit2 className="w-3 h-3 mr-1"/> Edit
-                                        </button>
-                                    </td>
-                                ))}
-                                {visibleProducts.length < 2 && Array(2 - visibleProducts.length).fill(0).map((_, i) => <td key={i} className="border-b border-zinc-50"></td>)}
-                            </tr>
-                        )}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    );
-}
-
-function SwatchDisplay({ color, size = 'medium', className = '', onClick }) {
-  const isObject = typeof color === 'object' && color !== null;
-  const hex = isObject ? color.hex : color;
-  const image = isObject ? color.image : null;
-  const name = isObject ? color.name : color;
-  
-  // Advanced Visual Properties
-  const visualType = isObject ? (color.visualType || 'SOLID') : 'SOLID';
-  const textureType = isObject ? (color.textureType || 'SOLID') : 'SOLID';
-  const gradient = isObject ? color.gradient : null;
-  const pattern = isObject ? (color.pattern || 'NONE') : 'NONE';
-
-  const sizeClass = size === 'large' ? 'w-10 h-10' : size === 'small' ? 'w-4 h-4' : 'w-6 h-6';
-
-  const isLight = hex && (
-     hex.toLowerCase() === '#ffffff' || 
-     hex.toLowerCase() === '#fff' || 
-     hex.toLowerCase().startsWith('#f') || 
-     hex.toLowerCase().startsWith('#e')
-  );
-
-  // CSS Pattern Generation (Simulated)
-  const getPatternStyle = (type) => {
-      switch(type) {
-          case 'DOT': return { backgroundImage: 'radial-gradient(#00000033 1px, transparent 1px)', backgroundSize: '4px 4px' };
-          case 'DIAGONAL': return { backgroundImage: 'repeating-linear-gradient(45deg, #0000001a 0, #0000001a 1px, transparent 0, transparent 50%)', backgroundSize: '6px 6px' };
-          case 'GRID': return { backgroundImage: 'linear-gradient(#0000001a 1px, transparent 1px), linear-gradient(90deg, #0000001a 1px, transparent 1px)', backgroundSize: '6px 6px' };
-          case 'KNIT': return { backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 2px, #0000001a 2px, #0000001a 4px), repeating-linear-gradient(-45deg, transparent, transparent 2px, #0000001a 2px, #0000001a 4px)' };
-          case 'WEAVE': return { backgroundImage: 'linear-gradient(45deg, #0000001a 25%, transparent 25%, transparent 75%, #0000001a 75%, #0000001a), linear-gradient(45deg, #0000001a 25%, transparent 25%, transparent 75%, #0000001a 75%, #0000001a)', backgroundPosition: '0 0, 4px 4px', backgroundSize: '8px 8px' };
-          case 'FUR': return { backgroundImage: 'repeating-radial-gradient(circle at 50% 50%, #0000000d 0, transparent 2px)', backgroundSize: '3px 3px' }; 
-          case 'LEATHER': return { backgroundImage: 'radial-gradient(#00000022 1px, transparent 0)', backgroundSize: '3px 3px' }; 
-          default: return {};
-      }
+  const handleSave = () => {
+     const tags = data.tagsString.split(',').map(t => t.trim()).filter(Boolean);
+     onSave({ ...data, tags });
   };
 
-  // Base Background
-  const baseStyle = image ? 
-    { backgroundImage: `url(${image})`, backgroundSize: 'cover' } : 
-    (visualType === 'GRADATION' && gradient) ? { background: gradient } : { backgroundColor: hex };
-
-  // Texture Gloss/Matte Effect (Overlay)
-  const getTextureOverlay = (type) => {
-      if(type === 'GLOSSY') return { background: 'linear-gradient(to bottom right, rgba(255,255,255,0.6) 0%, transparent 40%, transparent 100%)' };
-      if(type === 'SEMI_GLOSSY') return { background: 'linear-gradient(to bottom right, rgba(255,255,255,0.3) 0%, transparent 50%, transparent 100%)' };
-      if(type === 'MATTE') return { boxShadow: 'inset 0 0 10px rgba(0,0,0,0.2)' };
-      if(type === 'CLEAR') return { opacity: 0.6, border: '1px solid rgba(0,0,0,0.1)' };
-      return {};
-  };
-  
   return (
-    <div className={`group relative inline-block ${className} ${onClick ? 'cursor-pointer' : ''}`} title={name} onClick={onClick}>
-       <div className={`${sizeClass} rounded-full overflow-hidden flex items-center justify-center bg-zinc-50 box-border relative`} style={{boxShadow: isLight ? 'inset 0 0 0 1px rgba(0,0,0,0.15)' : 'inset 0 0 0 1px rgba(0,0,0,0.05)'}}>
-         
-         {/* Layer 1: Base Color/Gradient/Image */}
-         <div className="absolute inset-0 w-full h-full" style={baseStyle}></div>
-
-         {/* Layer 2: Pattern Overlay */}
-         {!image && pattern !== 'NONE' && (
-             <div className="absolute inset-0 w-full h-full opacity-30" style={getPatternStyle(pattern)}></div>
-         )}
-
-         {/* Layer 3: Texture/Finish Overlay */}
-         <div className="absolute inset-0 w-full h-full pointer-events-none" style={getTextureOverlay(textureType)}></div>
-       </div>
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[80] flex items-center justify-center p-4">
+      <div className="bg-white w-full max-w-lg rounded-2xl overflow-hidden shadow-2xl">
+        <div className="px-6 py-4 border-b border-zinc-100 flex justify-between items-center"><h3 className="text-lg font-bold text-zinc-900">Edit Space Info</h3><button onClick={onClose}><X className="w-5 h-5 text-zinc-400" /></button></div>
+        <div className="p-6 space-y-4">
+           <div><label className="block text-xs font-bold text-zinc-500 uppercase mb-2">Description</label><textarea className="w-full border border-zinc-300 rounded-xl p-3 text-sm focus:ring-2 focus:ring-zinc-900 outline-none" rows={4} value={data.description} onChange={(e) => setData({...data, description: e.target.value})} /></div>
+           <div><label className="block text-xs font-bold text-zinc-500 uppercase mb-2">Design Trend Keywords</label><input type="text" className="w-full border border-zinc-300 rounded-xl p-3 text-sm focus:ring-2 focus:ring-zinc-900 outline-none" value={data.trend} onChange={(e) => setData({...data, trend: e.target.value})} placeholder="e.g. Minimalist, Eco-friendly, Open Plan" /></div>
+           <div><label className="block text-xs font-bold text-zinc-500 uppercase mb-2">Space Tags (comma separated)</label><input type="text" className="w-full border border-zinc-300 rounded-xl p-3 text-sm focus:ring-2 focus:ring-zinc-900 outline-none" value={data.tagsString} onChange={(e) => setData({...data, tagsString: e.target.value})} placeholder="Task, Executive, Meeting..." /></div>
+        </div>
+        <div className="px-6 py-4 border-t border-zinc-100 bg-zinc-50 flex justify-end"><button onClick={handleSave} className="px-6 py-2 bg-zinc-900 text-white rounded-xl text-sm font-bold hover:bg-black shadow-lg">Save Changes</button></div>
+      </div>
     </div>
   );
 }
 
-function SwatchManager({ category, swatches, isAdmin, onSave, onDelete, onSelect, onDuplicate }) {
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingSwatch, setEditingSwatch] = useState(null);
-  const [activeTag, setActiveTag] = useState('ALL');
-
-  const allTags = Array.from(new Set(swatches.flatMap(s => s.tags || []))).sort();
-
-  const handleCardClick = (swatch) => { onSelect(swatch); };
-  const handleEditClick = (e, swatch) => { e.stopPropagation(); setEditingSwatch(swatch); setIsModalOpen(true); };
-
-  const filteredSwatches = activeTag === 'ALL' ? swatches : swatches.filter(s => s.tags && s.tags.includes(activeTag));
-
-  return (
-    <div className="p-1 animate-in fade-in">
-       <div className="flex flex-col md:flex-row justify-between items-end mb-8 border-b border-zinc-100 pb-4 gap-4">
-          <div>
-            <h2 className="text-3xl font-extrabold text-zinc-900 tracking-tight flex items-center">
-              <div className="w-3 h-8 mr-3 rounded-full" style={{backgroundColor: category.color}}></div>
-              {category.label} Materials
-            </h2>
-            <p className="text-zinc-500 text-sm mt-1 ml-6">{filteredSwatches.length} finishes available</p>
-          </div>
-          <div className="flex items-center gap-2">
-             {isAdmin && (
-                <button onClick={() => { setEditingSwatch(null); setIsModalOpen(true); }} className="px-4 py-2 bg-zinc-900 text-white text-sm font-bold rounded-xl hover:bg-black transition-all flex items-center shadow-lg whitespace-nowrap">
-                   <Plus className="w-4 h-4 mr-2" /> Add Material
-                </button>
-             )}
-          </div>
-       </div>
-
-       {allTags.length > 0 && (
-         <div className="mb-6 flex gap-2 overflow-x-auto pb-2 custom-scrollbar">
-            <button onClick={() => setActiveTag('ALL')} className={`px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-colors border ${activeTag === 'ALL' ? 'bg-black text-white border-black' : 'bg-white text-zinc-500 border-zinc-200 hover:bg-zinc-100'}`}>ALL</button>
-            {allTags.map(tag => (
-               <button key={tag} onClick={() => setActiveTag(tag)} className={`px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-colors border ${activeTag === tag ? 'bg-black text-white border-black' : 'bg-white text-zinc-500 border-zinc-200 hover:bg-zinc-100'}`}>{tag}</button>
-            ))}
-         </div>
-       )}
-
-       <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-4">
-          {filteredSwatches.map(swatch => (
-             <div key={swatch.id} onClick={() => handleCardClick(swatch)} className="bg-white rounded-xl border border-zinc-200 overflow-hidden group hover:shadow-lg transition-all relative cursor-pointer">
-                <div className="aspect-square relative bg-zinc-100 flex items-center justify-center">
-                   <SwatchDisplay color={swatch} size="large" className="w-full h-full scale-100 rounded-none"/>
-                   {isAdmin && (
-                     <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button onClick={(e) => {e.stopPropagation(); onDuplicate(swatch);}} className="p-1.5 bg-white rounded-full shadow hover:text-green-600"><Layers className="w-3 h-3"/></button>
-                        <button onClick={(e) => handleEditClick(e, swatch)} className="p-1.5 bg-white rounded-full shadow hover:text-blue-600"><Edit2 className="w-3 h-3"/></button>
-                        <button onClick={(e) => { e.stopPropagation(); onDelete(swatch.id); }} className="p-1.5 bg-white rounded-full shadow hover:text-red-600"><Trash2 className="w-3 h-3"/></button>
-                     </div>
-                   )}
-                </div>
-                <div className="p-3">
-                   <h4 className="font-bold text-sm truncate mb-1">{swatch.name}</h4>
-                   <div className="flex justify-between items-end">
-                      <span className="text-[10px] text-zinc-400 uppercase font-medium">{swatch.category}</span>
-                      <span className="text-lg font-extrabold text-zinc-900 tracking-tight">{swatch.materialCode || '-'}</span>
-                   </div>
-                </div>
-             </div>
-          ))}
-          {filteredSwatches.length === 0 && (
-             <div className="col-span-full py-20 text-center text-zinc-400 border-2 border-dashed border-zinc-100 rounded-xl">
-                <Palette className="w-10 h-10 mx-auto mb-2 opacity-20" />
-                No materials registered in this category.
-             </div>
-          )}
-       </div>
-
-       {isModalOpen && (
-         <SwatchFormModal 
-            category={category} 
-            existingData={editingSwatch} 
-            onClose={() => setIsModalOpen(false)} 
-            onSave={(data) => { onSave(data); setIsModalOpen(false); }} 
-         />
-       )}
-    </div>
-  );
-}
-
-function SwatchDetailModal({ swatch, allProducts, swatches, onClose, onNavigateProduct, onNavigateSwatch, isAdmin, onEdit }) {
-    const relatedProducts = allProducts.filter(p => {
-        const inBody = p.bodyColors?.some(c => typeof c === 'object' && c.id === swatch.id);
-        const inUph = p.upholsteryColors?.some(c => typeof c === 'object' && c.id === swatch.id);
-        return inBody || inUph;
-    });
-
-    const currentIdx = swatches.findIndex(s => s.id === swatch.id);
-    const handleNext = () => { if(currentIdx < swatches.length - 1) onNavigateSwatch(swatches[currentIdx + 1]); };
-    const handlePrev = () => { if(currentIdx > 0) onNavigateSwatch(swatches[currentIdx - 1]); };
-    
-    const touchStart = useRef(null);
-    const handleTouchStart = (e) => { touchStart.current = e.targetTouches[0].clientX; };
-    const handleTouchEnd = (e) => {
-        if(!touchStart.current) return;
-        const diff = touchStart.current - e.changedTouches[0].clientX;
-        if(Math.abs(diff) > 50) { if(diff > 0) handleNext(); else handlePrev(); }
-        touchStart.current = null;
-    };
-
-    return (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[150] flex items-center justify-center md:p-4 animate-in zoom-in-95 duration-200" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
-            <div className="bg-white w-full h-full md:h-auto md:max-w-4xl rounded-none md:rounded-3xl overflow-hidden shadow-2xl flex flex-col md:flex-row md:max-h-[90vh] relative">
-                <div className="absolute top-4 right-4 z-[100] flex gap-2">
-                   {isAdmin && <button onClick={onEdit} className="p-2 bg-white/50 hover:bg-zinc-100 rounded-full backdrop-blur shadow-sm"><Edit3 className="w-6 h-6 text-zinc-900"/></button>}
-                   <button onClick={onClose} className="p-2 bg-white/50 hover:bg-zinc-100 rounded-full backdrop-blur shadow-sm"><X className="w-6 h-6 text-zinc-900"/></button>
-                </div>
-                
-                <div className="w-full md:w-5/12 bg-zinc-50 flex items-center justify-center p-8 relative min-h-[40vh]">
-                    <div className="w-48 h-48 md:w-64 md:h-64 rounded-full shadow-2xl overflow-hidden border-4 border-white ring-1 ring-black/5 flex items-center justify-center bg-white">
-                        <SwatchDisplay color={swatch} size="large" className="w-full h-full scale-100 rounded-full"/>
-                    </div>
-                </div>
-
-                <div className="w-full md:w-7/12 bg-white p-8 md:p-10 flex flex-col overflow-y-auto">
-                    <div className="mb-6">
-                        <div className="flex gap-2 mb-2">
-                            <span className="inline-block px-2.5 py-0.5 bg-zinc-900 text-white text-[10px] font-bold rounded uppercase tracking-widest">{swatch.category}</span>
-                            {swatch.tags?.map(t => <span key={t} className="inline-block px-2 py-0.5 bg-zinc-100 text-zinc-600 text-[10px] font-bold rounded uppercase tracking-widest">{t}</span>)}
-                        </div>
-                        <div className="flex flex-col">
-                           <span className="text-4xl font-black text-zinc-900 tracking-tighter mb-1">{swatch.materialCode || 'NO CODE'}</span>
-                           <h2 className="text-xl font-bold text-zinc-500">{swatch.name}</h2>
-                        </div>
-                        <div className="flex items-center mt-3 text-zinc-400 font-mono text-xs">
-                            <span className="w-3 h-3 rounded-full mr-2 border border-zinc-200" style={{backgroundColor: swatch.hex}}></span>
-                            {swatch.hex}
-                        </div>
-                    </div>
-
-                    <div className="space-y-6 flex-1">
-                        <div>
-                            <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2">Description</h3>
-                            <p className="text-sm text-zinc-600 leading-relaxed whitespace-pre-wrap">
-                                {swatch.description || "No description provided for this material."}
-                            </p>
-                        </div>
-                        
-                        {swatch.textureType && (
-                            <div>
-                                <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2">Finish Type</h3>
-                                <p className="text-sm font-bold text-zinc-800">{swatch.textureType}</p>
-                            </div>
-                        )}
-
-                        <div className="pt-6 border-t border-zinc-100">
-                             <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-3 flex justify-between items-center">
-                                 Applied Products 
-                                 <span className="bg-zinc-100 text-zinc-600 px-2 py-0.5 rounded-full text-[10px]">{relatedProducts.length}</span>
-                             </h3>
-                             <div className="grid grid-cols-2 gap-3 max-h-60 overflow-y-auto custom-scrollbar p-1">
-                                 {relatedProducts.length > 0 ? relatedProducts.map(p => (
-                                     <button key={p.id} onClick={() => onNavigateProduct(p)} className="flex items-center p-2 rounded-lg border border-zinc-100 hover:border-zinc-300 hover:bg-zinc-50 transition-all text-left group">
-                                         <div className="w-10 h-10 rounded-md bg-zinc-100 overflow-hidden mr-3 flex-shrink-0">
-                                            {p.images?.[0] ? <img src={typeof p.images[0] === 'object' ? p.images[0].url : p.images[0]} className="w-full h-full object-cover" /> : <div className="w-full h-full bg-zinc-200"></div>}
-                                         </div>
-                                         <div className="min-w-0">
-                                             <div className="text-xs font-bold text-zinc-900 truncate group-hover:text-blue-600">{p.name}</div>
-                                             <div className="text-[10px] text-zinc-500 truncate">{p.category}</div>
-                                         </div>
-                                     </button>
-                                 )) : (
-                                     <div className="col-span-2 text-center py-6 text-zinc-300 text-xs">No products currently use this finish.</div>
-                                 )}
-                             </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    );
-}
-
-function SwatchFormModal({ category, existingData, onClose, onSave }) {
-  const [data, setData] = useState({ 
-     id: null, name: '', category: category.id, hex: '#000000', image: null, 
-     description: '', materialCode: '', tags: '', textureType: 'SOLID',
-     visualType: 'SOLID', gradient: '', pattern: 'NONE'
+function ProductFormModal({ categories, swatches = [], allProducts = [], existingData, onClose, onSave, onDelete, isFirebaseAvailable, initialCategory, spaceTags = [] }) {
+  const isEditMode = !!existingData;
+  const fileInputRef = useRef(null);
+  const contentInputRef = useRef(null);
+  const defaultCategory = (initialCategory && !['ALL','NEW','MY_PICK','DASHBOARD','COMPARE_PAGE'].includes(initialCategory) && !SPACES.find(s=>s.id===initialCategory)) ? initialCategory : 'EXECUTIVE';
+  
+  const [formData, setFormData] = useState({ 
+    id: null, name: '', category: defaultCategory, specs: '', designer: '',
+    featuresString: '', optionsString: '', materialsString: '', awardsString: '',
+    productLink: '', isNew: false, launchDate: new Date().getFullYear().toString(),
+    images: [], attachments: [], contentImages: [], spaces: [], spaceTags: [],
+    bodyColors: [], upholsteryColors: [], relatedProductIds: []
   });
-  const fileRef = useRef(null);
+  const [isProcessingImage, setIsProcessingImage] = useState(false);
+  const [relatedFilter, setRelatedFilter] = useState('');
+
+  // Helper to normalize images to objects
+  const normalizeImages = (imgs) => imgs.map(img => typeof img === 'string' ? { url: img, caption: '' } : img);
 
   useEffect(() => {
-     if(existingData) setData({ 
-        ...existingData, 
-        description: existingData.description || '', 
-        materialCode: existingData.materialCode || '',
-        tags: existingData.tags ? existingData.tags.join(', ') : '',
-        textureType: existingData.textureType || 'SOLID',
-        visualType: existingData.visualType || 'SOLID',
-        gradient: existingData.gradient || '',
-        pattern: existingData.pattern || 'NONE'
-     });
+    if (existingData) {
+      setFormData({ 
+        id: existingData.id, name: existingData.name, category: existingData.category, specs: existingData.specs, designer: existingData.designer || '',
+        featuresString: existingData.features?.join(', ') || '', optionsString: existingData.options?.join(', ') || '', materialsString: existingData.materials?.join(', ') || '',
+        awardsString: existingData.awards?.join(', ') || '', productLink: existingData.productLink || '', isNew: existingData.isNew, 
+        launchDate: existingData.launchDate ? existingData.launchDate.substring(0,4) : new Date().getFullYear().toString(),
+        images: normalizeImages(existingData.images || []), 
+        attachments: existingData.attachments || [], 
+        contentImages: normalizeImages(existingData.contentImages || []),
+        spaces: existingData.spaces || [], spaceTags: existingData.spaceTags || [],
+        bodyColors: existingData.bodyColors || [],
+        upholsteryColors: existingData.upholsteryColors || [],
+        relatedProductIds: existingData.relatedProductIds || []
+      });
+    }
   }, [existingData]);
 
-  const processImage = (file) => {
-    return new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const img = new Image();
-        img.onload = () => {
-           const canvas = document.createElement('canvas'); 
-           const MAX = 500; 
-           let w = img.width; let h = img.height; 
-           const minDim = Math.min(w, h);
-           const sx = (w - minDim) / 2; const sy = (h - minDim) / 2;
-           canvas.width = MAX; canvas.height = MAX;
-           const ctx = canvas.getContext('2d'); 
-           ctx.drawImage(img, sx, sy, minDim, minDim, 0, 0, MAX, MAX); 
-           resolve(canvas.toDataURL('image/jpeg', 0.9));
-        };
-        img.src = e.target.result;
-      };
-      reader.readAsDataURL(file);
+  const processImage = (file) => { return new Promise((resolve) => { const reader = new FileReader(); reader.onload = (e) => { const img = new Image(); img.onload = () => { const canvas = document.createElement('canvas'); const MAX_WIDTH = 1000; let width = img.width; let height = img.height; if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; } canvas.width = width; canvas.height = height; const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0, width, height); resolve(canvas.toDataURL('image/jpeg', 0.8)); }; img.src = e.target.result; }; reader.readAsDataURL(file); }); };
+  
+  const handleImageUpload = async (e) => { 
+      const files = Array.from(e.target.files); 
+      if (files.length > 0) { 
+          setIsProcessingImage(true); 
+          const newImgs = []; 
+          for (const file of files) { try { newImgs.push({ url: await processImage(file), caption: '' }); } catch (e) {} } 
+          setFormData(prev => ({ ...prev, images: [...prev.images, ...newImgs] })); 
+          setIsProcessingImage(false); 
+      } 
+  };
+  const handleContentImageUpload = async (e) => { 
+      const files = Array.from(e.target.files); 
+      if (files.length > 0) { 
+          setIsProcessingImage(true); 
+          const newImgs = []; 
+          for (const file of files) { try { newImgs.push({ url: await processImage(file), caption: '' }); } catch (e) {} } 
+          setFormData(prev => ({ ...prev, contentImages: [...prev.contentImages, ...newImgs] })); 
+          setIsProcessingImage(false); 
+      } 
+  };
+
+  const handleCaptionChange = (index, value, type) => {
+      setFormData(prev => {
+          const list = type === 'main' ? [...prev.images] : [...prev.contentImages];
+          list[index] = { ...list[index], caption: value };
+          return type === 'main' ? { ...prev, images: list } : { ...prev, contentImages: list };
+      });
+  };
+
+  const handleAttachmentUpload = (e) => { const files = Array.from(e.target.files); files.forEach(file => { if (file.size > 300*1024) return window.alert("Too large"); const reader = new FileReader(); reader.onload = (e) => setFormData(p => ({...p, attachments: [...p.attachments, {name: file.name, url: e.target.result}]})); reader.readAsDataURL(file); }); };
+  const handleAddLinkAttachment = () => { const url = window.prompt("URL:"); const name = window.prompt("Name:"); if(url && name) setFormData(p => ({...p, attachments: [...p.attachments, {name, url}]})); };
+  const removeImage = (i) => setFormData(p => ({...p, images: p.images.filter((_, idx) => idx !== i)}));
+  const removeContentImage = (i) => setFormData(p => ({...p, contentImages: p.contentImages.filter((_, idx) => idx !== i)}));
+  const setMainImage = (i) => setFormData(p => { const imgs = [...p.images]; const [m] = imgs.splice(i, 1); imgs.unshift(m); return {...p, images: imgs}; });
+  const removeAttachment = (i) => setFormData(p => ({...p, attachments: p.attachments.filter((_, idx) => idx !== i)}));
+  const toggleSpace = (spaceId) => { setFormData(prev => { const currentSpaces = prev.spaces || []; if (currentSpaces.includes(spaceId)) { return { ...prev, spaces: currentSpaces.filter(id => id !== spaceId) }; } else { return { ...prev, spaces: [...currentSpaces, spaceId] }; } }); };
+  const toggleSpaceTag = (tag) => { setFormData(prev => { const currentTags = prev.spaceTags || []; if (currentTags.includes(tag)) return { ...prev, spaceTags: currentTags.filter(t => t !== tag) }; else return { ...prev, spaceTags: [...currentTags, tag] }; }); };
+  
+  const toggleRelatedProduct = (pid) => {
+      setFormData(prev => {
+          const ids = prev.relatedProductIds || [];
+          if(ids.includes(pid)) return { ...prev, relatedProductIds: ids.filter(id => id !== pid) };
+          else return { ...prev, relatedProductIds: [...ids, pid] };
+      });
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    onSave({ 
+      ...formData,
+      launchDate: formData.launchDate, 
+      features: formData.featuresString.split(',').map(s=>s.trim()).filter(Boolean),
+      options: formData.optionsString.split(',').map(s=>s.trim()).filter(Boolean),
+      materials: formData.materialsString.split(',').map(s=>s.trim()).filter(Boolean),
+      awards: formData.awardsString.split(',').map(s=>s.trim()).filter(Boolean),
     });
   };
 
-  const handleUpload = async (e) => {
-     const file = e.target.files[0];
-     if(file) {
-        try { const url = await processImage(file); setData(p => ({...p, image: url})); } catch(e){}
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[180] flex items-center justify-center p-4">
+      <div className="bg-white w-full max-w-3xl rounded-2xl overflow-hidden shadow-2xl flex flex-col max-h-[95vh] animate-in slide-in-from-bottom-4 duration-200">
+        <div className="px-8 py-5 border-b border-zinc-100 flex justify-between items-center">
+          <h2 className="text-xl font-bold text-zinc-900">{isEditMode ? 'Edit Product' : 'New Product'}</h2>
+          <button onClick={onClose}><X className="w-6 h-6 text-zinc-400 hover:text-zinc-900" /></button>
+        </div>
+        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-8 space-y-6">
+          <div className="bg-zinc-50 p-6 rounded-xl border border-zinc-200">
+             <div className="flex justify-between mb-4"><span className="font-bold text-sm">Product Images (Main)</span><div className="space-x-2"><button type="button" onClick={() => fileInputRef.current.click()} className="text-xs bg-white border px-3 py-1 rounded-lg font-medium hover:bg-zinc-100">Upload</button></div><input ref={fileInputRef} type="file" multiple className="hidden" onChange={handleImageUpload} accept="image/*"/></div>
+             <div className="grid grid-cols-3 sm:grid-cols-5 gap-3">
+               {formData.images.map((img, i) => (
+                   <div key={i} className="relative aspect-square bg-white rounded-lg border overflow-hidden group">
+                       <img src={img.url || img} className="w-full h-full object-cover" />
+                       <input 
+                           className="absolute bottom-0 w-full text-[9px] bg-white/90 border-t p-1 outline-none opacity-0 group-hover:opacity-100 transition-opacity" 
+                           placeholder="Caption..." 
+                           value={img.caption || ''} 
+                           onChange={(e) => handleCaptionChange(i, e.target.value, 'main')}
+                       />
+                       <button type="button" onClick={()=>removeImage(i)} className="absolute top-1 right-1 bg-red-500 text-white p-1 rounded-full opacity-0 group-hover:opacity-100"><X className="w-3 h-3"/></button>
+                       {i===0 && <span className="absolute top-1 left-1 bg-black text-white text-[9px] px-1 rounded">MAIN</span>}
+                       {i!==0 && <button type="button" onClick={()=>setMainImage(i)} className="absolute top-1 left-1 bg-white text-black text-[9px] px-1 rounded opacity-0 group-hover:opacity-100">Set Main</button>}
+                   </div>
+               ))}
+             </div>
+          </div>
+          <div className="bg-zinc-50 p-6 rounded-xl border border-zinc-200">
+             <div className="flex justify-between mb-4"><span className="font-bold text-sm">Detailed Content Images (Vertical Scroll)</span><div className="space-x-2"><button type="button" onClick={() => contentInputRef.current.click()} className="text-xs bg-white border px-3 py-1 rounded-lg font-medium hover:bg-zinc-100">Upload</button></div><input ref={contentInputRef} type="file" multiple className="hidden" onChange={handleContentImageUpload} accept="image/*"/></div>
+             <div className="grid grid-cols-3 sm:grid-cols-5 gap-3">
+               {formData.contentImages.map((img, i) => (
+                   <div key={i} className="relative aspect-[3/4] bg-white rounded-lg border overflow-hidden group">
+                       <img src={img.url || img} className="w-full h-full object-cover" />
+                       <input 
+                           className="absolute bottom-0 w-full text-[9px] bg-white/90 border-t p-1 outline-none opacity-0 group-hover:opacity-100 transition-opacity" 
+                           placeholder="Caption..." 
+                           value={img.caption || ''} 
+                           onChange={(e) => handleCaptionChange(i, e.target.value, 'content')}
+                       />
+                       <button type="button" onClick={()=>removeContentImage(i)} className="absolute top-1 right-1 bg-red-500 text-white p-1 rounded-full opacity-0 group-hover:opacity-100"><X className="w-3 h-3"/></button>
+                   </div>
+               ))}
+             </div>
+          </div>
+          
+          <div className="mb-4">
+             <label className="block text-xs font-bold text-zinc-500 uppercase mb-2">Related Spaces</label>
+             <div className="flex flex-wrap gap-2 mb-2">{SPACES.map(space => (<button key={space.id} type="button" onClick={() => toggleSpace(space.id)} className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-colors flex items-center ${formData.spaces.includes(space.id) ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-500 border-zinc-200 hover:border-zinc-400'}`}>{formData.spaces.includes(space.id) && <Check className="w-3 h-3 mr-1.5" />}{space.label}</button>))}</div>
+             {spaceTags.length > 0 && (<div className="p-3 bg-zinc-50 rounded-lg border border-zinc-100"><label className="block text-[10px] font-bold text-zinc-400 uppercase mb-2">Detailed Space Tags</label><div className="flex flex-wrap gap-2">{spaceTags.map(tag => (<button key={tag} type="button" onClick={() => toggleSpaceTag(tag)} className={`px-2 py-1 rounded text-[10px] font-bold border ${formData.spaceTags.includes(tag) ? 'bg-blue-50 text-blue-600 border-blue-200' : 'bg-white text-zinc-500 border-zinc-200'}`}>{tag}</button>))}</div></div>)}
+          </div>
+
+          <div className="grid grid-cols-2 gap-6"><div><label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Name</label><input required className="w-full border p-2 rounded-lg" value={formData.name} onChange={e=>setFormData({...formData, name: e.target.value})}/></div><div><label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Category</label><select className="w-full border p-2 rounded-lg" value={formData.category} onChange={e=>setFormData({...formData, category: e.target.value})}>{categories.map(c=><option key={c.id} value={c.id}>{c.label}</option>)}</select></div></div>
+          
+          <div className="grid grid-cols-2 gap-6">
+             <div><label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Launch Year</label><input type="number" min="1900" max="2099" step="1" className="w-full border p-2 rounded-lg" value={formData.launchDate} onChange={e=>setFormData({...formData, launchDate: e.target.value})}/></div>
+             <div><label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Designer</label><input className="w-full border p-2 rounded-lg" value={formData.designer} onChange={e=>setFormData({...formData, designer: e.target.value})}/></div>
+          </div>
+          
+          <div><label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Specs</label><textarea required rows={2} className="w-full border p-2 rounded-lg" value={formData.specs} onChange={e=>setFormData({...formData, specs: e.target.value})}/></div>
+          <div className="grid grid-cols-2 gap-6"><div><label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Options (comma)</label><input className="w-full border p-2 rounded-lg" value={formData.optionsString} onChange={e=>setFormData({...formData, optionsString: e.target.value})}/></div><div><label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Features (comma)</label><input className="w-full border p-2 rounded-lg" value={formData.featuresString} onChange={e=>setFormData({...formData, featuresString: e.target.value})}/></div></div>
+          <div className="grid grid-cols-2 gap-6"><div><label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Materials (comma)</label><input className="w-full border p-2 rounded-lg" value={formData.materialsString} onChange={e=>setFormData({...formData, materialsString: e.target.value})}/></div><div><label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Awards (comma)</label><input className="w-full border p-2 rounded-lg" value={formData.awardsString} onChange={e=>setFormData({...formData, awardsString: e.target.value})}/></div></div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-zinc-50 p-4 rounded-xl border border-zinc-100">
+             <SwatchSelector 
+                label="Body Colors" 
+                selected={formData.bodyColors} 
+                swatches={swatches}
+                onChange={(newColors) => setFormData({...formData, bodyColors: newColors})}
+             />
+             <SwatchSelector 
+                label="Upholstery Colors" 
+                selected={formData.upholsteryColors} 
+                swatches={swatches}
+                onChange={(newColors) => setFormData({...formData, upholsteryColors: newColors})}
+             />
+          </div>
+
+          {/* Related Products Selection */}
+          <div className="border-t border-zinc-100 pt-6">
+              <label className="block text-xs font-bold text-zinc-500 uppercase mb-2">Related Products (Tagging)</label>
+              <div className="border border-zinc-200 rounded-xl p-4 bg-zinc-50 max-h-60 overflow-y-auto">
+                 <input className="w-full mb-3 p-2 border border-zinc-300 rounded text-xs" placeholder="Filter products..." value={relatedFilter} onChange={e => setRelatedFilter(e.target.value)} />
+                 <div className="grid grid-cols-2 gap-2">
+                     {allProducts.filter(p => p.id !== formData.id && p.name.toLowerCase().includes(relatedFilter.toLowerCase())).map(p => {
+                         const isSelected = formData.relatedProductIds.includes(p.id);
+                         return (
+                             <div key={p.id} onClick={() => toggleRelatedProduct(p.id)} className={`flex items-center p-2 rounded cursor-pointer text-xs ${isSelected ? 'bg-indigo-100 border border-indigo-300 text-indigo-800' : 'bg-white border border-zinc-200 hover:bg-zinc-100'}`}>
+                                 <div className={`w-3 h-3 border rounded mr-2 flex items-center justify-center ${isSelected ? 'bg-indigo-500 border-indigo-500' : 'border-zinc-300'}`}>{isSelected && <Check className="w-2 h-2 text-white"/>}</div>
+                                 <span className="truncate">{p.name}</span>
+                             </div>
+                         );
+                     })}
+                 </div>
+              </div>
+          </div>
+          
+          <div className="space-y-4"><div><label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Link</label><input className="w-full border p-2 rounded-lg" placeholder="https://..." value={formData.productLink} onChange={e=>setFormData({...formData, productLink: e.target.value})}/></div><div className="flex justify-between"><label className="block text-xs font-bold text-zinc-500 uppercase">Attachments</label><div className="space-x-2"><button type="button" onClick={()=>document.getElementById('doc-upload').click()} className="text-xs border px-2 py-1 rounded bg-white">File</button><button type="button" onClick={handleAddLinkAttachment} className="text-xs border px-2 py-1 rounded bg-white">Link</button></div><input id="doc-upload" type="file" multiple className="hidden" onChange={handleAttachmentUpload}/></div><div className="space-y-1">{formData.attachments.map((f, i)=><div key={i} className="flex justify-between text-xs bg-zinc-50 p-2 rounded"><span>{f.name}</span><button type="button" onClick={()=>removeAttachment(i)} className="text-red-500"><X className="w-3 h-3"/></button></div>)}</div></div>
+          <div className="flex items-center space-x-2"><input type="checkbox" checked={formData.isNew} onChange={e=>setFormData({...formData, isNew: e.target.checked})}/><label className="text-sm font-bold">Mark as New Arrival</label></div>
+        </form>
+        <div className="px-8 py-5 border-t border-zinc-100 bg-zinc-50 flex justify-between">
+           {isEditMode && <button type="button" onClick={()=>onDelete(formData.id, formData.name)} className="text-red-500 font-bold text-sm flex items-center"><Trash2 className="w-4 h-4 mr-2"/> Delete</button>}
+           <div className="flex space-x-3 ml-auto">
+              <button type="button" onClick={onClose} className="px-5 py-2.5 border rounded-xl text-sm font-bold hover:bg-white">Cancel</button>
+              <button onClick={handleSubmit} disabled={isProcessingImage} className="px-6 py-2.5 bg-zinc-900 text-white rounded-xl text-sm font-bold hover:bg-black shadow-lg disabled:opacity-50">{isProcessingImage ? 'Processing...' : 'Save Product'}</button>
+           </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SwatchSelector({ label, selected, swatches, onChange }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [filter, setFilter] = useState('');
+  const [activeTab, setActiveTab] = useState('ALL');
+
+  const handleSelect = (swatch) => {
+     // Snapshot essential data
+     const snapshot = { 
+         id: swatch.id, name: swatch.name, hex: swatch.hex, image: swatch.image, 
+         category: swatch.category, textureType: swatch.textureType, materialCode: swatch.materialCode 
+     };
+     // Check if ID already exists in selected
+     if(!selected.find(s => (typeof s === 'object' ? s.id === swatch.id : false))) {
+        onChange([...selected, snapshot]);
+     }
+     setIsOpen(false);
+  };
+
+  const handleRemove = (index) => {
+     const newSelected = [...selected];
+     newSelected.splice(index, 1);
+     onChange(newSelected);
+  };
+  
+  const handleMove = (index, direction) => {
+     const newSelected = [...selected];
+     const targetIndex = index + direction;
+     if (targetIndex >= 0 && targetIndex < newSelected.length) {
+        const temp = newSelected[index];
+        newSelected[index] = newSelected[targetIndex];
+        newSelected[targetIndex] = temp;
+        onChange(newSelected);
      }
   };
 
-  const handleSubmit = () => {
-      onSave({
-          ...data,
-          tags: data.tags.split(',').map(t => t.trim()).filter(Boolean)
-      });
+  const handleManualAdd = () => {
+     const hex = prompt("Enter Hex Color (e.g. #000000) or Name:");
+     if(hex) onChange([...selected, hex]);
   };
 
+  const filteredSwatches = swatches.filter(s => {
+     if(activeTab !== 'ALL' && s.category !== activeTab) return false;
+     return s.name.toLowerCase().includes(filter.toLowerCase());
+  });
+
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[160] flex items-center justify-center p-4">
-       <div className="bg-white rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
-          <div className="px-5 py-4 border-b border-zinc-100 font-bold text-lg flex-shrink-0">
-             {existingData ? 'Edit Material' : 'Add Material'}
-          </div>
-          <div className="p-6 space-y-4 overflow-y-auto custom-scrollbar">
-             {/* Preview */}
-             <div className="flex justify-center mb-4">
-                <div onClick={() => fileRef.current.click()} className="w-24 h-24 rounded-full shadow-md border-4 border-white cursor-pointer overflow-hidden relative group bg-zinc-100 flex items-center justify-center">
-                    <SwatchDisplay color={data} size="large" className="w-full h-full scale-100 rounded-none"/>
-                   <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"><Camera className="w-6 h-6 text-white"/></div>
-                </div>
-                <input type="file" ref={fileRef} className="hidden" accept="image/*" onChange={handleUpload} />
-             </div>
-             
-             <div>
-                <label className="text-xs font-bold text-zinc-500 uppercase block mb-1">Visual Type</label>
-                <div className="flex gap-2">
-                    <button onClick={()=>setData({...data, visualType: 'SOLID'})} className={`flex-1 py-2 text-xs font-bold rounded border ${data.visualType==='SOLID' ? 'bg-zinc-900 text-white' : 'bg-white'}`}>Solid</button>
-                    <button onClick={()=>setData({...data, visualType: 'GRADATION'})} className={`flex-1 py-2 text-xs font-bold rounded border ${data.visualType==='GRADATION' ? 'bg-zinc-900 text-white' : 'bg-white'}`}>Gradation</button>
-                </div>
-             </div>
-
-             {data.visualType === 'SOLID' ? (
-                 <div>
-                    <label className="text-xs font-bold text-zinc-500 uppercase block mb-1">Color (Hex)</label>
-                    <div className="flex gap-2">
-                       <input type="color" value={data.hex} onChange={e=>setData({...data, hex: e.target.value})} className="h-9 w-12 p-0 border rounded overflow-hidden" />
-                       <input value={data.hex} onChange={e=>setData({...data, hex: e.target.value})} className="flex-1 border rounded-lg p-2 text-sm outline-none" />
-                    </div>
-                 </div>
-             ) : (
-                 <div>
-                    <label className="text-xs font-bold text-zinc-500 uppercase block mb-1">Gradient (CSS)</label>
-                    <textarea rows={2} value={data.gradient} onChange={e=>setData({...data, gradient: e.target.value})} className="w-full border rounded-lg p-2 text-xs outline-none" placeholder="linear-gradient(to right, #000, #fff)"/>
-                 </div>
-             )}
-
-             <div className="grid grid-cols-2 gap-4">
-                 <div>
-                    <label className="text-xs font-bold text-zinc-500 uppercase block mb-1">Pattern Overlay</label>
-                    <select value={data.pattern} onChange={e=>setData({...data, pattern: e.target.value})} className="w-full border rounded-lg p-2 text-sm outline-none bg-white">
-                        {PATTERN_TYPES.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
-                    </select>
-                 </div>
-                 <div>
-                    <label className="text-xs font-bold text-zinc-500 uppercase block mb-1">Finish Type</label>
-                    <select value={data.textureType} onChange={e=>setData({...data, textureType: e.target.value})} className="w-full border rounded-lg p-2 text-sm outline-none bg-white">
-                        {TEXTURE_TYPES.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
-                    </select>
-                 </div>
-             </div>
-
-             <div>
-                <label className="text-xs font-bold text-zinc-500 uppercase block mb-1">Material Code</label>
-                <input value={data.materialCode} onChange={e=>setData({...data, materialCode: e.target.value})} className="w-full border rounded-lg p-2 text-sm outline-none font-mono font-bold" />
-             </div>
-
-             <div>
-                <label className="text-xs font-bold text-zinc-500 uppercase block mb-1">Name</label>
-                <input value={data.name} onChange={e=>setData({...data, name: e.target.value})} className="w-full border rounded-lg p-2 text-sm outline-none" />
-             </div>
-             
-             <div>
-                <label className="text-xs font-bold text-zinc-500 uppercase block mb-1">Tags</label>
-                <input value={data.tags} onChange={e=>setData({...data, tags: e.target.value})} className="w-full border rounded-lg p-2 text-sm outline-none" />
-             </div>
-
-             <div>
-                <label className="text-xs font-bold text-zinc-500 uppercase block mb-1">Type</label>
-                <select value={data.category} onChange={e=>setData({...data, category: e.target.value})} className="w-full border rounded-lg p-2 text-sm outline-none bg-white">
-                   {SWATCH_CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
-                </select>
-             </div>
-          </div>
-          <div className="px-5 py-4 border-t border-zinc-100 bg-zinc-50 flex justify-end space-x-2 flex-shrink-0">
-             <button onClick={onClose} className="px-4 py-2 text-sm font-bold text-zinc-500 hover:text-zinc-900">Cancel</button>
-             <button onClick={handleSubmit} className="px-4 py-2 bg-zinc-900 text-white rounded-lg text-sm font-bold shadow-md hover:bg-black">Save</button>
-          </div>
+    <div className="relative">
+       <div className="flex justify-between items-center mb-1">
+          <label className="block text-xs font-bold text-zinc-500 uppercase">{label}</label>
+          <button type="button" onClick={handleManualAdd} className="text-[10px] text-blue-600 font-bold hover:underline">Manual Input</button>
        </div>
+       <div className="flex flex-wrap gap-2 min-h-[40px] p-2 bg-white border rounded-lg items-center">
+          {selected.map((item, idx) => (
+             <div key={idx} className="relative group">
+                <SwatchDisplay color={item} size="small" />
+                <div className="absolute -top-3 left-1/2 -translate-x-1/2 flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity bg-white shadow-md rounded-full border border-zinc-200 overflow-hidden z-20 scale-75">
+                  <button type="button" onClick={()=>handleMove(idx, -1)} className="p-1 hover:bg-zinc-100"><ChevronLeft size={10}/></button>
+                  <button type="button" onClick={()=>handleRemove(idx)} className="p-1 hover:bg-zinc-100 text-red-500"><X size={10}/></button>
+                  <button type="button" onClick={()=>handleMove(idx, 1)} className="p-1 hover:bg-zinc-100"><ChevronRight size={10}/></button>
+                </div>
+             </div>
+          ))}
+          <button type="button" onClick={() => setIsOpen(true)} className="w-6 h-6 rounded-full border border-dashed border-zinc-400 flex items-center justify-center text-zinc-400 hover:border-zinc-900 hover:text-zinc-900"><Plus className="w-3 h-3"/></button>
+       </div>
+
+       {isOpen && (
+          <div className="absolute top-full left-0 z-50 mt-2 w-full md:w-[400px] bg-white rounded-xl shadow-xl border border-zinc-200 p-4">
+             <div className="flex justify-between items-center mb-3">
+                <h4 className="font-bold text-sm">Select Material</h4>
+                <button onClick={() => setIsOpen(false)}><X className="w-4 h-4 text-zinc-400 hover:text-black"/></button>
+             </div>
+             
+             <div className="flex gap-1 overflow-x-auto pb-2 mb-2 custom-scrollbar">
+                <button type="button" onClick={()=>setActiveTab('ALL')} className={`px-2 py-1 rounded text-[10px] font-bold whitespace-nowrap ${activeTab==='ALL'?'bg-black text-white':'bg-zinc-100'}`}>ALL</button>
+                {SWATCH_CATEGORIES.map(c => (
+                   <button key={c.id} type="button" onClick={()=>setActiveTab(c.id)} className={`px-2 py-1 rounded text-[10px] font-bold whitespace-nowrap ${activeTab===c.id?'bg-black text-white':'bg-zinc-100'}`}>{c.label}</button>
+                ))}
+             </div>
+
+             <input placeholder="Search materials..." value={filter} onChange={e=>setFilter(e.target.value)} className="w-full text-xs p-2 bg-zinc-50 rounded border mb-3 outline-none" />
+             
+             <div className="grid grid-cols-5 gap-2 max-h-48 overflow-y-auto custom-scrollbar">
+                {filteredSwatches.map(s => (
+                   <button key={s.id} type="button" onClick={() => handleSelect(s)} className="flex flex-col items-center group">
+                      <div className="w-8 h-8 rounded-full border overflow-hidden relative">
+                         {s.image ? <img src={s.image} className="w-full h-full object-cover"/> : <div className="w-full h-full" style={{backgroundColor:s.hex}}></div>}
+                         <div className="absolute inset-0 bg-black/20 hidden group-hover:flex items-center justify-center"><Plus className="w-4 h-4 text-white"/></div>
+                      </div>
+                      <span className="text-[9px] text-zinc-500 truncate w-full text-center mt-1">{s.name}</span>
+                   </button>
+                ))}
+             </div>
+          </div>
+       )}
     </div>
   );
 }
 
-function PieChartComponent({ data, total, selectedIndex, onSelect }) {
-  const [hoveredIndex, setHoveredIndex] = useState(null);
-  let cumulativePercent = 0;
-  const radius = 0.7; 
-
+function SpaceProductManager({ spaceId, products, onClose, onToggle }) {
+  const [filter, setFilter] = useState('');
   return (
-    <div className="relative w-full h-full flex items-center justify-center">
-      <svg viewBox="-1.2 -1.2 2.4 2.4" className="w-full h-full transform -rotate-90">
-        {data.map((item, idx) => {
-           const percent = item.count / total;
-           const startAngle = cumulativePercent * 2 * Math.PI;
-           cumulativePercent += percent;
-           const endAngle = cumulativePercent * 2 * Math.PI;
-
-           const x1 = Math.cos(startAngle) * radius;
-           const y1 = Math.sin(startAngle) * radius;
-           const x2 = Math.cos(endAngle) * radius;
-           const y2 = Math.sin(endAngle) * radius;
-           
-           const largeArcFlag = percent > 0.5 ? 1 : 0;
-           const pathData = `M ${x1} ${y1} A ${radius} ${radius} 0 ${largeArcFlag} 1 ${x2} ${y2}`;
-
-           const isSelected = selectedIndex === idx;
-           const isHovered = hoveredIndex === idx;
-           const midAngle = startAngle + (endAngle - startAngle) / 2;
-           const explodeDist = isSelected ? 0.15 : (isHovered ? 0.05 : 0); 
-           const tx = Math.cos(midAngle) * explodeDist;
-           const ty = Math.sin(midAngle) * explodeDist;
-
-           const strokeWidth = isSelected ? 0.22 : 0.2; 
-
-           return (
-             <React.Fragment key={item.id}>
-                <path
-                  d={pathData}
-                  fill="none"
-                  stroke={item.color}
-                  strokeWidth={strokeWidth}
-                  transform={`translate(${tx}, ${ty})`}
-                  className="transition-all duration-500 cursor-pointer"
-                  onClick={(e) => { e.stopPropagation(); onSelect(isSelected ? null : idx); }}
-                  onMouseEnter={() => setHoveredIndex(idx)}
-                  onMouseLeave={() => setHoveredIndex(null)}
-                />
-             </React.Fragment>
-           );
-        })}
-      </svg>
-      
-      {/* Labels Outside */}
-      {data.map((item, idx) => {
-          let prevPercent = 0;
-          for(let i=0; i<idx; i++) prevPercent += data[i].count/total;
-          const percent = item.count/total;
-          const midPercent = prevPercent + percent/2;
-          const angleRad = (midPercent * 2 * Math.PI) - (Math.PI / 2); 
-          
-          const labelRadius = 1.05; 
-          const lx = Math.cos(angleRad) * labelRadius;
-          const ly = Math.sin(angleRad) * labelRadius;
-          
-          if(percent < 0.03) return null; 
-
-          return (
-             <div 
-                key={`label-${item.id}`} 
-                className="absolute text-[9px] font-bold text-zinc-500 pointer-events-none whitespace-nowrap"
-                style={{ 
-                    left: '50%', top: '50%', 
-                    transform: `translate(calc(-50% + ${lx * 140}px), calc(-50% + ${ly * 140}px))` 
-                }}
-             >
-                {item.label}
-             </div>
-          );
-      })}
-
-      <div className="absolute inset-0 flex items-center justify-center flex-col pointer-events-none transition-all duration-300">
-         {selectedIndex !== null ? (
-            <>
-                <span className="text-[10px] md:text-xs text-zinc-400 font-bold uppercase tracking-widest">{data[selectedIndex].label}</span>
-                <span className="text-3xl md:text-4xl font-black text-zinc-900" style={{color: data[selectedIndex].color}}>{data[selectedIndex].count}</span>
-            </>
-         ) : (
-            <>
-                <span className="text-[10px] md:text-xs text-zinc-400 font-bold uppercase tracking-widest">TOTAL</span>
-                <span className="text-3xl md:text-4xl font-black text-zinc-900">{total}</span>
-            </>
-         )}
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[80] flex items-center justify-center p-4">
+      <div className="bg-white w-full max-w-3xl rounded-2xl overflow-hidden shadow-2xl flex flex-col max-h-[85vh]">
+        <div className="px-6 py-4 border-b border-zinc-100 flex justify-between items-center bg-indigo-50"><div><h3 className="text-lg font-bold text-indigo-900">Manage Products</h3><p className="text-xs text-indigo-600">Select products to display in {spaceId}</p></div><button onClick={onClose}><X className="w-5 h-5 text-indigo-400" /></button></div>
+        <div className="p-4 border-b border-zinc-100"><input type="text" placeholder="Filter products..." className="w-full px-4 py-2 bg-zinc-50 rounded-lg border border-zinc-200 text-sm focus:outline-none focus:border-indigo-500" value={filter} onChange={(e) => setFilter(e.target.value)} /></div>
+        <div className="flex-1 overflow-y-auto p-4 grid grid-cols-1 md:grid-cols-2 gap-3 custom-scrollbar">{products.filter(p => p.name.toLowerCase().includes(filter.toLowerCase())).map(product => { const isAdded = product.spaces && product.spaces.includes(spaceId); return (<div key={product.id} className={`flex items-center p-3 rounded-xl border cursor-pointer transition-all ${isAdded ? 'border-indigo-500 bg-indigo-50' : 'border-zinc-200 hover:border-zinc-300'}`} onClick={() => onToggle(product.id, !isAdded)}><div className={`w-5 h-5 rounded border flex items-center justify-center mr-3 ${isAdded ? 'bg-indigo-500 border-indigo-500' : 'bg-white border-zinc-300'}`}>{isAdded && <Check className="w-3.5 h-3.5 text-white" />}</div>{product.images?.[0] && <img src={typeof product.images[0] === 'object' ? product.images[0].url : product.images[0]} className="w-10 h-10 rounded-lg object-cover mr-3" />}<div><div className="text-sm font-bold text-zinc-900">{product.name}</div><div className="text-xs text-zinc-500">{product.category}</div></div></div>); })}</div>
       </div>
     </div>
   );
 }
 
-function DashboardView({ products, favorites, setActiveCategory, setSelectedProduct, isAdmin, bannerData, onBannerUpload, onLogoUpload, onBannerTextChange, onSaveBannerText }) {
-  const totalCount = products.length; const newCount = products.filter(p => p.isNew).length; const pickCount = favorites.length;
-  const categoryCounts = []; let totalStandardProducts = 0;
-  CATEGORIES.filter(c => !c.isSpecial).forEach(c => { const count = products.filter(p => p.category === c.id).length; if (count > 0) { categoryCounts.push({ ...c, count }); totalStandardProducts += count; } });
+function SceneEditModal({ initialData, allProducts, spaceTags = [], spaceOptions = [], onClose, onSave, onDelete }) {
+  const [data, setData] = useState({ id: null, title: '', description: '', image: null, images: [], productIds: [], tags: [], spaceId: '' });
+  const [filter, setFilter] = useState('');
+  const mainInputRef = useRef(null);
+  const galleryInputRef = useRef(null);
   
-  const donutColors = ['#2563eb', '#0891b2', '#7c3aed', '#db2777', '#059669', '#d97706', '#ea580c', '#475569', '#9ca3af'];
-  const chartData = categoryCounts.map((item, idx) => ({ ...item, color: donutColors[idx % donutColors.length] }));
-  
-  const recentUpdates = [...products].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)).slice(0, 6);
-  const fileInputRef = useRef(null);
-  const logoInputRef = useRef(null);
+  const normalizeImages = (imgs) => imgs.map(img => typeof img === 'string' ? { url: img, caption: '' } : img);
 
-  const [selectedSlice, setSelectedSlice] = useState(null);
-
-  // Helper for Selected Slice Data
-  const getSelectedSliceDetails = () => {
-      if(selectedSlice === null) return null;
-      const catId = chartData[selectedSlice].id;
-      const catProducts = products.filter(p => p.category === catId);
-      
-      const years = [...new Set(catProducts.map(p => p.launchDate ? p.launchDate.substring(0,4) : 'Unknown'))].sort().join(', ');
-      const awardCount = catProducts.reduce((acc, curr) => acc + (curr.awards?.length || 0), 0);
-      const uniqueColors = new Set();
-      catProducts.forEach(p => {
-          (p.bodyColors || []).forEach(c => uniqueColors.add(c));
-          (p.upholsteryColors || []).forEach(c => uniqueColors.add(c));
+  useEffect(() => {
+    if(initialData) {
+      setData({ 
+        id: initialData.id || null, 
+        title: initialData.title || '', 
+        description: initialData.description || '', 
+        image: initialData.image || null, 
+        images: normalizeImages(initialData.images || []), 
+        productIds: initialData.productIds || [], 
+        tags: initialData.tags || [],
+        spaceId: initialData.spaceId 
       });
+    }
+  }, [initialData]);
 
-      return { products: catProducts, years, awardCount, uniqueColors: Array.from(uniqueColors) };
+  const processImage = (file) => { return new Promise((resolve) => { const reader = new FileReader(); reader.onload = (e) => { const img = new Image(); img.onload = () => { const canvas = document.createElement('canvas'); const MAX_WIDTH = 1200; let width = img.width; let height = img.height; if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; } canvas.width = width; canvas.height = height; const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0, width, height); resolve(canvas.toDataURL('image/jpeg', 0.8)); }; img.src = e.target.result; }; reader.readAsDataURL(file); }); };
+  
+  const handleMainImage = async (e) => { const file = e.target.files[0]; if (file) { const imageUrl = await processImage(file); setData(prev => ({ ...prev, image: imageUrl })); } };
+  const handleGalleryUpload = async (e) => { 
+      const files = Array.from(e.target.files); 
+      if(files.length > 0) { 
+          const newUrls = []; 
+          for(const file of files) { try { newUrls.push({ url: await processImage(file), caption: '' }); } catch(e) {} } 
+          setData(prev => ({ ...prev, images: [...prev.images, ...newUrls] })); 
+      } 
+  };
+  
+  const handleCaptionChange = (index, val) => {
+      setData(prev => {
+          const newImgs = [...prev.images];
+          newImgs[index] = { ...newImgs[index], caption: val };
+          return { ...prev, images: newImgs };
+      });
   };
 
-  const sliceDetails = getSelectedSliceDetails();
+  const toggleProduct = (pid) => { setData(prev => { const ids = prev.productIds || []; return ids.includes(pid) ? { ...prev, productIds: ids.filter(id => id !== pid) } : { ...prev, productIds: [...ids, pid] }; }); };
+  const toggleTag = (tag) => { setData(prev => { const tags = prev.tags || []; if (tags.includes(tag)) return { ...prev, tags: tags.filter(t => t !== tag) }; else return { ...prev, tags: [...tags, tag] }; }); };
 
   return (
-    <div className="max-w-7xl mx-auto space-y-6 md:space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20 print:hidden" onClick={() => setSelectedSlice(null)}>
-      <div className="relative w-full h-48 md:h-80 rounded-3xl overflow-hidden shadow-lg border border-zinc-200 group bg-zinc-900">
-         <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/40 to-transparent z-10"></div>
-         {bannerData.url ? <img src={bannerData.url} alt="Dashboard Banner" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" /> : <div className="w-full h-full flex items-center justify-center opacity-20"><img src="/api/placeholder/1200/400" className="w-full h-full object-cover grayscale" alt="Pattern" /></div>}
-         <div className="absolute bottom-6 left-6 md:bottom-10 md:left-10 z-20 max-w-2xl">
-            {isAdmin ? (
-              <div className="space-y-4">
-                 <div className="flex items-center gap-4">
-                    {bannerData.logoUrl ? (
-                        <div className="relative group/logo">
-                            <img src={bannerData.logoUrl} className="h-16 md:h-24 w-auto object-contain" alt="Logo" />
-                            <button onClick={()=>logoInputRef.current.click()} className="absolute inset-0 bg-black/50 flex items-center justify-center text-white opacity-0 group-hover/logo:opacity-100 rounded"><Edit2 className="w-4 h-4"/></button>
-                        </div>
-                    ) : (
-                        <button onClick={()=>logoInputRef.current.click()} className="text-xs text-white bg-white/20 px-3 py-1 rounded hover:bg-white/40">+ Upload Logo</button>
-                    )}
-                    <input type="text" value={bannerData.title} onChange={(e) => onBannerTextChange('title', e.target.value)} onBlur={onSaveBannerText} className="bg-transparent text-3xl md:text-5xl font-black text-white tracking-tighter w-full outline-none placeholder-zinc-500 border-b border-transparent hover:border-zinc-500 transition-colors" placeholder="Main Title" />
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[80] flex items-center justify-center p-4">
+      <div className="bg-white w-full max-w-2xl rounded-2xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
+         <div className="px-6 py-4 border-b border-zinc-100 flex justify-between items-center bg-white z-10">
+            <h3 className="text-lg font-bold text-zinc-900">{!initialData.id ? 'New Scene' : 'Edit Scene'}</h3>
+            <div className="flex gap-2">
+                {!(!initialData.id) && <button onClick={()=>onDelete(data.id)} className="text-red-500 p-2 hover:bg-red-50 rounded-full"><Trash2 className="w-5 h-5"/></button>}
+                <button onClick={onClose} className="p-2 bg-white/50 hover:bg-zinc-100 rounded-full backdrop-blur shadow-sm"><X className="w-5 h-5 text-zinc-400 hover:text-black"/></button>
+            </div>
+         </div>
+         <div className="flex-1 overflow-y-auto p-6 space-y-8 bg-zinc-50">
+            <div className="space-y-4">
+              <div><label className="block text-xs font-bold text-zinc-500 uppercase mb-2">Main Image</label><div onClick={() => mainInputRef.current.click()} className="w-full h-48 bg-white rounded-xl flex items-center justify-center cursor-pointer border border-dashed border-zinc-300 overflow-hidden relative hover:border-zinc-400 transition-colors shadow-sm">{data.image ? <img src={data.image} className="w-full h-full object-cover" /> : <div className="flex flex-col items-center text-zinc-400"><ImagePlus className="w-8 h-8 mb-2"/><span className="text-xs">Upload Main</span></div>}</div><input type="file" ref={mainInputRef} className="hidden" accept="image/*" onChange={handleMainImage} /></div>
+              
+              {spaceOptions.length > 0 && (
+                  <div>
+                      <label className="block text-xs font-bold text-zinc-500 uppercase mb-2">Belongs To Space</label>
+                      <select className="w-full border border-zinc-300 rounded-lg p-2.5 text-sm bg-white" value={data.spaceId} onChange={e => setData({...data, spaceId: e.target.value})}>
+                          {spaceOptions.map(s => (
+                              <option key={s.id} value={s.id}>{s.label}</option>
+                          ))}
+                      </select>
+                  </div>
+              )}
+
+              {spaceTags.length > 0 && (
+                 <div>
+                    <label className="block text-xs font-bold text-zinc-500 uppercase mb-2">Space Tags (Filter)</label>
+                    <div className="flex flex-wrap gap-2">
+                       {spaceTags.map(tag => (
+                          <button key={tag} onClick={() => toggleTag(tag)} className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-colors ${data.tags?.includes(tag) ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-500 border-zinc-200'}`}>
+                             {tag}
+                          </button>
+                       ))}
+                    </div>
                  </div>
-                <input type="text" value={bannerData.subtitle} onChange={(e) => onBannerTextChange('subtitle', e.target.value)} onBlur={onSaveBannerText} className="bg-transparent text-zinc-300 font-medium text-sm md:text-xl w-full outline-none placeholder-zinc-500 border-b border-transparent hover:border-zinc-500 transition-colors" placeholder="Subtitle" />
-                <input type="file" ref={logoInputRef} className="hidden" accept="image/*" onChange={onLogoUpload} />
+              )}
+
+              <div>
+                 <div className="flex justify-between items-center mb-2"><label className="block text-xs font-bold text-zinc-500 uppercase">Additional Images</label><button type="button" onClick={() => galleryInputRef.current.click()} className="text-[10px] bg-white border px-2 py-1 rounded hover:bg-zinc-100">+ Add</button><input type="file" ref={galleryInputRef} multiple className="hidden" accept="image/*" onChange={handleGalleryUpload} /></div>
+                 {data.images.length > 0 && <div className="grid grid-cols-5 gap-2">{data.images.map((img, i) => (
+                     <div key={i} className="relative aspect-square rounded-lg overflow-hidden group border border-zinc-200">
+                         <img src={img.url || img} className="w-full h-full object-cover" />
+                         <input className="absolute bottom-0 w-full text-[8px] bg-white/90 p-1 opacity-0 group-hover:opacity-100" value={img.caption || ''} onChange={e => handleCaptionChange(i, e.target.value)} placeholder="Caption"/>
+                         <button onClick={() => setData(prev => ({...prev, images: prev.images.filter((_, idx) => idx !== i)}))} className="absolute top-0.5 right-0.5 bg-red-500 text-white p-0.5 rounded-full opacity-0 group-hover:opacity-100"><X className="w-3 h-3"/></button>
+                     </div>
+                 ))}</div>}
               </div>
-            ) : (
-              <>
-                {bannerData.logoUrl ? <img src={bannerData.logoUrl} className="h-16 md:h-24 w-auto object-contain mb-4" alt="Logo" /> : <h2 className="text-3xl md:text-6xl font-black text-white tracking-tighter mb-2">{bannerData.title}</h2>}
-                <p className="text-zinc-300 font-medium text-sm md:text-xl opacity-90">{bannerData.subtitle}</p>
-              </>
-            )}
-         </div>
-         {isAdmin && (<><button onClick={() => fileInputRef.current.click()} className="absolute top-4 right-4 z-30 p-2 bg-white/20 backdrop-blur rounded-full text-white hover:bg-white hover:text-black transition-all opacity-0 group-hover:opacity-100" title="Change Banner Image"><Camera className="w-5 h-5" /></button><input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={onBannerUpload} /></>)}
-      </div>
-
-      <div className="grid grid-cols-3 gap-2 md:gap-4">
-        <div onClick={() => setActiveCategory('ALL')} className="bg-white p-3 md:p-5 rounded-xl md:rounded-2xl border border-zinc-100 shadow-sm hover:shadow-md cursor-pointer group flex flex-col md:flex-row items-center md:justify-between transition-all text-center md:text-left">
-          <div className="flex flex-col md:flex-row items-center md:space-x-4 w-full justify-center md:justify-start">
-             <div className="p-2 md:p-3 bg-zinc-100 rounded-xl group-hover:bg-zinc-900 group-hover:text-white transition-colors text-zinc-500 mb-1 md:mb-0"><LayoutGrid className="w-4 h-4 md:w-6 md:h-6" /></div>
-             <div className="flex flex-col">
-                <span className="text-[10px] md:text-xs font-bold text-zinc-400 uppercase tracking-wide">Total</span>
-                <span className="text-base md:text-2xl font-black text-zinc-900 leading-tight">{totalCount}</span>
-             </div>
-          </div>
-          <ChevronRight className="w-5 h-5 text-zinc-300 group-hover:text-zinc-600 hidden md:block" />
-        </div>
-        <div onClick={() => setActiveCategory('NEW')} className="bg-white p-3 md:p-5 rounded-xl md:rounded-2xl border border-zinc-100 shadow-sm hover:shadow-md cursor-pointer group flex flex-col md:flex-row items-center md:justify-between transition-all text-center md:text-left">
-          <div className="flex flex-col md:flex-row items-center md:space-x-4 w-full justify-center md:justify-start">
-             <div className="p-2 md:p-3 bg-red-50 rounded-xl text-red-500 group-hover:bg-red-500 group-hover:text-white transition-colors mb-1 md:mb-0"><Zap className="w-4 h-4 md:w-6 md:h-6" /></div>
-             <div className="flex flex-col">
-                <span className="text-[10px] md:text-xs font-bold text-red-400 uppercase tracking-wide">New</span>
-                <span className="text-base md:text-2xl font-black text-zinc-900 leading-tight">{newCount}</span>
-             </div>
-          </div>
-          <ChevronRight className="w-5 h-5 text-zinc-300 group-hover:text-zinc-600 hidden md:block" />
-        </div>
-        <div onClick={() => setActiveCategory('MY_PICK')} className="bg-white p-3 md:p-5 rounded-xl md:rounded-2xl border border-zinc-100 shadow-sm hover:shadow-md cursor-pointer group flex flex-col md:flex-row items-center md:justify-between transition-all text-center md:text-left">
-          <div className="flex flex-col md:flex-row items-center md:space-x-4 w-full justify-center md:justify-start">
-             <div className="p-2 md:p-3 bg-yellow-50 rounded-xl text-yellow-500 group-hover:bg-yellow-400 group-hover:text-white transition-colors mb-1 md:mb-0"><Heart className="w-4 h-4 md:w-6 md:h-6 fill-current" /></div>
-             <div className="flex flex-col">
-                <span className="text-[10px] md:text-xs font-bold text-yellow-500 uppercase tracking-wide">Pick</span>
-                <span className="text-base md:text-2xl font-black text-zinc-900 leading-tight">{pickCount}</span>
-             </div>
-          </div>
-          <ChevronRight className="w-5 h-5 text-zinc-300 group-hover:text-zinc-600 hidden md:block" />
-        </div>
-      </div>
-
-      <div className="bg-white p-6 md:p-8 rounded-3xl border border-zinc-100 shadow-sm">
-         <div className="flex items-center justify-between mb-8">
-            <h3 className="text-xl font-bold text-zinc-900 flex items-center"><PieChart className="w-6 h-6 mr-3 text-zinc-400" /> Category Contribution</h3>
-            <span className="text-xs font-medium text-zinc-400 bg-zinc-50 px-3 py-1 rounded-full">{totalStandardProducts} items</span>
-         </div>
-         {totalStandardProducts > 0 ? (
-           <div className="flex flex-col lg:flex-row gap-12 items-center">
-              <div className="relative w-72 h-72 md:w-96 md:h-96 flex-shrink-0">
-                 <PieChartComponent data={chartData} total={totalStandardProducts} selectedIndex={selectedSlice} onSelect={setSelectedSlice} />
+              <div className="grid grid-cols-1 gap-4">
+                <div><label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Title</label><input className="w-full border border-zinc-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-zinc-900 outline-none" value={data.title} onChange={e=>setData({...data, title: e.target.value})} placeholder="e.g. Modern Office Lounge" /></div>
+                <div><label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Description</label><textarea className="w-full border border-zinc-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-zinc-900 outline-none" rows={2} value={data.description} onChange={e=>setData({...data, description: e.target.value})} placeholder="Short description..." /></div>
               </div>
-              <div className="flex-1 w-full">
-                 {selectedSlice !== null ? (
-                    <div className="animate-in fade-in slide-in-from-left-4 h-full flex flex-col justify-center">
-                        <div className="flex items-center gap-3 mb-4 pb-2 border-b border-zinc-100">
-                             <div className="w-4 h-4 rounded-full" style={{backgroundColor: chartData[selectedSlice].color}}></div>
-                             <h4 className="text-2xl font-black text-zinc-900">{chartData[selectedSlice].label}</h4>
-                             <button onClick={() => setActiveCategory(chartData[selectedSlice].id)} className="ml-auto text-xs font-bold text-blue-600 hover:underline flex items-center">Explore <ArrowRight className="w-3 h-3 ml-1"/></button>
-                        </div>
-                        
-                        <div className="grid grid-cols-2 gap-4 mb-6">
-                           <div className="bg-zinc-50 p-3 rounded-xl border border-zinc-100">
-                              <span className="text-[10px] text-zinc-400 uppercase font-bold block mb-1">Products</span>
-                              <span className="text-xl font-black text-zinc-900">{chartData[selectedSlice].count}</span>
-                           </div>
-                           <div className="bg-zinc-50 p-3 rounded-xl border border-zinc-100">
-                              <span className="text-[10px] text-zinc-400 uppercase font-bold block mb-1">New Arrivals</span>
-                              <span className="text-xl font-black text-zinc-900">{sliceDetails.products.filter(p=>p.isNew).length}</span>
-                           </div>
-                           <div className="bg-zinc-50 p-3 rounded-xl border border-zinc-100">
-                              <span className="text-[10px] text-zinc-400 uppercase font-bold block mb-1">Total Awards</span>
-                              <span className="text-xl font-black text-zinc-900">{sliceDetails.awardCount}</span>
-                           </div>
-                           <div className="bg-zinc-50 p-3 rounded-xl border border-zinc-100">
-                              <span className="text-[10px] text-zinc-400 uppercase font-bold block mb-1">Launching</span>
-                              <span className="text-xs font-bold text-zinc-900 truncate" title={sliceDetails.years}>{sliceDetails.years.substring(0,12)}...</span>
-                           </div>
-                        </div>
-
-                        <div className="mb-4">
-                            <span className="text-xs text-zinc-400 uppercase font-bold block mb-2">Palette Preview</span>
-                            <div className="flex flex-wrap gap-1">
-                                {sliceDetails.uniqueColors.slice(0, 10).map((c, i) => (
-                                    <div key={i}><SwatchDisplay color={c} size="small"/></div>
-                                ))}
-                                {sliceDetails.uniqueColors.length > 10 && <span className="text-[9px] text-zinc-400">+{sliceDetails.uniqueColors.length - 10}</span>}
-                            </div>
-                        </div>
-
-                        <div className="flex-1 overflow-y-auto max-h-60 custom-scrollbar bg-zinc-50 p-3 rounded-xl border border-zinc-100">
-                            <span className="text-[10px] text-zinc-400 uppercase font-bold block mb-2 sticky top-0 bg-zinc-50">Product List</span>
-                            <div className="grid grid-cols-2 gap-2">
-                                {sliceDetails.products.map(p => (
-                                    <div key={p.id} className="text-xs truncate text-zinc-600 hover:text-black cursor-pointer p-1 hover:bg-zinc-100 rounded" onClick={() => setSelectedProduct(p)}>• {p.name}</div>
-                                ))}
-                            </div>
-                        </div>
-                    </div>
-                 ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-4">
-                        {chartData.map((item) => {
-                            const percent = Math.round((item.count/totalStandardProducts)*100);
-                            return (
-                                <button key={item.id} onClick={() => setActiveCategory(item.id)} className="flex flex-col group p-2 rounded-lg hover:bg-zinc-50 transition-colors text-left">
-                                    <div className="flex items-center justify-between mb-1.5">
-                                        <div className="flex items-center">
-                                            <div className="w-3 h-3 rounded-full mr-2.5 shadow-sm" style={{ backgroundColor: item.color }}></div>
-                                            <span className="text-sm font-bold text-zinc-700 group-hover:text-zinc-900">{item.label}</span>
-                                        </div>
-                                        <div className="flex items-baseline space-x-1">
-                                            <span className="text-sm font-black text-zinc-900">{item.count}</span>
-                                            <span className="text-[10px] text-zinc-400 font-medium">({percent}%)</span>
-                                        </div>
-                                    </div>
-                                    <div className="w-full h-1.5 bg-zinc-100 rounded-full overflow-hidden">
-                                        <div className="h-full rounded-full" style={{ width: `${percent}%`, backgroundColor: item.color }}></div>
-                                    </div>
-                                </button>
-                            );
-                        })}
-                    </div>
-                 )}
-              </div>
-           </div>
-         ) : <div className="text-center py-20 text-zinc-300">No category data available</div>}
-      </div>
-
-      <div className="bg-white p-6 md:p-8 rounded-3xl border border-zinc-100 shadow-sm">
-         <div className="flex items-center justify-between mb-6">
-            <h3 className="text-xl font-bold text-zinc-900 flex items-center"><Clock className="w-6 h-6 mr-3 text-zinc-400" /> Recent Updates</h3>
-            <button className="text-xs font-bold text-blue-600 hover:text-blue-800 flex items-center" onClick={() => setActiveCategory('NEW')}>View All <ArrowRight className="w-3 h-3 ml-1"/></button>
-         </div>
-         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-            {recentUpdates.length > 0 ? recentUpdates.map(product => (
-               <div key={product.id} onClick={() => setSelectedProduct(product)} className="flex flex-col p-3 rounded-xl border border-zinc-100 hover:border-zinc-300 hover:bg-zinc-50 cursor-pointer transition-all group">
-                  <div className="aspect-[4/3] bg-zinc-100 rounded-lg flex items-center justify-center overflow-hidden border border-zinc-200 mb-2 relative">
-                     {/* Multiple Mix Blend Mode Overlay */}
-                     <div className="absolute inset-0 bg-zinc-100/50 mix-blend-multiply z-10 pointer-events-none"></div>
-                     {product.images?.[0] ? <img src={typeof product.images[0] === 'object' ? product.images[0].url : product.images[0]} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" alt="" /> : <ImageIcon className="w-6 h-6 text-zinc-300"/>}
-                  </div>
-                  <h4 className="text-xs font-bold text-zinc-900 truncate">{product.name}</h4>
-                  <div className="flex justify-between items-center mt-1">
-                     <span className="text-[9px] text-zinc-400 uppercase">{product.category}</span>
-                     {product.isNew && <span className="w-1.5 h-1.5 rounded-full bg-red-500"></span>}
-                  </div>
+            </div>
+            <div className="pt-6 border-t border-zinc-200">
+               <div className="flex justify-between items-end mb-3"><div><h4 className="text-sm font-bold text-zinc-900">Related Products</h4><p className="text-[10px] text-zinc-500">Select products visible in this scene</p></div><span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded-full">{data.productIds.length} selected</span></div>
+               <div className="bg-white rounded-xl border border-zinc-200 overflow-hidden shadow-sm">
+                  <div className="p-2 border-b border-zinc-100 bg-zinc-50/50"><div className="flex items-center bg-white border border-zinc-200 rounded-lg px-2"><Search className="w-4 h-4 text-zinc-400 mr-2"/><input className="w-full py-2 text-xs outline-none bg-transparent" placeholder="Search product name..." value={filter} onChange={e => setFilter(e.target.value)} /></div></div>
+                  <div className="h-48 overflow-y-auto p-2 space-y-1 custom-scrollbar">{allProducts.filter(p => p.name.toLowerCase().includes(filter.toLowerCase())).map(p => { const isSelected = data.productIds.includes(p.id); return (<div key={p.id} onClick={() => toggleProduct(p.id)} className={`flex items-center p-2 rounded-lg cursor-pointer transition-colors ${isSelected ? 'bg-indigo-50 border border-indigo-100' : 'hover:bg-zinc-50 border border-transparent'}`}><div className={`w-4 h-4 rounded border flex items-center justify-center mr-3 flex-shrink-0 ${isSelected ? 'bg-indigo-500 border-indigo-500' : 'bg-white border-zinc-300'}`}>{isSelected && <Check className="w-3 h-3 text-white"/>}</div>{p.images?.[0] && <img src={p.images[0]} className="w-8 h-8 rounded object-cover mr-3 bg-zinc-100" />}<div className="min-w-0"><div className={`text-xs font-bold truncate ${isSelected ? 'text-indigo-900' : 'text-zinc-700'}`}>{p.name}</div><div className="text-[10px] text-zinc-400 truncate">{p.category}</div></div></div>) })}</div>
                </div>
-            )) : <div className="col-span-full text-center text-zinc-300 py-10">No recent updates.</div>}
+            </div>
+         </div>
+         <div className="px-6 py-4 border-t border-zinc-100 bg-white flex justify-end items-center z-10 gap-3">
+            <button onClick={onClose} className="px-4 py-2 border border-zinc-300 text-zinc-600 rounded-lg text-sm font-bold hover:bg-zinc-50">Cancel</button>
+            <button onClick={()=>onSave(data)} className="px-6 py-2 bg-zinc-900 text-white rounded-lg text-sm font-bold hover:bg-black shadow-md">Save Scene</button>
+         </div>
+      </div>
+    </div>
+  );
+}
+
+function SpaceSceneModal({ scene, products, allProducts, isAdmin, onClose, onEdit, onProductToggle, onNavigateProduct }) {
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const images = scene.images ? [scene.image, ...scene.images] : [scene.image];
+  const [isProductManagerOpen, setProductManagerOpen] = useState(false);
+  const [productFilter, setProductFilter] = useState('');
+  const [isZoomed, setIsZoomed] = useState(false);
+
+  // Swipe Logic
+  const handleNext = () => { if(currentImageIndex < images.length - 1) setCurrentImageIndex(currentImageIndex + 1); };
+  const handlePrev = () => { if(currentImageIndex > 0) setCurrentImageIndex(currentImageIndex - 1); };
+
+  const touchStart = useRef(null);
+  const handleTouchStart = (e) => { touchStart.current = e.targetTouches[0].clientX; };
+  const handleTouchEnd = (e) => {
+      if(!touchStart.current) return;
+      const diff = touchStart.current - e.changedTouches[0].clientX;
+      if(Math.abs(diff) > 50) { if(diff > 0) handleNext(); else handlePrev(); }
+      touchStart.current = null;
+  };
+
+  const currentImgObj = images[currentImageIndex];
+  const currentImgUrl = typeof currentImgObj === 'object' ? currentImgObj.url : currentImgObj;
+  const currentImgCaption = typeof currentImgObj === 'object' ? currentImgObj.caption : '';
+
+  return (
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[60] flex items-center justify-center p-0 md:p-6 animate-in zoom-in-95 duration-200 print:hidden" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
+      {isZoomed && currentImgUrl && (<div className="fixed inset-0 z-[120] bg-black/95 flex items-center justify-center p-8 cursor-zoom-out print:hidden" onClick={() => setIsZoomed(false)}><img src={currentImgUrl} className="max-w-full max-h-full object-contain" alt="Zoomed" /><button className="absolute top-6 right-6 text-white/50 hover:text-white"><X className="w-10 h-10" /></button></div>)}
+      
+      <div className="bg-white w-full h-full md:h-[90vh] md:max-w-6xl md:rounded-3xl overflow-hidden shadow-2xl flex flex-col md:flex-row relative">
+         <div className="absolute top-4 right-4 z-[100] flex gap-2">
+            {isAdmin && <button onClick={onEdit} className="p-2 bg-white/50 hover:bg-zinc-100 rounded-full backdrop-blur shadow-sm"><Edit3 className="w-6 h-6 text-zinc-900" /></button>}
+            <button onClick={onClose} className="p-2 bg-white/50 hover:bg-zinc-100 rounded-full backdrop-blur shadow-sm"><X className="w-6 h-6 text-zinc-900" /></button>
+         </div>
+         <div className="w-full md:w-2/3 bg-black relative flex flex-col justify-center h-[40vh] md:h-full">
+            <div className="relative w-full h-full">
+                <img src={currentImgUrl} className="w-full h-full object-contain cursor-zoom-in" alt="Scene" onClick={() => setIsZoomed(true)} />
+                {currentImgCaption && <div className="absolute bottom-8 left-0 right-0 text-center text-white/90 text-sm bg-black/40 backdrop-blur-sm p-2 mx-auto max-w-md rounded-xl">{currentImgCaption}</div>}
+            </div>
+            {images.length > 1 && (<div className="absolute bottom-4 left-0 right-0 flex justify-center space-x-2 px-4">{images.map((_, idx) => (<button key={idx} onClick={() => setCurrentImageIndex(idx)} className={`w-2 h-2 rounded-full transition-all ${currentImageIndex === idx ? 'bg-white w-6' : 'bg-white/40 hover:bg-white/80'}`} />))}</div>)}
+         </div>
+         <div className="w-full md:w-1/3 bg-white flex flex-col border-l border-zinc-100 h-[60vh] md:h-full relative">
+            <div className="p-6 md:p-8 border-b border-zinc-50 pt-16 md:pt-16">
+               <div className="mb-4">
+                   <h2 className="text-2xl md:text-3xl font-black text-zinc-900 mb-2">{scene.title}</h2>
+                   <p className="text-zinc-500 text-sm leading-relaxed">{scene.description}</p>
+               </div>
+            </div>
+            <div className="flex-1 overflow-y-auto p-6 md:p-8 custom-scrollbar bg-zinc-50/50">
+               <div className="flex justify-between items-center mb-4"><h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Tagged Products</h3>{isAdmin && <button onClick={() => setProductManagerOpen(!isProductManagerOpen)} className="text-xs font-bold text-indigo-600 hover:text-indigo-800">+ Add Tag</button>}</div>
+               {isAdmin && isProductManagerOpen && (
+                 <div className="mb-4 bg-white p-3 rounded-xl border border-indigo-100 shadow-sm animate-in slide-in-from-top-2">
+                    <input type="text" placeholder="Search to tag..." className="w-full text-xs p-2 bg-zinc-50 rounded-lg border border-zinc-200 mb-2 outline-none focus:border-indigo-500" value={productFilter} onChange={(e) => setProductFilter(e.target.value)} />
+                    <div className="max-h-32 overflow-y-auto space-y-1 custom-scrollbar">{allProducts.filter(p => p.name.toLowerCase().includes(productFilter.toLowerCase())).map(p => { const isTagged = scene.productIds?.includes(p.id); return (<div key={p.id} onClick={() => onProductToggle(p.id, !isTagged)} className={`flex items-center p-1.5 rounded cursor-pointer ${isTagged ? 'bg-indigo-50 text-indigo-700' : 'hover:bg-zinc-50'}`}><div className={`w-3 h-3 border rounded mr-2 flex items-center justify-center ${isTagged ? 'bg-indigo-500 border-indigo-500' : 'border-zinc-300'}`}>{isTagged && <Check className="w-2 h-2 text-white"/>}</div><span className="text-xs truncate">{p.name}</span></div>) })}</div>
+                 </div>
+               )}
+               <div className="space-y-3">{products.length > 0 ? products.map(product => (<div key={product.id} onClick={() => onNavigateProduct(product)} className="flex items-center p-3 bg-white rounded-xl border border-zinc-100 shadow-sm hover:border-zinc-300 transition-all cursor-pointer group"><div className="w-12 h-12 bg-zinc-50 rounded-lg flex-shrink-0 flex items-center justify-center mr-3 overflow-hidden">{product.images?.[0] ? <img src={typeof product.images[0] === 'object' ? product.images[0].url : product.images[0]} className="w-full h-full object-cover" /> : <ImageIcon className="w-5 h-5 text-zinc-300"/>}</div><div className="flex-1 min-w-0"><h4 className="text-sm font-bold text-zinc-900 truncate group-hover:text-blue-600">{product.name}</h4><p className="text-xs text-zinc-500">{product.category}</p></div><ChevronRight className="w-4 h-4 text-zinc-300 group-hover:text-zinc-600"/></div>)) : (<div className="text-center py-8 text-zinc-400 text-xs">연관된 제품이 없습니다.</div>)}</div>
+            </div>
          </div>
       </div>
     </div>
