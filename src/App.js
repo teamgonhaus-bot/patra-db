@@ -135,6 +135,9 @@ export default function App() {
   // Edit & Admin
   const [isFormOpen, setIsFormOpen] = useState(false); 
   const [editingProduct, setEditingProduct] = useState(null);
+  // Swatch Editing via Manager
+  const [editingSwatchFromModal, setEditingSwatchFromModal] = useState(null);
+
   const [isLoading, setIsLoading] = useState(true);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [showScrollTop, setShowScrollTop] = useState(false);
@@ -165,7 +168,7 @@ export default function App() {
   // --- Effects ---
   useEffect(() => {
     const handleScroll = () => {
-      if (mainContentRef.current.scrollTop > 300) setShowScrollTop(true);
+      if (mainContentRef.current && mainContentRef.current.scrollTop > 300) setShowScrollTop(true);
       else setShowScrollTop(false);
     };
     const div = mainContentRef.current;
@@ -273,34 +276,28 @@ export default function App() {
   }, [user]);
 
   // --- Handlers ---
-
   const handleHomeClick = () => {
     setActiveCategory('DASHBOARD');
     setIsMobileMenuOpen(false);
     window.history.pushState({}, '', window.location.pathname);
   };
-
   const loadFromLocalStorage = () => {
     const saved = localStorage.getItem('patra_products');
     setProducts(saved ? JSON.parse(saved) : []);
     setIsLoading(false);
   };
-  
   const saveToLocalStorage = (newProducts) => {
     localStorage.setItem('patra_products', JSON.stringify(newProducts));
     setProducts(newProducts);
   };
-
   const saveSwatchesToLocal = (newSwatches) => {
     localStorage.setItem('patra_swatches', JSON.stringify(newSwatches));
     setSwatches(newSwatches);
   };
-
   const showToast = (message, type = 'success') => {
     setToast({ message, type });
     setTimeout(() => setToast(null), 3000);
   };
-
   const toggleAdminMode = () => {
     if (isAdmin) { setIsAdmin(false); setShowAdminDashboard(false); showToast("뷰어 모드로 전환되었습니다.", "info"); } 
     else {
@@ -309,7 +306,6 @@ export default function App() {
       else if (password !== null) showToast("비밀번호가 올바르지 않습니다.", "error");
     }
   };
-
   const toggleFavorite = (e, productId) => {
     if(e) e.stopPropagation();
     let newFavs;
@@ -318,7 +314,6 @@ export default function App() {
     setFavorites(newFavs);
     localStorage.setItem('patra_favorites', JSON.stringify(newFavs));
   };
-
   const toggleCompare = (e, product) => {
     if(e) e.stopPropagation();
     if(compareList.find(p => p.id === product.id)) {
@@ -328,7 +323,6 @@ export default function App() {
         setCompareList([...compareList, product]);
     }
   };
-
   const processImage = (file) => {
     return new Promise((resolve) => {
       const reader = new FileReader();
@@ -345,34 +339,7 @@ export default function App() {
     });
   };
 
-  // --- Duplication Logic ---
-  const handleDuplicateProduct = async (product) => {
-     if(!isAdmin) return;
-     const newProduct = {
-        ...product,
-        id: Date.now().toString(),
-        name: `${product.name} (Copy)`,
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-        orderIndex: Date.now()
-     };
-     await handleSaveProduct(newProduct);
-     showToast("제품이 복제되었습니다.");
-  };
-
-  const handleDuplicateSwatch = async (swatch) => {
-     if(!isAdmin) return;
-     const newSwatch = {
-        ...swatch,
-        id: Date.now().toString(),
-        name: `${swatch.name} (Copy)`,
-        updatedAt: Date.now()
-     };
-     await handleSaveSwatch(newSwatch);
-     showToast("스와치가 복제되었습니다.");
-  };
-
-  // --- CRUD & Actions ---
+  // --- Actions ---
   const handleBannerUpload = async (e) => { if (!isAdmin) return; const file = e.target.files[0]; if (!file) return; try { const resizedImage = await processImage(file); const newData = { ...bannerData, url: resizedImage }; if (isFirebaseAvailable && db) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'banner'), newData, { merge: true }); else { localStorage.setItem('patra_banner_data', JSON.stringify(newData)); setBannerData(newData); } showToast("메인 배너가 업데이트되었습니다."); } catch (error) { showToast("이미지 처리 실패", "error"); } };
   const handleBannerTextChange = (key, value) => { if (!isAdmin) return; setBannerData(prev => ({ ...prev, [key]: value })); };
   const saveBannerText = async () => { if (isFirebaseAvailable && db) { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'banner'), bannerData, { merge: true }); showToast("배너 문구가 저장되었습니다."); } };
@@ -383,11 +350,28 @@ export default function App() {
   const handleSpaceProductToggle = async (spaceId, productId, isAdded) => { const product = products.find(p => p.id === productId); if(!product) return; let newSpaces = product.spaces || []; if(isAdded) { if(!newSpaces.includes(spaceId)) newSpaces.push(spaceId); } else { newSpaces = newSpaces.filter(s => s !== spaceId); } if (isFirebaseAvailable && db) { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'products', product.id), { spaces: newSpaces }, { merge: true }); } else { const idx = products.findIndex(p => p.id === productId); const newProds = [...products]; newProds[idx] = { ...product, spaces: newSpaces }; saveToLocalStorage(newProds); } };
   const logActivity = async (action, productName, details = "") => { if (!isFirebaseAvailable || !db) return; try { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'logs'), { action, productName, details, timestamp: Date.now(), adminId: 'admin' }); } catch (e) { console.error(e); } };
   const fetchLogs = async () => { if (!isFirebaseAvailable || !db) return; const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'logs'), orderBy('timestamp', 'desc'), limit(100)); onSnapshot(q, (snapshot) => { setActivityLogs(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))); }); };
+  
   const handleSaveSwatch = async (swatchData) => { const docId = swatchData.id ? String(swatchData.id) : String(Date.now()); const payload = { ...swatchData, id: docId, updatedAt: Date.now() }; if (isFirebaseAvailable && db) { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'swatches', docId), payload, { merge: true }); } else { const idx = swatches.findIndex(s => s.id === docId); let newSwatches = [...swatches]; if (idx >= 0) newSwatches[idx] = payload; else newSwatches = [payload, ...newSwatches]; saveSwatchesToLocal(newSwatches); } showToast("마감재가 저장되었습니다."); };
   const handleDeleteSwatch = async (swatchId) => { if (!window.confirm("정말 삭제하시겠습니까?")) return; if (isFirebaseAvailable && db) { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'swatches', String(swatchId))); } else { saveSwatchesToLocal(swatches.filter(s => s.id !== swatchId)); } showToast("마감재가 삭제되었습니다."); };
+  
   const handleSaveProduct = async (productData) => { const docId = productData.id ? String(productData.id) : String(Date.now()); const isEdit = !!productData.id && products.some(p => String(p.id) === docId); const payload = { ...productData, id: docId, updatedAt: Date.now(), createdAt: isEdit ? (products.find(p => String(p.id) === docId)?.createdAt || Date.now()) : Date.now(), orderIndex: isEdit ? (products.find(p => String(p.id) === docId)?.orderIndex || Date.now()) : Date.now() }; if (isFirebaseAvailable && db) { try { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'products', docId), payload, { merge: true }); } catch (error) { showToast("저장 실패", "error"); return; } } else { const idx = products.findIndex(p => String(p.id) === docId); let newProducts = [...products]; if (idx >= 0) newProducts[idx] = payload; else newProducts = [payload, ...products]; saveToLocalStorage(newProducts); } if (selectedProduct && String(selectedProduct.id) === docId) setSelectedProduct(payload); setIsFormOpen(false); setEditingProduct(null); showToast(isEdit ? "수정 완료" : "등록 완료"); };
   const handleDeleteProduct = async (productId, productName) => { if (!window.confirm('정말 삭제하시겠습니까?')) return; if (isFirebaseAvailable && db) { try { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'products', String(productId))); await logActivity("DELETE", productName, "삭제됨"); } catch (error) { showToast("삭제 실패", "error"); return; } } else { const newProducts = products.filter(p => String(p.id) !== String(productId)); saveToLocalStorage(newProducts); } setSelectedProduct(null); setIsFormOpen(false); showToast("삭제되었습니다."); };
   
+  // --- Duplication Logic ---
+  const handleDuplicateProduct = async (product) => {
+     if(!isAdmin) return;
+     const newProduct = { ...product, id: Date.now().toString(), name: `${product.name} (Copy)`, createdAt: Date.now(), updatedAt: Date.now(), orderIndex: Date.now() };
+     await handleSaveProduct(newProduct);
+     showToast("제품이 복제되었습니다.");
+  };
+
+  const handleDuplicateSwatch = async (swatch) => {
+     if(!isAdmin) return;
+     const newSwatch = { ...swatch, id: Date.now().toString(), name: `${swatch.name} (Copy)`, updatedAt: Date.now() };
+     await handleSaveSwatch(newSwatch);
+     showToast("스와치가 복제되었습니다.");
+  };
+
   // --- Data & Filters ---
   const getProcessedProducts = () => {
     let filtered = products.filter(product => {
@@ -398,36 +382,22 @@ export default function App() {
       else if (activeCategory === 'ALL') matchesCategory = true;
       else if (SPACES.find(s => s.id === activeCategory)) {
          matchesCategory = product.spaces && product.spaces.includes(activeCategory);
-         if (matchesCategory && activeSpaceTag !== 'ALL') {
-            matchesCategory = product.spaceTags && product.spaceTags.includes(activeSpaceTag);
-         }
+         if (matchesCategory && activeSpaceTag !== 'ALL') { matchesCategory = product.spaceTags && product.spaceTags.includes(activeSpaceTag); }
       }
       else if (SWATCH_CATEGORIES.find(s => s.id === activeCategory)) matchesCategory = false; 
       else matchesCategory = product.category === activeCategory;
-      
       const searchLower = searchTerm.toLowerCase();
-      const searchFields = [
-         product.name, product.specs, product.designer, 
-         ...(product.features || []), ...(product.options || []), ...(product.awards || []), ...(product.materials || []),
-         ...(product.bodyColors || []).map(c => typeof c === 'object' ? c.name : c),
-         ...(product.upholsteryColors || []).map(c => typeof c === 'object' ? c.name : c)
-      ];
+      const searchFields = [ product.name, product.specs, product.designer, ...(product.features || []), ...(product.options || []), ...(product.awards || []), ...(product.materials || []), ...(product.bodyColors || []).map(c => typeof c === 'object' ? c.name : c), ...(product.upholsteryColors || []).map(c => typeof c === 'object' ? c.name : c) ];
       const matchesSearch = !searchTerm || searchFields.join(' ').toLowerCase().includes(searchLower);
-
       let matchesFilter = true;
       if(filters.isNew && !product.isNew) matchesFilter = false;
       if(filters.year && !product.launchDate?.startsWith(filters.year)) matchesFilter = false;
       if(filters.color) {
-         const colorMatch = [...(product.bodyColors||[]), ...(product.upholsteryColors||[])].some(c => {
-            const name = typeof c === 'object' ? c.name : c;
-            return name.toLowerCase().includes(filters.color.toLowerCase());
-         });
+         const colorMatch = [...(product.bodyColors||[]), ...(product.upholsteryColors||[])].some(c => { const name = typeof c === 'object' ? c.name : c; return name.toLowerCase().includes(filters.color.toLowerCase()); });
          if(!colorMatch) matchesFilter = false;
       }
-
       return matchesCategory && matchesSearch && matchesFilter;
     });
-
     filtered.sort((a, b) => {
       let comparison = 0;
       if (sortOption === 'name') comparison = a.name.localeCompare(b.name);
@@ -440,66 +410,31 @@ export default function App() {
   };
   const processedProducts = getProcessedProducts();
 
-  // --- Drag & Drop (Manual Sort) ---
+  // --- Drag & Drop ---
   const handleDragStart = (e, index) => { dragItem.current = index; };
   const handleDragEnter = (e, index) => { dragOverItem.current = index; };
   const handleDragEnd = async () => {
      const _products = [...processedProducts];
-     const dragIndex = dragItem.current;
-     const dragOverIndex = dragOverItem.current;
+     const dragIndex = dragItem.current; const dragOverIndex = dragOverItem.current;
      if(dragIndex === null || dragOverIndex === null || dragIndex === dragOverIndex) return;
-     const draggedItemContent = _products[dragIndex];
-     _products.splice(dragIndex, 1);
-     _products.splice(dragOverIndex, 0, draggedItemContent);
-     if(isFirebaseAvailable && db) { showToast("순서가 변경되었습니다. (DB 반영은 전체 업데이트 필요)"); } 
-     else { saveToLocalStorage(_products); }
-     setProducts(_products); 
-     dragItem.current = null;
-     dragOverItem.current = null;
+     const draggedItemContent = _products[dragIndex]; _products.splice(dragIndex, 1); _products.splice(dragOverIndex, 0, draggedItemContent);
+     if(isFirebaseAvailable && db) { showToast("순서가 변경되었습니다. (DB 반영은 전체 업데이트 필요)"); } else { saveToLocalStorage(_products); }
+     setProducts(_products); dragItem.current = null; dragOverItem.current = null;
   };
 
-  // --- Navigation (Swipe) Helpers ---
-  const handleNavigateNext = () => {
-     if(!selectedProduct) return;
-     const currentIndex = processedProducts.findIndex(p => p.id === selectedProduct.id);
-     if(currentIndex >= 0 && currentIndex < processedProducts.length - 1) { setSelectedProduct(processedProducts[currentIndex + 1]); }
-  };
-  const handleNavigatePrev = () => {
-     if(!selectedProduct) return;
-     const currentIndex = processedProducts.findIndex(p => p.id === selectedProduct.id);
-     if(currentIndex > 0) { setSelectedProduct(processedProducts[currentIndex - 1]); }
-  };
+  // --- Navigation (Swipe) ---
+  const handleNavigateNext = () => { if(!selectedProduct) return; const currentIndex = processedProducts.findIndex(p => p.id === selectedProduct.id); if(currentIndex >= 0 && currentIndex < processedProducts.length - 1) { setSelectedProduct(processedProducts[currentIndex + 1]); } };
+  const handleNavigatePrev = () => { if(!selectedProduct) return; const currentIndex = processedProducts.findIndex(p => p.id === selectedProduct.id); if(currentIndex > 0) { setSelectedProduct(processedProducts[currentIndex - 1]); } };
 
   // Import/Export
-  const handleExportData = () => {
-    const dataStr = JSON.stringify({ products, swatches, spaces: spaceContents, version: APP_VERSION }, null, 2);
-    const blob = new Blob([dataStr], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href = url; a.download = `patra_db_backup_${new Date().toISOString().slice(0,10)}.json`; a.click();
-    showToast("데이터 백업이 완료되었습니다.");
-  };
-  const handleImportData = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = async (event) => {
-      try {
-        const imported = JSON.parse(event.target.result);
-        if (window.confirm(`총 ${imported.products?.length || 0}개 제품, ${imported.swatches?.length || 0}개 스와치를 불러오시겠습니까?`)) {
-           if (!isFirebaseAvailable) { saveToLocalStorage(imported.products || []); saveSwatchesToLocal(imported.swatches || []); window.location.reload(); } 
-           else { setProducts(imported.products || []); setSwatches(imported.swatches || []); }
-           showToast("데이터 복원 완료 (메모리 로드)");
-        }
-      } catch (err) { showToast("파일 형식이 올바르지 않습니다.", "error"); }
-    };
-    reader.readAsText(file);
-  };
+  const handleExportData = () => { const dataStr = JSON.stringify({ products, swatches, spaces: spaceContents, version: APP_VERSION }, null, 2); const blob = new Blob([dataStr], { type: "application/json" }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `patra_db_backup_${new Date().toISOString().slice(0,10)}.json`; a.click(); showToast("데이터 백업이 완료되었습니다."); };
+  const handleImportData = (e) => { const file = e.target.files[0]; if (!file) return; const reader = new FileReader(); reader.onload = async (event) => { try { const imported = JSON.parse(event.target.result); if (window.confirm(`총 ${imported.products?.length || 0}개 제품, ${imported.swatches?.length || 0}개 스와치를 불러오시겠습니까?`)) { if (!isFirebaseAvailable) { saveToLocalStorage(imported.products || []); saveSwatchesToLocal(imported.swatches || []); window.location.reload(); } else { setProducts(imported.products || []); setSwatches(imported.swatches || []); } showToast("데이터 복원 완료 (메모리 로드)"); } } catch (err) { showToast("파일 형식이 올바르지 않습니다.", "error"); } }; reader.readAsText(file); };
 
   return (
     <div className="flex h-screen bg-zinc-50 font-sans text-zinc-900 overflow-hidden relative selection:bg-black selection:text-white print:overflow-visible print:h-auto print:bg-white">
       {isMobileMenuOpen && <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 md:hidden animate-in fade-in" onClick={() => setIsMobileMenuOpen(false)} />}
       
-      {/* Sidebar */}
+      {/* Sidebar (Compact) */}
       <aside className={`fixed inset-y-0 left-0 z-50 w-72 bg-white/90 backdrop-blur-md border-r border-zinc-200 flex flex-col shadow-2xl md:shadow-none transition-transform duration-300 md:relative md:translate-x-0 print:hidden ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         <div className="p-6 border-b border-zinc-100 flex items-center justify-between cursor-pointer group" onClick={handleHomeClick}>
           <div className="flex flex-col">
@@ -509,34 +444,10 @@ export default function App() {
           <button onClick={(e) => { e.stopPropagation(); setIsMobileMenuOpen(false); }} className="md:hidden text-zinc-400 hover:text-zinc-600"><X className="w-6 h-6" /></button>
         </div>
         <nav className="flex-1 overflow-y-auto py-6 px-4 space-y-4 custom-scrollbar">
-          <div className="space-y-1">
-            {CATEGORIES.filter(c => c.isSpecial).map((cat) => (<button key={cat.id} onClick={() => { setActiveCategory(cat.id); setIsMobileMenuOpen(false); }} className={`w-full text-left px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 flex items-center justify-between group border ${activeCategory === cat.id ? 'bg-zinc-900 text-white shadow-lg border-zinc-900' : 'bg-white text-zinc-600 border-zinc-100 hover:bg-zinc-50 hover:border-zinc-300'}`}><div className="flex items-center">{cat.id === 'ALL' && <LayoutGrid className="w-4 h-4 mr-3 opacity-70" />}{cat.id === 'NEW' && <Zap className="w-4 h-4 mr-3 opacity-70" />}<span className="font-bold tracking-tight">{cat.label}</span></div>{cat.id === 'NEW' && <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse ml-auto"></span>}</button>))}
-          </div>
-          
-          <div className="py-2">
-             <button onClick={() => setSidebarState(p => ({...p, spaces: !p.spaces}))} className={`w-full text-left px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 flex items-center justify-between group border bg-white text-zinc-600 border-zinc-100 hover:bg-zinc-50 hover:border-zinc-300 mb-1 shadow-sm`}>
-                <span className="font-bold tracking-tight">SPACES</span>
-                {sidebarState.spaces ? <ChevronUp className="w-4 h-4 text-zinc-400" /> : <ChevronDown className="w-4 h-4 text-zinc-400" />}
-             </button>
-             {sidebarState.spaces && (<div className="space-y-1 mt-2 pl-2 animate-in slide-in-from-top-2 duration-200">{SPACES.map((space) => (<button key={space.id} onClick={() => { setActiveCategory(space.id); setIsMobileMenuOpen(false); }} className={`w-full text-left px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 flex items-center justify-between group ${activeCategory === space.id ? 'bg-zinc-800 text-white font-bold' : 'text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900'}`}><div className="flex items-center"><space.icon className={`w-3.5 h-3.5 mr-3 ${activeCategory === space.id ? 'text-white' : 'text-zinc-400'}`} />{space.label}</div>{activeCategory === space.id && <div className="w-1.5 h-1.5 rounded-full bg-green-500"></div>}</button>))}</div>)}
-          </div>
-
-          <div className="py-2">
-             <button onClick={() => setSidebarState(p => ({...p, collections: !p.collections}))} className={`w-full text-left px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 flex items-center justify-between group border bg-white text-zinc-600 border-zinc-100 hover:bg-zinc-50 hover:border-zinc-300 mb-1 shadow-sm`}>
-                <div className="flex items-center"><span className="font-bold tracking-tight">COLLECTIONS</span>{isFirebaseAvailable ? <Cloud className="w-3 h-3 ml-2 text-green-500" /> : <CloudOff className="w-3 h-3 ml-2 text-zinc-300" />}</div>
-                {sidebarState.collections ? <ChevronUp className="w-4 h-4 text-zinc-400" /> : <ChevronDown className="w-4 h-4 text-zinc-400" />}
-             </button>
-             {sidebarState.collections && (<div className="space-y-0.5 mt-2 pl-2 animate-in slide-in-from-top-2 duration-200">{CATEGORIES.filter(c => !c.isSpecial).map((cat) => (<button key={cat.id} onClick={() => { setActiveCategory(cat.id); setIsMobileMenuOpen(false); }} className={`w-full text-left px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center justify-between group ${activeCategory === cat.id ? 'bg-zinc-100 text-zinc-900 font-bold' : 'text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900'}`}>{cat.label}</button>))}</div>)}
-          </div>
-
-          <div className="py-2">
-             <button onClick={() => setSidebarState(p => ({...p, materials: !p.materials}))} className={`w-full text-left px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 flex items-center justify-between group border bg-white text-zinc-600 border-zinc-100 hover:bg-zinc-50 hover:border-zinc-300 mb-1 shadow-sm`}>
-                <div className="flex items-center"><span className="font-bold tracking-tight">MATERIALS</span></div>
-                {sidebarState.materials ? <ChevronUp className="w-4 h-4 text-zinc-400" /> : <ChevronDown className="w-4 h-4 text-zinc-400" />}
-             </button>
-             {sidebarState.materials && (<div className="space-y-0.5 mt-2 pl-2 animate-in slide-in-from-top-2 duration-200">{SWATCH_CATEGORIES.map((cat) => (<button key={cat.id} onClick={() => { setActiveCategory(cat.id); setIsMobileMenuOpen(false); }} className={`w-full text-left px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center justify-between group ${activeCategory === cat.id ? 'bg-zinc-100 text-zinc-900 font-bold' : 'text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900'}`}>{cat.label}</button>))}</div>)}
-          </div>
-
+          <div className="space-y-1">{CATEGORIES.filter(c => c.isSpecial).map((cat) => (<button key={cat.id} onClick={() => { setActiveCategory(cat.id); setIsMobileMenuOpen(false); }} className={`w-full text-left px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 flex items-center justify-between group border ${activeCategory === cat.id ? 'bg-zinc-900 text-white shadow-lg border-zinc-900' : 'bg-white text-zinc-600 border-zinc-100 hover:bg-zinc-50 hover:border-zinc-300'}`}><div className="flex items-center">{cat.id === 'ALL' && <LayoutGrid className="w-4 h-4 mr-3 opacity-70" />}{cat.id === 'NEW' && <Zap className="w-4 h-4 mr-3 opacity-70" />}<span className="font-bold tracking-tight">{cat.label}</span></div>{cat.id === 'NEW' && <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse ml-auto"></span>}</button>))}</div>
+          <div className="py-2"><button onClick={() => setSidebarState(p => ({...p, spaces: !p.spaces}))} className={`w-full text-left px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 flex items-center justify-between group border bg-white text-zinc-600 border-zinc-100 hover:bg-zinc-50 hover:border-zinc-300 mb-1 shadow-sm`}><span className="font-bold tracking-tight">SPACES</span>{sidebarState.spaces ? <ChevronUp className="w-4 h-4 text-zinc-400" /> : <ChevronDown className="w-4 h-4 text-zinc-400" />}</button>{sidebarState.spaces && (<div className="space-y-1 mt-2 pl-2 animate-in slide-in-from-top-2 duration-200">{SPACES.map((space) => (<button key={space.id} onClick={() => { setActiveCategory(space.id); setIsMobileMenuOpen(false); }} className={`w-full text-left px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 flex items-center justify-between group ${activeCategory === space.id ? 'bg-zinc-800 text-white font-bold' : 'text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900'}`}><div className="flex items-center"><space.icon className={`w-3.5 h-3.5 mr-3 ${activeCategory === space.id ? 'text-white' : 'text-zinc-400'}`} />{space.label}</div>{activeCategory === space.id && <div className="w-1.5 h-1.5 rounded-full bg-green-500"></div>}</button>))}</div>)}</div>
+          <div className="py-2"><button onClick={() => setSidebarState(p => ({...p, collections: !p.collections}))} className={`w-full text-left px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 flex items-center justify-between group border bg-white text-zinc-600 border-zinc-100 hover:bg-zinc-50 hover:border-zinc-300 mb-1 shadow-sm`}><div className="flex items-center"><span className="font-bold tracking-tight">COLLECTIONS</span>{isFirebaseAvailable ? <Cloud className="w-3 h-3 ml-2 text-green-500" /> : <CloudOff className="w-3 h-3 ml-2 text-zinc-300" />}</div>{sidebarState.collections ? <ChevronUp className="w-4 h-4 text-zinc-400" /> : <ChevronDown className="w-4 h-4 text-zinc-400" />}</button>{sidebarState.collections && (<div className="space-y-0.5 mt-2 pl-2 animate-in slide-in-from-top-2 duration-200">{CATEGORIES.filter(c => !c.isSpecial).map((cat) => (<button key={cat.id} onClick={() => { setActiveCategory(cat.id); setIsMobileMenuOpen(false); }} className={`w-full text-left px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center justify-between group ${activeCategory === cat.id ? 'bg-zinc-100 text-zinc-900 font-bold' : 'text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900'}`}>{cat.label}</button>))}</div>)}</div>
+          <div className="py-2"><button onClick={() => setSidebarState(p => ({...p, materials: !p.materials}))} className={`w-full text-left px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 flex items-center justify-between group border bg-white text-zinc-600 border-zinc-100 hover:bg-zinc-50 hover:border-zinc-300 mb-1 shadow-sm`}><div className="flex items-center"><span className="font-bold tracking-tight">MATERIALS</span></div>{sidebarState.materials ? <ChevronUp className="w-4 h-4 text-zinc-400" /> : <ChevronDown className="w-4 h-4 text-zinc-400" />}</button>{sidebarState.materials && (<div className="space-y-0.5 mt-2 pl-2 animate-in slide-in-from-top-2 duration-200">{SWATCH_CATEGORIES.map((cat) => (<button key={cat.id} onClick={() => { setActiveCategory(cat.id); setIsMobileMenuOpen(false); }} className={`w-full text-left px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center justify-between group ${activeCategory === cat.id ? 'bg-zinc-100 text-zinc-900 font-bold' : 'text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900'}`}>{cat.label}</button>))}</div>)}</div>
           <div className="pt-2"><button onClick={() => { setActiveCategory('MY_PICK'); setIsMobileMenuOpen(false); }} className={`w-full text-left px-4 py-3 rounded-xl text-sm font-bold transition-all duration-200 flex items-center space-x-3 group border ${activeCategory === 'MY_PICK' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' : 'text-zinc-400 border-transparent hover:bg-zinc-50 hover:text-zinc-600'}`}><Heart className={`w-4 h-4 ${activeCategory === 'MY_PICK' ? 'fill-yellow-500 text-yellow-500' : ''}`} /><span>My Pick ({favorites.length})</span></button></div>
         </nav>
         <div className="p-4 border-t border-zinc-100 bg-zinc-50/50 space-y-3">
@@ -553,11 +464,7 @@ export default function App() {
             <div className="relative w-full max-w-md group"><Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-zinc-400 w-4 h-4 group-focus-within:text-zinc-800 transition-colors" /><input type="text" placeholder="Search..." value={searchTerm} onChange={(e) => { setSearchTerm(e.target.value); if (activeCategory === 'DASHBOARD' && e.target.value) setActiveCategory('ALL'); }} className="w-full pl-10 pr-4 py-2 bg-zinc-50/50 border border-transparent focus:bg-white focus:border-zinc-200 focus:ring-4 focus:ring-zinc-50 rounded-full text-sm transition-all outline-none" /></div>
           </div>
           <div className="flex items-center space-x-2">
-             {compareList.length > 0 && (
-                <button onClick={() => setIsCompareModalOpen(true)} className="flex items-center px-3 py-1.5 bg-zinc-900 text-white rounded-full text-xs font-bold animate-in fade-in hover:bg-black mr-2 shadow-lg">
-                   <ArrowLeftRight className="w-3 h-3 mr-1.5"/> Compare ({compareList.length})
-                </button>
-             )}
+             {compareList.length > 0 && <button onClick={() => setIsCompareModalOpen(true)} className="flex items-center px-3 py-1.5 bg-zinc-900 text-white rounded-full text-xs font-bold animate-in fade-in hover:bg-black mr-2 shadow-lg"><ArrowLeftRight className="w-3 h-3 mr-1.5"/> Compare ({compareList.length})</button>}
              <button onClick={() => setIsFilterOpen(!isFilterOpen)} className={`p-2 rounded-full transition-all ${isFilterOpen ? 'bg-zinc-200 text-black' : 'hover:bg-zinc-100 text-zinc-500'}`} title="Filters"><SlidersHorizontal className="w-5 h-5" /></button>
              <button onClick={() => setActiveCategory('MY_PICK')} className={`hidden md:flex p-2 rounded-full transition-all items-center space-x-1 ${activeCategory === 'MY_PICK' ? 'bg-yellow-100 text-yellow-600' : 'hover:bg-zinc-100 text-zinc-400 hover:text-zinc-600'}`} title="My Pick"><Heart className={`w-5 h-5 ${activeCategory === 'MY_PICK' ? 'fill-yellow-500 text-yellow-500' : ''}`} /></button>
              <div className="flex items-center bg-zinc-100 rounded-lg p-1">
@@ -579,40 +486,15 @@ export default function App() {
 
         <div ref={mainContentRef} className="flex-1 overflow-y-auto p-4 md:p-8 custom-scrollbar relative print:overflow-visible print:p-0">
           {activeCategory === 'DASHBOARD' && !searchTerm ? (
-            <DashboardView 
-              products={products} favorites={favorites} setActiveCategory={setActiveCategory} setSelectedProduct={setSelectedProduct} 
-              isAdmin={isAdmin} bannerData={bannerData} onBannerUpload={handleBannerUpload} onBannerTextChange={handleBannerTextChange} onSaveBannerText={saveBannerText}
-            />
+            <DashboardView products={products} favorites={favorites} setActiveCategory={setActiveCategory} setSelectedProduct={setSelectedProduct} isAdmin={isAdmin} bannerData={bannerData} onBannerUpload={handleBannerUpload} onBannerTextChange={handleBannerTextChange} onSaveBannerText={saveBannerText} />
           ) : (
             <>
               {SPACES.find(s => s.id === activeCategory) && (
-                 <SpaceDetailView 
-                    space={SPACES.find(s => s.id === activeCategory)}
-                    spaceContent={spaceContents[activeCategory] || {}}
-                    isAdmin={isAdmin}
-                    activeTag={activeSpaceTag}
-                    setActiveTag={setActiveSpaceTag}
-                    onBannerUpload={(e) => handleSpaceBannerUpload(e, activeCategory)}
-                    onEditInfo={() => setEditingSpaceInfoId(activeCategory)}
-                    onManageProducts={() => setManagingSpaceProductsId(activeCategory)}
-                    onAddScene={() => setEditingScene({ isNew: true, spaceId: activeCategory })}
-                    onViewScene={(scene) => setSelectedScene({ ...scene, spaceId: activeCategory })}
-                    productCount={processedProducts.length}
-                 />
+                 <SpaceDetailView space={SPACES.find(s => s.id === activeCategory)} spaceContent={spaceContents[activeCategory] || {}} isAdmin={isAdmin} activeTag={activeSpaceTag} setActiveTag={setActiveSpaceTag} onBannerUpload={(e) => handleSpaceBannerUpload(e, activeCategory)} onEditInfo={() => setEditingSpaceInfoId(activeCategory)} onManageProducts={() => setManagingSpaceProductsId(activeCategory)} onAddScene={() => setEditingScene({ isNew: true, spaceId: activeCategory })} onViewScene={(scene) => setSelectedScene({ ...scene, spaceId: activeCategory })} productCount={processedProducts.length} />
               )}
-
               {SWATCH_CATEGORIES.find(s => s.id === activeCategory) && (
-                <SwatchManager 
-                  category={SWATCH_CATEGORIES.find(s => s.id === activeCategory)}
-                  swatches={swatches.filter(s => s.category === activeCategory)}
-                  isAdmin={isAdmin}
-                  onSave={handleSaveSwatch}
-                  onDelete={handleDeleteSwatch}
-                  onSelect={(swatch) => setSelectedSwatch(swatch)}
-                  onDuplicate={handleDuplicateSwatch}
-                />
+                <SwatchManager category={SWATCH_CATEGORIES.find(s => s.id === activeCategory)} swatches={swatches.filter(s => s.category === activeCategory)} isAdmin={isAdmin} onSave={handleSaveSwatch} onDelete={handleDeleteSwatch} onSelect={(swatch) => setSelectedSwatch(swatch)} onDuplicate={handleDuplicateSwatch} />
               )}
-
               {!SWATCH_CATEGORIES.find(s => s.id === activeCategory) && (
                 <>
                   {isLoading && products.length === 0 ? (
@@ -625,87 +507,24 @@ export default function App() {
                             <h2 className="text-xl md:text-3xl font-extrabold text-zinc-900 tracking-tight">{activeCategory === 'MY_PICK' ? 'MY PICK' : CATEGORIES.find(c => c.id === activeCategory)?.label || activeCategory}</h2>
                             <p className="text-zinc-500 text-xs md:text-sm mt-1 font-medium">{processedProducts.length} items found {!isFirebaseAvailable && <span className="ml-2 text-red-400 bg-red-50 px-2 py-0.5 rounded-full text-xs">Offline Mode</span>}</p>
                           </div>
-                          
-                          {activeCategory === 'MY_PICK' && processedProducts.length > 0 && (
-                            <div className="flex space-x-2">
-                              <div className="flex bg-zinc-100 p-1 rounded-lg">
-                                  <button onClick={() => setMyPickViewMode('grid')} className={`p-2 rounded-md ${myPickViewMode === 'grid' ? 'bg-white shadow-sm text-zinc-900' : 'text-zinc-400'}`} title="Grid View"><Grid className="w-4 h-4"/></button>
-                                  <button onClick={() => setMyPickViewMode('list')} className={`p-2 rounded-md ${myPickViewMode === 'list' ? 'bg-white shadow-sm text-zinc-900' : 'text-zinc-400'}`} title="List View"><List className="w-4 h-4"/></button>
-                              </div>
-                              <button onClick={() => window.print()} className="flex items-center px-4 py-2 bg-zinc-900 text-white rounded-lg text-sm font-bold hover:bg-black transition-colors"><Printer className="w-4 h-4 mr-2"/> Export</button>
-                            </div>
-                          )}
+                          {activeCategory === 'MY_PICK' && processedProducts.length > 0 && (<div className="flex space-x-2"><div className="flex bg-zinc-100 p-1 rounded-lg"><button onClick={() => setMyPickViewMode('grid')} className={`p-2 rounded-md ${myPickViewMode === 'grid' ? 'bg-white shadow-sm text-zinc-900' : 'text-zinc-400'}`} title="Grid View"><Grid className="w-4 h-4"/></button><button onClick={() => setMyPickViewMode('list')} className={`p-2 rounded-md ${myPickViewMode === 'list' ? 'bg-white shadow-sm text-zinc-900' : 'text-zinc-400'}`} title="List View"><List className="w-4 h-4"/></button></div><button onClick={() => window.print()} className="flex items-center px-4 py-2 bg-zinc-900 text-white rounded-lg text-sm font-bold hover:bg-black transition-colors"><Printer className="w-4 h-4 mr-2"/> Export</button></div>)}
                         </div>
                       )}
-                      
                       {activeCategory === 'MY_PICK' && myPickViewMode === 'list' ? (
                         <div className="space-y-4 print:space-y-6">
-                            <div className="hidden print:block mb-8">
-                              <h1 className="text-4xl font-bold mb-2">MY PICK SELECTION</h1>
-                              <p className="text-zinc-500">{new Date().toLocaleDateString()} · Patra Design Lab</p>
-                            </div>
-                            {processedProducts.map((product) => (
-                              <div key={product.id} className="flex flex-col md:flex-row gap-6 p-6 bg-white rounded-2xl border border-zinc-200 print:border-zinc-300 print:break-inside-avoid">
-                                  <div className="w-full md:w-48 h-48 bg-zinc-50 rounded-xl overflow-hidden flex-shrink-0 border border-zinc-100 flex items-center justify-center">
-                                    {product.images?.[0] ? <img src={product.images[0]} className="w-full h-full object-contain mix-blend-multiply" alt={product.name} /> : <ImageIcon className="w-8 h-8 text-zinc-300"/>}
-                                  </div>
-                                  <div className="flex-1">
-                                    <div className="flex justify-between items-start">
-                                        <div>
-                                          <span className="inline-block px-2 py-0.5 bg-zinc-100 text-zinc-600 text-xs font-bold rounded mb-2">{product.category}</span>
-                                          <h3 className="text-2xl font-bold text-zinc-900 mb-1">{product.name}</h3>
-                                          <p className="text-zinc-500 font-medium text-sm mb-4">Designed by {product.designer || 'Patra Design Lab'}</p>
-                                        </div>
-                                        <button onClick={(e) => toggleFavorite(e, product.id)} className="print:hidden text-yellow-400 hover:scale-110 transition-transform"><Star className="w-6 h-6 fill-current"/></button>
-                                    </div>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                                        <div className="bg-zinc-50 p-3 rounded-lg"><span className="font-bold block text-xs text-zinc-400 uppercase mb-1">Specs</span>{product.specs}</div>
-                                        <div className="space-y-2">
-                                          <div><span className="font-bold text-xs text-zinc-400 uppercase">Options</span> <span className="text-zinc-700">{product.options?.join(', ')}</span></div>
-                                          <div>
-                                            <span className="font-bold text-xs text-zinc-400 uppercase block mb-1">Colors</span> 
-                                            <div className="flex gap-2 mb-1">
-                                              <span className="text-xs text-zinc-400 w-16">Body:</span>
-                                              <div className="flex gap-1">{product.bodyColors?.map((c, i) => <SwatchDisplay key={i} color={c} size="small" />)}</div>
-                                            </div>
-                                            <div className="flex gap-2">
-                                              <span className="text-xs text-zinc-400 w-16">Upholstery:</span>
-                                              <div className="flex gap-1">{product.upholsteryColors?.map((c, i) => <SwatchDisplay key={i} color={c} size="small" />)}</div>
-                                            </div>
-                                          </div>
-                                        </div>
-                                    </div>
-                                  </div>
-                              </div>
-                            ))}
+                            <div className="hidden print:block mb-8"><h1 className="text-4xl font-bold mb-2">MY PICK SELECTION</h1><p className="text-zinc-500">{new Date().toLocaleDateString()} · Patra Design Lab</p></div>
+                            {processedProducts.map((product) => (<div key={product.id} className="flex flex-col md:flex-row gap-6 p-6 bg-white rounded-2xl border border-zinc-200 print:border-zinc-300 print:break-inside-avoid"><div className="w-full md:w-48 h-48 bg-zinc-50 rounded-xl overflow-hidden flex-shrink-0 border border-zinc-100 flex items-center justify-center">{product.images?.[0] ? <img src={product.images[0]} className="w-full h-full object-contain mix-blend-multiply" alt={product.name} /> : <ImageIcon className="w-8 h-8 text-zinc-300"/>}</div><div className="flex-1"><div className="flex justify-between items-start"><div><span className="inline-block px-2 py-0.5 bg-zinc-100 text-zinc-600 text-xs font-bold rounded mb-2">{product.category}</span><h3 className="text-2xl font-bold text-zinc-900 mb-1">{product.name}</h3><p className="text-zinc-500 font-medium text-sm mb-4">Designed by {product.designer || 'Patra Design Lab'}</p></div><button onClick={(e) => toggleFavorite(e, product.id)} className="print:hidden text-yellow-400 hover:scale-110 transition-transform"><Star className="w-6 h-6 fill-current"/></button></div><div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm"><div className="bg-zinc-50 p-3 rounded-lg"><span className="font-bold block text-xs text-zinc-400 uppercase mb-1">Specs</span>{product.specs}</div><div className="space-y-2"><div><span className="font-bold text-xs text-zinc-400 uppercase">Options</span> <span className="text-zinc-700">{product.options?.join(', ')}</span></div><div><span className="font-bold text-xs text-zinc-400 uppercase block mb-1">Colors</span> <div className="flex gap-2 mb-1"><span className="text-xs text-zinc-400 w-16">Body:</span><div className="flex gap-1">{product.bodyColors?.map((c, i) => <SwatchDisplay key={i} color={c} size="small" />)}</div></div><div className="flex gap-2"><span className="text-xs text-zinc-400 w-16">Upholstery:</span><div className="flex gap-1">{product.upholsteryColors?.map((c, i) => <SwatchDisplay key={i} color={c} size="small" />)}</div></div></div></div></div></div></div>))}
                         </div>
                       ) : (
                         <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-6 pb-20 print:grid-cols-3 print:gap-4">
                             {processedProducts.map((product, idx) => (
-                               <div 
-                                  key={product.id}
-                                  draggable={isAdmin && sortOption === 'manual'}
-                                  onDragStart={(e) => handleDragStart(e, idx)}
-                                  onDragEnter={(e) => handleDragEnter(e, idx)}
-                                  onDragEnd={handleDragEnd}
-                                  className={isAdmin && sortOption === 'manual' ? 'cursor-move active:opacity-50 transition-all' : ''}
-                               >
-                                  <ProductCard 
-                                     product={product} 
-                                     onClick={() => setSelectedProduct(product)} 
-                                     isAdmin={isAdmin} 
-                                     isFavorite={favorites.includes(product.id)} 
-                                     onToggleFavorite={(e) => toggleFavorite(e, product.id)}
-                                     onCompareToggle={(e) => toggleCompare(e, product)}
-                                     onDuplicate={(e) => { e.stopPropagation(); handleDuplicateProduct(product); }}
-                                     isCompared={!!compareList.find(p=>p.id===product.id)}
-                                  />
+                               <div key={product.id} draggable={isAdmin && sortOption === 'manual'} onDragStart={(e) => handleDragStart(e, idx)} onDragEnter={(e) => handleDragEnter(e, idx)} onDragEnd={handleDragEnd} className={isAdmin && sortOption === 'manual' ? 'cursor-move active:opacity-50 transition-all' : ''}>
+                                  <ProductCard product={product} onClick={() => setSelectedProduct(product)} isAdmin={isAdmin} isFavorite={favorites.includes(product.id)} onToggleFavorite={(e) => toggleFavorite(e, product.id)} onCompareToggle={(e) => toggleCompare(e, product)} onDuplicate={(e) => { e.stopPropagation(); handleDuplicateProduct(product); }} isCompared={!!compareList.find(p=>p.id===product.id)} />
                                </div>
                             ))}
                             {isAdmin && activeCategory !== 'MY_PICK' && activeCategory !== 'NEW' && !SPACES.find(s => s.id === activeCategory) && (<button onClick={() => { setEditingProduct(null); setIsFormOpen(true); }} className="border-2 border-dashed border-zinc-200 rounded-2xl flex flex-col items-center justify-center min-h-[250px] md:min-h-[300px] text-zinc-400 hover:border-zinc-400 hover:text-zinc-600 hover:bg-zinc-50 transition-all group print:hidden"><div className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-zinc-100 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform"><Plus className="w-6 h-6" /></div><span className="text-xs md:text-sm font-bold">Add Product</span></button>)}
                         </div>
                       )}
-                      
                       {processedProducts.length === 0 && (<div className="flex flex-col items-center justify-center py-32 text-zinc-300"><CloudOff className="w-16 h-16 mb-4 opacity-50" /><p className="text-sm font-medium">No products found for this space.</p>{isAdmin && SPACES.find(s => s.id === activeCategory) && (<button onClick={() => setManagingSpaceProductsId(activeCategory)} className="mt-4 px-4 py-2 bg-blue-50 text-blue-600 rounded-lg text-sm font-bold hover:bg-blue-100 transition-colors">+ Select Products</button>)}</div>)}
                     </>
                   )}
@@ -785,19 +604,17 @@ export default function App() {
           isAdmin={isAdmin}
           onClose={() => setSelectedSwatch(null)}
           onNavigateProduct={(product) => { setSelectedSwatch(null); setSelectedProduct(product); }}
-          onEdit={() => { setEditingProduct(selectedSwatch); /* Reuse SwatchForm */ }}
-          onEditTrigger={(swatch) => {
-             // Open edit form directly from detail modal
-             setSelectedSwatch(null);
-             // We reuse the SwatchManager logic's modal state, but here we need to trigger it from App level or pass a handler
-             // Simplest way: Close detail, pass signal to SwatchManager? No, SwatchManager is a child.
-             // We'll handle editing in SwatchManager context usually, but for Detail Modal, 
-             // let's just close and let user edit from list, OR we can implement a global editing state for swatch.
-             // For this codebase structure, editing is handled inside SwatchManager. 
-             // To support "Edit from Modal", we'd need to lift `isModalOpen` of SwatchManager to App.
-             // For safety/simplicity in this iteration, I'll add the button but it will require manual list click.
-             // ACTUALLY: I will just render SwatchFormModal here if needed.
-          }}
+          onEdit={() => { setSelectedSwatch(null); setEditingSwatchFromModal(selectedSwatch); }}
+        />
+      )}
+      
+      {/* Editing Swatch From Modal Trigger */}
+      {editingSwatchFromModal && (
+        <SwatchFormModal 
+           category={SWATCH_CATEGORIES.find(c => c.id === editingSwatchFromModal.category) || SWATCH_CATEGORIES[0]}
+           existingData={editingSwatchFromModal}
+           onClose={() => setEditingSwatchFromModal(null)}
+           onSave={(data) => { handleSaveSwatch(data); setEditingSwatchFromModal(null); }}
         />
       )}
 
@@ -896,9 +713,10 @@ function SwatchDisplay({ color, size = 'medium', className = '' }) {
   const name = isObject ? color.name : color;
   const sizeClass = size === 'large' ? 'w-10 h-10' : size === 'small' ? 'w-4 h-4' : 'w-6 h-6';
 
+  // Fixed: Removed tooltip, using box-shadow for cleaner border
   return (
     <div className={`group relative inline-block ${className}`} title={name}>
-       <div className={`${sizeClass} rounded-full overflow-hidden flex items-center justify-center bg-zinc-50 box-border ring-1 ring-inset ring-black/5`}>
+       <div className={`${sizeClass} rounded-full overflow-hidden flex items-center justify-center bg-zinc-50 box-border`} style={{boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.1)'}}>
          {image ? (
             <img src={image} alt={name} className="w-full h-full object-cover scale-110" />
          ) : (
@@ -986,33 +804,11 @@ function SwatchDetailModal({ swatch, allProducts, onClose, onNavigateProduct, is
         return inBody || inUph;
     });
 
-    const [isEditing, setIsEditing] = useState(false);
-
-    if(isEditing) {
-       return <SwatchFormModal 
-          category={{id: swatch.category}} 
-          existingData={swatch} 
-          onClose={() => setIsEditing(false)} 
-          onSave={async (data) => { 
-             // We need to inject the save handler logic from parent context which is tricky here. 
-             // Ideally we pass a specific onSave handler. 
-             // For this V0.6.6 quick fix, we just show a message or reuse the parent's reload mechanism? 
-             // Correct way: App needs to pass handleSaveSwatch here. 
-             // Since we cannot easily pass it through all layers without prop drilling, 
-             // we assume the user will Edit from the main list for full functionality, 
-             // OR we accept `onEdit` prop triggers the modal in parent.
-             alert("Please edit from the main list view for safety in this version.");
-             setIsEditing(false);
-          }} 
-       />;
-    }
-
     return (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[90] flex items-center justify-center p-4 animate-in zoom-in-95 duration-200">
             <div className="bg-white w-full max-w-4xl rounded-3xl overflow-hidden shadow-2xl flex flex-col md:flex-row max-h-[90vh] relative">
                 <div className="absolute top-4 right-4 z-[100] flex gap-2">
-                   {/* Edit Button inside Modal */}
-                   {isAdmin && <button onClick={onEdit} className="p-2 bg-white/50 hover:bg-zinc-100 rounded-full backdrop-blur shadow-sm"><Edit3 className="w-5 h-5 text-zinc-900"/></button>}
+                   {isAdmin && <button onClick={onEdit} className="p-2 bg-white/50 hover:bg-zinc-100 rounded-full backdrop-blur shadow-sm"><Edit3 className="w-6 h-6 text-zinc-900"/></button>}
                    <button onClick={onClose} className="p-2 bg-white/50 hover:bg-zinc-100 rounded-full backdrop-blur shadow-sm"><X className="w-6 h-6 text-zinc-900"/></button>
                 </div>
                 
@@ -2088,3 +1884,38 @@ function SceneEditModal({ initialData, allProducts, spaceTags = [], onClose, onS
     </div>
   );
 }
+
+function SpaceSceneModal({ scene, products, allProducts, isAdmin, onClose, onEdit, onProductToggle, onNavigateProduct }) {
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const images = scene.images ? [scene.image, ...scene.images] : [scene.image];
+  const [isProductManagerOpen, setProductManagerOpen] = useState(false);
+  const [productFilter, setProductFilter] = useState('');
+
+  return (
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[60] flex items-center justify-center p-0 md:p-6 animate-in zoom-in-95 duration-200 print:hidden">
+      <div className="bg-white w-full h-full md:h-[90vh] md:max-w-6xl md:rounded-3xl overflow-hidden shadow-2xl flex flex-col md:flex-row relative">
+         <button onClick={onClose} className="absolute top-4 right-4 z-50 p-2 bg-black/20 text-white hover:bg-black/50 rounded-full backdrop-blur"><X className="w-6 h-6"/></button>
+         <div className="w-full md:w-2/3 bg-black relative flex flex-col justify-center h-[40vh] md:h-full">
+            <img src={images[currentImageIndex]} className="w-full h-full object-contain" alt="Scene" />
+            {images.length > 1 && (<div className="absolute bottom-4 left-0 right-0 flex justify-center space-x-2 px-4">{images.map((_, idx) => (<button key={idx} onClick={() => setCurrentImageIndex(idx)} className={`w-2 h-2 rounded-full transition-all ${currentImageIndex === idx ? 'bg-white w-6' : 'bg-white/40 hover:bg-white/80'}`} />))}</div>)}
+         </div>
+         <div className="w-full md:w-1/3 bg-white flex flex-col border-l border-zinc-100 h-[60vh] md:h-full relative">
+            <div className="p-6 md:p-8 border-b border-zinc-50">
+               <div className="flex justify-between items-start mb-4"><div><h2 className="text-2xl md:text-3xl font-black text-zinc-900 mb-2">{scene.title}</h2><p className="text-zinc-500 text-sm leading-relaxed">{scene.description}</p></div>{isAdmin && <button onClick={onEdit} className="p-2 text-zinc-400 hover:text-zinc-900"><Edit3 className="w-5 h-5"/></button>}</div>
+            </div>
+            <div className="flex-1 overflow-y-auto p-6 md:p-8 custom-scrollbar bg-zinc-50/50">
+               <div className="flex justify-between items-center mb-4"><h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Tagged Products</h3>{isAdmin && <button onClick={() => setProductManagerOpen(!isProductManagerOpen)} className="text-xs font-bold text-indigo-600 hover:text-indigo-800">+ Add Tag</button>}</div>
+               {isAdmin && isProductManagerOpen && (
+                 <div className="mb-4 bg-white p-3 rounded-xl border border-indigo-100 shadow-sm animate-in slide-in-from-top-2">
+                    <input type="text" placeholder="Search to tag..." className="w-full text-xs p-2 bg-zinc-50 rounded-lg border border-zinc-200 mb-2 outline-none focus:border-indigo-500" value={productFilter} onChange={(e) => setProductFilter(e.target.value)} />
+                    <div className="max-h-32 overflow-y-auto space-y-1 custom-scrollbar">{allProducts.filter(p => p.name.toLowerCase().includes(productFilter.toLowerCase())).map(p => { const isTagged = scene.productIds?.includes(p.id); return (<div key={p.id} onClick={() => onProductToggle(p.id, !isTagged)} className={`flex items-center p-1.5 rounded cursor-pointer ${isTagged ? 'bg-indigo-50 text-indigo-700' : 'hover:bg-zinc-50'}`}><div className={`w-3 h-3 border rounded mr-2 flex items-center justify-center ${isTagged ? 'bg-indigo-500 border-indigo-500' : 'border-zinc-300'}`}>{isTagged && <Check className="w-2 h-2 text-white"/>}</div><span className="text-xs truncate">{p.name}</span></div>) })}</div>
+                 </div>
+               )}
+               <div className="space-y-3">{products.length > 0 ? products.map(product => (<div key={product.id} onClick={() => onNavigateProduct(product)} className="flex items-center p-3 bg-white rounded-xl border border-zinc-100 shadow-sm hover:border-zinc-300 transition-all cursor-pointer group"><div className="w-12 h-12 bg-zinc-50 rounded-lg flex-shrink-0 flex items-center justify-center mr-3 overflow-hidden">{product.images?.[0] ? <img src={product.images[0]} className="w-full h-full object-cover" /> : <ImageIcon className="w-5 h-5 text-zinc-300"/>}</div><div className="flex-1 min-w-0"><h4 className="text-sm font-bold text-zinc-900 truncate group-hover:text-blue-600">{product.name}</h4><p className="text-xs text-zinc-500">{product.category}</p></div><ChevronRight className="w-4 h-4 text-zinc-300 group-hover:text-zinc-600"/></div>)) : (<div className="text-center py-8 text-zinc-400 text-xs">연관된 제품이 없습니다.</div>)}</div>
+            </div>
+         </div>
+      </div>
+    </div>
+  );
+}
+```
