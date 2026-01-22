@@ -36,7 +36,7 @@ const YOUR_FIREBASE_CONFIG = {
 // ----------------------------------------------------------------------
 // 상수 및 설정
 // ----------------------------------------------------------------------
-const APP_VERSION = "v0.6.3"; 
+const APP_VERSION = "v0.6.3-fix"; 
 const BUILD_DATE = "2026.01.22";
 const ADMIN_PASSWORD = "adminlcg1"; 
 
@@ -116,7 +116,7 @@ export default function App() {
   const [products, setProducts] = useState([]);
   const [swatches, setSwatches] = useState([]); 
   const [activeCategory, setActiveCategory] = useState('DASHBOARD');
-  const [activeSpaceTag, setActiveSpaceTag] = useState('ALL'); // For Space sub-filtering
+  const [activeSpaceTag, setActiveSpaceTag] = useState('ALL'); 
   const [searchTerm, setSearchTerm] = useState('');
   
   const [sortOption, setSortOption] = useState('manual'); 
@@ -140,7 +140,7 @@ export default function App() {
   const [myPickViewMode, setMyPickViewMode] = useState('grid'); 
 
   const [bannerData, setBannerData] = useState({ url: null, title: 'Design Lab DB', subtitle: 'Integrated Product Database & Archives' });
-  const [spaceContents, setSpaceContents] = useState({}); // Stores tags, banner, scenes
+  const [spaceContents, setSpaceContents] = useState({}); 
 
   const [editingSpaceInfoId, setEditingSpaceInfoId] = useState(null);
   const [managingSpaceProductsId, setManagingSpaceProductsId] = useState(null);
@@ -184,7 +184,6 @@ export default function App() {
     }
   }, [selectedProduct]);
 
-  // Reset tag when category changes
   useEffect(() => {
      setActiveSpaceTag('ALL');
   }, [activeCategory]);
@@ -368,12 +367,7 @@ export default function App() {
       else if (activeCategory === 'ALL') matchesCategory = true;
       else if (SPACES.find(s => s.id === activeCategory)) {
          matchesCategory = product.spaces && product.spaces.includes(activeCategory);
-         // Filter by Tag if activeSpaceTag is set
          if (matchesCategory && activeSpaceTag !== 'ALL') {
-            // Logic: Assume product also has 'tags' or we filter based on Scenes?
-            // V0.6.3: Tags categorize SCENES, but for products, let's allow basic filtering if the product has that tag saved.
-            // Currently ProductForm doesn't explicitly save Space Tags to product root, but related Scenes might. 
-            // For this implementation, we will check if the product's saved spaceTags (added in form) include this tag.
             matchesCategory = product.spaceTags && product.spaceTags.includes(activeSpaceTag);
          }
       }
@@ -381,7 +375,6 @@ export default function App() {
       else matchesCategory = product.category === activeCategory;
       
       const searchLower = searchTerm.toLowerCase();
-      // v0.6.3: Comprehensive Search
       const searchFields = [
          product.name, 
          product.specs, 
@@ -390,12 +383,10 @@ export default function App() {
          ...(product.options || []), 
          ...(product.awards || []),
          ...(product.materials || []),
-         // Add color names
          ...(product.bodyColors || []).map(c => typeof c === 'object' ? c.name : c),
          ...(product.upholsteryColors || []).map(c => typeof c === 'object' ? c.name : c)
       ];
       const allText = searchFields.join(' ').toLowerCase();
-      
       const matchesSearch = !searchTerm || allText.includes(searchLower);
       return matchesCategory && matchesSearch;
     });
@@ -431,7 +422,6 @@ export default function App() {
             {CATEGORIES.filter(c => c.isSpecial).map((cat) => (<button key={cat.id} onClick={() => { setActiveCategory(cat.id); setIsMobileMenuOpen(false); }} className={`w-full text-left px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 flex items-center justify-between group border ${activeCategory === cat.id ? 'bg-zinc-900 text-white shadow-lg border-zinc-900' : 'bg-white text-zinc-600 border-zinc-100 hover:bg-zinc-50 hover:border-zinc-300'}`}><div className="flex items-center">{cat.id === 'ALL' && <LayoutGrid className="w-4 h-4 mr-3 opacity-70" />}{cat.id === 'NEW' && <Zap className="w-4 h-4 mr-3 opacity-70" />}<span className="font-bold tracking-tight">{cat.label}</span></div>{cat.id === 'NEW' && <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse ml-auto"></span>}</button>))}
           </div>
           
-          {/* SPACES Group */}
           <div className="py-2">
              <button onClick={() => setSidebarState(p => ({...p, spaces: !p.spaces}))} className={`w-full text-left px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 flex items-center justify-between group border bg-white text-zinc-600 border-zinc-100 hover:bg-zinc-50 hover:border-zinc-300 mb-1 shadow-sm`}>
                 <span className="font-bold tracking-tight">SPACES</span>
@@ -440,7 +430,6 @@ export default function App() {
              {sidebarState.spaces && (<div className="space-y-1 mt-2 pl-2 animate-in slide-in-from-top-2 duration-200">{SPACES.map((space) => (<button key={space.id} onClick={() => { setActiveCategory(space.id); setIsMobileMenuOpen(false); }} className={`w-full text-left px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 flex items-center justify-between group ${activeCategory === space.id ? 'bg-zinc-800 text-white font-bold' : 'text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900'}`}><div className="flex items-center"><space.icon className={`w-3.5 h-3.5 mr-3 ${activeCategory === space.id ? 'text-white' : 'text-zinc-400'}`} />{space.label}</div>{activeCategory === space.id && <div className="w-1.5 h-1.5 rounded-full bg-green-500"></div>}</button>))}</div>)}
           </div>
 
-          {/* COLLECTIONS Group */}
           <div className="py-2">
              <button onClick={() => setSidebarState(p => ({...p, collections: !p.collections}))} className={`w-full text-left px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 flex items-center justify-between group border bg-white text-zinc-600 border-zinc-100 hover:bg-zinc-50 hover:border-zinc-300 mb-1 shadow-sm`}>
                 <div className="flex items-center"><span className="font-bold tracking-tight">COLLECTIONS</span>{isFirebaseAvailable ? <Cloud className="w-3 h-3 ml-2 text-green-500" /> : <CloudOff className="w-3 h-3 ml-2 text-zinc-300" />}</div>
@@ -449,7 +438,6 @@ export default function App() {
              {sidebarState.collections && (<div className="space-y-0.5 mt-2 pl-2 animate-in slide-in-from-top-2 duration-200">{CATEGORIES.filter(c => !c.isSpecial).map((cat) => (<button key={cat.id} onClick={() => { setActiveCategory(cat.id); setIsMobileMenuOpen(false); }} className={`w-full text-left px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center justify-between group ${activeCategory === cat.id ? 'bg-zinc-100 text-zinc-900 font-bold' : 'text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900'}`}>{cat.label}</button>))}</div>)}
           </div>
 
-          {/* MATERIALS Group */}
           <div className="py-2">
              <button onClick={() => setSidebarState(p => ({...p, materials: !p.materials}))} className={`w-full text-left px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 flex items-center justify-between group border bg-white text-zinc-600 border-zinc-100 hover:bg-zinc-50 hover:border-zinc-300 mb-1 shadow-sm`}>
                 <div className="flex items-center"><span className="font-bold tracking-tight">MATERIALS</span></div>
@@ -603,10 +591,36 @@ export default function App() {
       </main>
 
       {toast && <div className="fixed bottom-8 right-8 bg-zinc-900 text-white px-5 py-3.5 rounded-xl shadow-2xl flex items-center space-x-3 animate-in slide-in-from-bottom-10 fade-in z-[90] print:hidden">{toast.type === 'success' ? <Check className="w-5 h-5 text-green-400" /> : <Info className="w-5 h-5 text-red-400" />}<span className="text-sm font-bold tracking-wide">{toast.message}</span></div>}
-      {selectedProduct && <ProductDetailModal product={selectedProduct} spaceContents={spaceContents} onClose={() => setSelectedProduct(null)} onEdit={() => { setEditingProduct(selectedProduct); setIsFormOpen(true); }} isAdmin={isAdmin} showToast={showToast} isFavorite={favorites.includes(selectedProduct.id)} onToggleFavorite={(e) => toggleFavorite(e, selectedProduct.id)} onNavigateSpace={(spaceId) => { setSelectedProduct(null); setActiveCategory(spaceId); }} onNavigateScene={(scene) => { setSelectedProduct(null); setActiveCategory(scene.spaceId || scene.id); setSelectedScene({...scene, spaceId: scene.spaceId || 'UNKNOWN'}); }} />}
-      {isFormOpen && <ProductFormModal categories={CATEGORIES.filter(c => !c.isSpecial)} swatches={swatches} initialCategory={activeCategory} existingData={editingProduct} onClose={() => { setIsFormOpen(false); setEditingProduct(null); }} onSave={handleSaveProduct} onDelete={handleDeleteProduct} isFirebaseAvailable={isFirebaseAvailable} spaceTags={SPACES.find(s=>s.id===activeCategory)?.defaultTags || []} />}
       
-      {/* Swatch Detail Modal */}
+      {selectedProduct && (
+        <ProductDetailModal 
+          product={selectedProduct} 
+          spaceContents={spaceContents} 
+          onClose={() => setSelectedProduct(null)} 
+          onEdit={() => { setEditingProduct(selectedProduct); setIsFormOpen(true); }} 
+          isAdmin={isAdmin} 
+          showToast={showToast} 
+          isFavorite={favorites.includes(selectedProduct.id)} 
+          onToggleFavorite={(e) => toggleFavorite(e, selectedProduct.id)} 
+          onNavigateSpace={(spaceId) => { setSelectedProduct(null); setActiveCategory(spaceId); }} 
+          onNavigateScene={(scene) => { setSelectedProduct(null); setActiveCategory(scene.spaceId || scene.id); setSelectedScene({...scene, spaceId: scene.spaceId || 'UNKNOWN'}); }} 
+        />
+      )}
+      
+      {isFormOpen && (
+        <ProductFormModal 
+          categories={CATEGORIES.filter(c => !c.isSpecial)} 
+          swatches={swatches} 
+          initialCategory={activeCategory} 
+          existingData={editingProduct} 
+          onClose={() => { setIsFormOpen(false); setEditingProduct(null); }} 
+          onSave={handleSaveProduct} 
+          onDelete={handleDeleteProduct} 
+          isFirebaseAvailable={isFirebaseAvailable} 
+          spaceTags={SPACES.find(s=>s.id===activeCategory)?.defaultTags || []} 
+        />
+      )}
+      
       {selectedSwatch && (
         <SwatchDetailModal 
           swatch={selectedSwatch}
@@ -617,9 +631,23 @@ export default function App() {
       )}
 
       {editingSpaceInfoId && (
-        <SpaceInfoEditModal spaceId={editingSpaceInfoId} currentData={spaceContents[editingSpaceInfoId]} defaultTags={SPACES.find(s=>s.id===editingSpaceInfoId)?.defaultTags} onClose={() => setEditingSpaceInfoId(null)} onSave={(data) => { handleSpaceInfoSave(editingSpaceInfoId, data); setEditingSpaceInfoId(null); }} />
+        <SpaceInfoEditModal 
+          spaceId={editingSpaceInfoId} 
+          currentData={spaceContents[editingSpaceInfoId]} 
+          defaultTags={SPACES.find(s=>s.id===editingSpaceInfoId)?.defaultTags} 
+          onClose={() => setEditingSpaceInfoId(null)} 
+          onSave={(data) => { handleSpaceInfoSave(editingSpaceInfoId, data); setEditingSpaceInfoId(null); }} 
+        />
       )}
-      {managingSpaceProductsId && <SpaceProductManager spaceId={managingSpaceProductsId} products={products} onClose={() => setManagingSpaceProductsId(null)} onToggle={(pid, add) => handleSpaceProductToggle(managingSpaceProductsId, pid, add)} />}
+      
+      {managingSpaceProductsId && (
+        <SpaceProductManager 
+          spaceId={managingSpaceProductsId} 
+          products={products} 
+          onClose={() => setManagingSpaceProductsId(null)} 
+          onToggle={(pid, add) => handleSpaceProductToggle(managingSpaceProductsId, pid, add)} 
+        />
+      )}
       
       {editingScene && (
         <SceneEditModal 
@@ -630,6 +658,7 @@ export default function App() {
            onDelete={(id) => { handleSceneDelete(editingScene.spaceId, id); setEditingScene(null); }} 
         />
       )}
+      
       {selectedScene && (
         <SpaceSceneModal 
            scene={selectedScene} 
@@ -647,6 +676,7 @@ export default function App() {
            onNavigateProduct={(p) => { setSelectedScene(null); setSelectedProduct(p); }}
         />
       )}
+      
       {showAdminDashboard && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4 print:hidden">
           <div className="bg-white w-full max-w-4xl rounded-2xl overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200 max-h-[85vh] flex flex-col">
@@ -661,6 +691,10 @@ export default function App() {
     </div>
   );
 }
+
+// ----------------------------------------------------------------------
+// Helper Components
+// ----------------------------------------------------------------------
 
 function SwatchDisplay({ color, size = 'medium', className = '' }) {
   const isObject = typeof color === 'object' && color !== null;
@@ -771,7 +805,6 @@ function SwatchDetailModal({ swatch, allProducts, onClose, onNavigateProduct }) 
     return (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[90] flex items-center justify-center p-4 animate-in zoom-in-95 duration-200">
             <div className="bg-white w-full max-w-4xl rounded-3xl overflow-hidden shadow-2xl flex flex-col md:flex-row max-h-[90vh] relative">
-                {/* Close Button Top-Right Fixed */}
                 <button onClick={onClose} className="absolute top-4 right-4 z-[100] p-2 bg-white/50 hover:bg-zinc-100 rounded-full backdrop-blur shadow-sm"><X className="w-6 h-6"/></button>
                 
                 <div className="w-full md:w-5/12 bg-zinc-50 flex items-center justify-center p-8 relative">
@@ -913,12 +946,9 @@ function SwatchFormModal({ category, existingData, onClose, onSave }) {
   );
 }
 
-
 function PieChartComponent({ data, total }) {
   const [hoveredIndex, setHoveredIndex] = useState(null);
   let cumulativePercent = 0;
-
-  // Larger Radius for v0.6.3
   const radius = 0.7; 
 
   return (
@@ -933,7 +963,7 @@ function PieChartComponent({ data, total }) {
            cumulativePercent += percent; 
            
            const isLargest = percent === Math.max(...data.map(d => d.count/total));
-           const strokeWidth = isLargest ? 0.35 : 0.3; // Thicker strokes
+           const strokeWidth = isLargest ? 0.35 : 0.3; 
 
            return (
              <React.Fragment key={item.id}>
@@ -953,7 +983,6 @@ function PieChartComponent({ data, total }) {
            );
         })}
       </svg>
-      {/* Improved Label Positioning to Avoid Overlap */}
       {data.map((item, idx) => {
          let prevPercent = 0;
          for(let i=0; i<idx; i++) prevPercent += data[i].count/total;
@@ -961,11 +990,11 @@ function PieChartComponent({ data, total }) {
          const midPercent = prevPercent + percent/2;
          const angleRad = (midPercent * 2 * Math.PI) - (Math.PI / 2); 
          
-         const dist = 0.95; // Push labels further out
+         const dist = 0.95; 
          const x = 50 + (dist * 50 * Math.cos(angleRad));
          const y = 50 + (dist * 50 * Math.sin(angleRad));
          
-         if (percent < 0.05) return null; // Hide tiny slices labels
+         if (percent < 0.05) return null; 
 
          return (
             <div key={`label-${item.id}`} className="absolute text-[10px] md:text-xs font-bold text-zinc-600 flex flex-col items-center leading-none pointer-events-none drop-shadow-md bg-white/90 backdrop-blur rounded-md px-1.5 py-1" style={{ left: `${x}%`, top: `${y}%`, transform: 'translate(-50%, -50%)', zIndex: 10 }}>
@@ -1084,7 +1113,6 @@ function DashboardView({ products, favorites, setActiveCategory, setSelectedProd
          ) : <div className="text-center py-20 text-zinc-300">No category data available</div>}
       </div>
 
-      {/* Grid Layout for Recent Updates */}
       <div className="bg-white p-6 md:p-8 rounded-3xl border border-zinc-100 shadow-sm">
          <div className="flex items-center justify-between mb-6">
             <h3 className="text-xl font-bold text-zinc-900 flex items-center"><Clock className="w-6 h-6 mr-3 text-zinc-400" /> Recent Updates</h3>
@@ -1114,7 +1142,6 @@ function SpaceDetailView({ space, spaceContent, activeTag, setActiveTag, isAdmin
   const description = spaceContent.description || "이 공간에 대한 설명이 없습니다.";
   const trend = spaceContent.trend || "";
   const scenes = spaceContent.scenes || [];
-  // Use saved tags from DB if available, else default
   const tags = spaceContent.tags || space.defaultTags || []; 
 
   const copySpaceLink = () => { navigator.clipboard.writeText(`${window.location.origin}${window.location.pathname}?space=${space.id}`); window.alert("공간 공유 링크가 복사되었습니다."); };
@@ -1136,7 +1163,6 @@ function SpaceDetailView({ space, spaceContent, activeTag, setActiveTag, isAdmin
         </div>
       </div>
 
-      {/* Tags Filter Bar */}
       <div className="mb-8 flex gap-2 overflow-x-auto pb-2 custom-scrollbar">
          <button onClick={() => setActiveTag('ALL')} className={`px-4 py-2 rounded-full text-sm font-bold whitespace-nowrap transition-colors border ${activeTag === 'ALL' ? 'bg-black text-white border-black' : 'bg-white text-zinc-500 border-zinc-200 hover:bg-zinc-100'}`}>ALL</button>
          {tags.map((tag, idx) => (
@@ -1152,7 +1178,6 @@ function SpaceDetailView({ space, spaceContent, activeTag, setActiveTag, isAdmin
               <div key={scene.id} onClick={() => onViewScene(scene)} className="group relative aspect-[4/3] rounded-2xl overflow-hidden bg-zinc-100 shadow-md hover:shadow-xl transition-all cursor-pointer">
                 <img src={scene.image} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" alt={scene.title} />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-80 group-hover:opacity-100 transition-opacity"></div>
-                {/* Badge for Product Count */}
                 {scene.productIds && scene.productIds.length > 0 && <div className="absolute top-4 right-4 bg-black/60 backdrop-blur text-white text-[10px] font-bold px-2 py-1 rounded-lg flex items-center"><Tag className="w-3 h-3 mr-1" /> {scene.productIds.length} Products</div>}
                 <div className="absolute bottom-5 left-5 right-5 text-white transform translate-y-2 group-hover:translate-y-0 transition-transform">
                   <h4 className="text-xl font-bold mb-1 truncate">{scene.title}</h4>
@@ -1193,7 +1218,6 @@ function ProductCard({ product, onClick, showMoveControls, onMove, isFavorite, o
         )}
       </div>
       
-      {/* V0.6.3 Redesigned Info Area: Name Top, Category Bottom */}
       <div className="p-3 md:p-5 flex-1 flex flex-col bg-white">
         <h3 className="text-sm md:text-lg font-extrabold text-zinc-900 mb-1 leading-tight group-hover:text-blue-600 transition-colors line-clamp-1">{product.name}</h3>
         <div className="flex justify-between items-center mb-2">
@@ -1247,37 +1271,144 @@ function ProductDetailModal({ product, spaceContents, onClose, onEdit, isAdmin, 
 
   const copyToClipboard = () => { navigator.clipboard.writeText(`[${product.name}]\n${product.specs}`); showToast("Copied to clipboard"); };
   
-  // Year Only
   const launchYear = product.launchDate ? product.launchDate.substring(0, 4) : '';
 
+  const wrapText = (ctx, text, x, y, maxWidth, lineHeight) => {
+     if(!text) return y;
+     const words = text.split(' ');
+     let line = '';
+     for(let n = 0; n < words.length; n++) {
+       const testLine = line + words[n] + ' ';
+       const metrics = ctx.measureText(testLine);
+       const testWidth = metrics.width;
+       if (testWidth > maxWidth && n > 0) {
+         ctx.fillText(line, x, y);
+         line = words[n] + ' ';
+         y += lineHeight;
+       } else {
+         line = testLine;
+       }
+     }
+     ctx.fillText(line, x, y);
+     return y + lineHeight;
+  };
+
   const handleShareImage = async () => {
-    // ... (Existing implementation for image generation)
-    // Simplified for brevity in full response, keeping logic intact
     const canvas = canvasRef.current; if (!canvas) return; const ctx = canvas.getContext('2d');
-    // ... drawing logic similar to previous version ...
-    // Since strict adherence to code is requested, I will retain the core logic but skip detailed canvas drawing here to fit response limits if needed, 
-    // BUT the prompt asks for "no omitted code". So I will include a simplified version.
     const w = 1080;
+    
+    ctx.font = '26px sans-serif'; 
     const specLinesHeight = (product.specs.split('\n').length + 5) * 40; 
     const baseHeight = 1400 + specLinesHeight + (product.features?.length || 0) * 50;
+    
     canvas.width = w; canvas.height = baseHeight; 
+    
     ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, w, baseHeight);
-    // ... Headers ...
+    
     ctx.fillStyle = '#18181b'; ctx.fillRect(0, 0, w, 140);
     ctx.fillStyle = '#ffffff'; ctx.font = 'bold 40px sans-serif'; ctx.textAlign = 'left'; ctx.fillText("PATRA DESIGN LAB", 60, 85);
-    // ... Image ...
-    const img = new Image(); img.crossOrigin="Anonymous"; img.src = currentImage;
-    await new Promise(r => { img.onload = r; img.onerror = r; });
-    if(img.complete) {
-        const ratio = Math.min((w - 120) / img.width, 600 / img.height);
-        const imgW = img.width * ratio; const imgH = img.height * ratio;
-        ctx.drawImage(img, (w - imgW) / 2, 200, imgW, imgH);
-    }
-    // ... Text ...
-    let cursorY = 900;
-    ctx.textAlign = 'center'; ctx.fillStyle = '#18181b'; ctx.font = 'bold 70px sans-serif'; ctx.fillText(product.name, w/2, cursorY);
-    // ... Export ...
-    const dataUrl = canvas.toDataURL('image/png'); const a = document.createElement('a'); a.href = dataUrl; a.download = `${product.name}.png`; a.click();
+
+    const loadImg = (src) => new Promise(res => { const i = new Image(); i.crossOrigin = "Anonymous"; i.onload = () => res(i); i.onerror = () => res(null); i.src = src; });
+    
+    if (currentImage) {
+        const img = await loadImg(currentImage);
+        if(img) {
+            const ratio = Math.min((w - 120) / img.width, 600 / img.height);
+            const imgW = img.width * ratio; const imgH = img.height * ratio;
+            ctx.drawImage(img, (w - imgW) / 2, 200, imgW, imgH);
+            let cursorY = 200 + imgH + 80;
+            
+            ctx.textAlign = 'center'; ctx.fillStyle = '#18181b'; ctx.font = 'bold 70px sans-serif'; 
+            ctx.fillText(product.name, w/2, cursorY);
+            cursorY += 60;
+            
+            ctx.fillStyle = '#71717a'; ctx.font = 'bold 30px sans-serif'; 
+            ctx.fillText(product.category.toUpperCase(), w/2, cursorY);
+            cursorY += 50;
+
+            if(product.designer) {
+                ctx.fillStyle = '#a1a1aa'; ctx.font = '30px sans-serif'; 
+                ctx.fillText(`Designed by ${product.designer}`, w/2, cursorY);
+                cursorY += 80;
+            } else { cursorY += 40; }
+
+            ctx.textAlign = 'left';
+            ctx.fillStyle = '#f4f4f5'; ctx.fillRect(60, cursorY, w - 120, baseHeight - cursorY - 60);
+            cursorY += 60;
+            ctx.fillStyle = '#3f3f46'; ctx.font = 'bold 30px sans-serif';
+            ctx.fillText("SPECIFICATIONS", 100, cursorY);
+            cursorY += 50;
+            
+            ctx.font = '26px sans-serif'; ctx.fillStyle = '#52525b';
+            const specText = product.specs.split('\n');
+            specText.forEach(line => { 
+                cursorY = wrapText(ctx, line, 100, cursorY, w - 200, 40);
+            });
+            cursorY += 40;
+
+            if (product.features?.length > 0 || product.options?.length > 0) {
+                ctx.fillStyle = '#3f3f46'; ctx.font = 'bold 30px sans-serif';
+                ctx.fillText("FEATURES & OPTIONS", 100, cursorY);
+                cursorY += 50;
+                ctx.font = '26px sans-serif'; ctx.fillStyle = '#52525b';
+                const allFeatures = [...(product.options||[]), ...(product.features||[])];
+                allFeatures.forEach(f => { cursorY = wrapText(ctx, `• ${f}`, 100, cursorY, w - 200, 40); });
+            }
+
+            cursorY += 40;
+            if ((product.bodyColors && product.bodyColors.length > 0) || (product.upholsteryColors && product.upholsteryColors.length > 0)) {
+                ctx.fillStyle = '#3f3f46'; ctx.font = 'bold 30px sans-serif';
+                ctx.fillText("MATERIALS & FINISHES", 100, cursorY);
+                cursorY += 50;
+
+                const drawSwatchRow = async (label, colors) => {
+                    if (!colors || colors.length === 0) return;
+                    ctx.font = 'bold 24px sans-serif'; ctx.fillStyle = '#71717a';
+                    ctx.fillText(label, 100, cursorY);
+                    cursorY += 40;
+                    
+                    let startX = 100;
+                    for (const color of colors) {
+                        const isObj = typeof color === 'object';
+                        const hex = isObj ? color.hex : color;
+                        const imgUrl = isObj ? color.image : null;
+                        
+                        ctx.save();
+                        ctx.beginPath();
+                        ctx.arc(startX + 25, cursorY + 25, 25, 0, Math.PI * 2);
+                        ctx.closePath();
+                        ctx.clip();
+
+                        if (imgUrl) {
+                            const sImg = await loadImg(imgUrl);
+                            if(sImg) ctx.drawImage(sImg, startX, cursorY, 50, 50);
+                            else { ctx.fillStyle = '#eee'; ctx.fillRect(startX, cursorY, 50, 50); }
+                        } else {
+                            ctx.fillStyle = hex || '#ccc';
+                            ctx.fillRect(startX, cursorY, 50, 50);
+                        }
+                        ctx.restore();
+                        ctx.beginPath(); ctx.arc(startX + 25, cursorY + 25, 25, 0, Math.PI * 2);
+                        ctx.strokeStyle = '#e4e4e7'; ctx.lineWidth = 2; ctx.stroke();
+
+                        if(isObj) {
+                            ctx.font = '20px sans-serif'; ctx.fillStyle = '#18181b';
+                            ctx.fillText(color.name, startX + 60, cursorY + 32);
+                            startX += 250; 
+                        } else {
+                           startX += 60;
+                        }
+                    }
+                    cursorY += 70;
+                };
+
+                await drawSwatchRow("Body Colors", product.bodyColors);
+                await drawSwatchRow("Upholstery", product.upholsteryColors);
+            }
+
+            const dataUrl = canvas.toDataURL('image/png'); const a = document.createElement('a'); a.href = dataUrl; a.download = `${product.name}-card.png`; a.click(); showToast("이미지가 저장되었습니다.");
+        }
+    } else showToast("이미지가 없어 생성할 수 없습니다.", "error");
   };
 
   return (
@@ -1286,13 +1417,11 @@ function ProductDetailModal({ product, spaceContents, onClose, onEdit, isAdmin, 
       {isZoomed && currentImage && (<div className="fixed inset-0 z-[70] bg-black/95 flex items-center justify-center p-8 cursor-zoom-out print:hidden" onClick={() => setIsZoomed(false)}><img src={currentImage} className="max-w-full max-h-full object-contain" alt="Zoomed" /><button className="absolute top-6 right-6 text-white/50 hover:text-white"><X className="w-10 h-10" /></button></div>)}
       <div className="bg-white w-full h-full md:h-[90vh] md:w-full md:max-w-6xl md:rounded-3xl overflow-hidden shadow-2xl flex flex-col md:flex-row relative print:h-auto print:overflow-visible print:shadow-none print:rounded-none">
         
-        {/* Universal Close Button (Top-Right) */}
         <button onClick={onClose} className="absolute top-4 right-4 z-[100] p-2 bg-white/50 hover:bg-zinc-100 rounded-full backdrop-blur shadow-sm"><X className="w-6 h-6 text-zinc-900" /></button>
         
-        {/* Mobile Header (No Back Button) */}
         <div className="md:hidden flex items-center justify-between p-4 border-b border-zinc-100 bg-white sticky top-0 z-50 print:hidden">
            <span className="font-bold text-sm truncate max-w-[200px]">{product.name}</span>
-           <div className="flex gap-2 mr-8"> {/* mr-8 to avoid overlapping with close button */}
+           <div className="flex gap-2 mr-8"> 
               <button onClick={onToggleFavorite}><Star className={`w-6 h-6 ${isFavorite ? 'text-yellow-400 fill-yellow-400' : 'text-zinc-300'}`}/></button>
            </div>
         </div>
@@ -1307,7 +1436,6 @@ function ProductDetailModal({ product, spaceContents, onClose, onEdit, isAdmin, 
           </div>
           <div className="w-full md:w-1/2 p-6 md:p-12 bg-white pb-12 print:pb-0">
             <div className="mb-6 md:mb-10">
-              {/* Separate Lines for Category and Awards */}
               <div className="mb-2">
                  <span className="inline-block px-2.5 py-0.5 bg-zinc-900 text-white text-[10px] font-extrabold rounded uppercase tracking-widest">{product.category}</span>
               </div>
@@ -1378,7 +1506,6 @@ function ProductDetailModal({ product, spaceContents, onClose, onEdit, isAdmin, 
 
               {contentImages.length > 0 && (<div className="pt-8 border-t border-zinc-100 space-y-4"><h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Detail View</h3><div className="flex flex-col gap-4">{contentImages.map((img, idx) => (<img key={idx} src={img} alt={`Detail ${idx+1}`} className="w-full h-auto rounded-xl border border-zinc-100 print:border-none" />))}</div></div>)}
 
-              {/* Mobile Actions: Not fixed, at bottom of scroll */}
               <div className="md:hidden mt-8 pt-8 border-t border-zinc-100 pb-10 print:hidden">
                  <div className="flex justify-center gap-4 mb-4">
                     <button onClick={handleShareImage} className="flex flex-col items-center justify-center w-14 h-14 bg-zinc-50 rounded-2xl text-zinc-600 active:scale-95 transition-transform border border-zinc-100">
@@ -1470,7 +1597,6 @@ function ProductFormModal({ categories, swatches = [], existingData, onClose, on
     }
   }, [existingData]);
 
-  // ... (Process Image and Upload functions remain the same)
   const processImage = (file) => { return new Promise((resolve) => { const reader = new FileReader(); reader.onload = (e) => { const img = new Image(); img.onload = () => { const canvas = document.createElement('canvas'); const MAX_WIDTH = 1000; let width = img.width; let height = img.height; if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; } canvas.width = width; canvas.height = height; const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0, width, height); resolve(canvas.toDataURL('image/jpeg', 0.8)); }; img.src = e.target.result; }; reader.readAsDataURL(file); }); };
   const handleImageUpload = async (e) => { const files = Array.from(e.target.files); if (files.length > 0) { setIsProcessingImage(true); const newUrls = []; for (const file of files) { try { newUrls.push(await processImage(file)); } catch (e) {} } setFormData(prev => ({ ...prev, images: [...prev.images, ...newUrls] })); setIsProcessingImage(false); } };
   const handleContentImageUpload = async (e) => { const files = Array.from(e.target.files); if (files.length > 0) { setIsProcessingImage(true); const newUrls = []; for (const file of files) { try { newUrls.push(await processImage(file)); } catch (e) {} } setFormData(prev => ({ ...prev, contentImages: [...prev.contentImages, ...newUrls] })); setIsProcessingImage(false); } };
@@ -1519,13 +1645,11 @@ function ProductFormModal({ categories, swatches = [], existingData, onClose, on
           <div className="mb-4">
              <label className="block text-xs font-bold text-zinc-500 uppercase mb-2">Related Spaces</label>
              <div className="flex flex-wrap gap-2 mb-2">{SPACES.map(space => (<button key={space.id} type="button" onClick={() => toggleSpace(space.id)} className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-colors flex items-center ${formData.spaces.includes(space.id) ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-500 border-zinc-200 hover:border-zinc-400'}`}>{formData.spaces.includes(space.id) && <Check className="w-3 h-3 mr-1.5" />}{space.label}</button>))}</div>
-             {/* Space Tags Selection if in Space View */}
              {spaceTags.length > 0 && (<div className="p-3 bg-zinc-50 rounded-lg border border-zinc-100"><label className="block text-[10px] font-bold text-zinc-400 uppercase mb-2">Detailed Space Tags</label><div className="flex flex-wrap gap-2">{spaceTags.map(tag => (<button key={tag} type="button" onClick={() => toggleSpaceTag(tag)} className={`px-2 py-1 rounded text-[10px] font-bold border ${formData.spaceTags.includes(tag) ? 'bg-blue-50 text-blue-600 border-blue-200' : 'bg-white text-zinc-500 border-zinc-200'}`}>{tag}</button>))}</div></div>)}
           </div>
 
           <div className="grid grid-cols-2 gap-6"><div><label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Name</label><input required className="w-full border p-2 rounded-lg" value={formData.name} onChange={e=>setFormData({...formData, name: e.target.value})}/></div><div><label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Category</label><select className="w-full border p-2 rounded-lg" value={formData.category} onChange={e=>setFormData({...formData, category: e.target.value})}>{categories.map(c=><option key={c.id} value={c.id}>{c.label}</option>)}</select></div></div>
           
-          {/* Launch Date: Year Only */}
           <div className="grid grid-cols-2 gap-6">
              <div><label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Launch Year</label><input type="number" min="1900" max="2099" step="1" className="w-full border p-2 rounded-lg" value={formData.launchDate} onChange={e=>setFormData({...formData, launchDate: e.target.value})}/></div>
              <div><label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Designer</label><input className="w-full border p-2 rounded-lg" value={formData.designer} onChange={e=>setFormData({...formData, designer: e.target.value})}/></div>
@@ -1564,10 +1688,6 @@ function ProductFormModal({ categories, swatches = [], existingData, onClose, on
     </div>
   );
 }
-
-// ... (SwatchSelector, SceneEditModal, etc. remain largely the same logic, reused) ...
-// For brevity, maintaining the previously provided helper components.
-// Ensuring no code is omitted in the logic required for v0.6.3 features.
 
 function SwatchSelector({ label, selected, swatches, onChange }) {
   const [isOpen, setIsOpen] = useState(false);
@@ -1658,6 +1778,108 @@ function SwatchSelector({ label, selected, swatches, onChange }) {
              </div>
           </div>
        )}
+    </div>
+  );
+}
+
+function SpaceProductManager({ spaceId, products, onClose, onToggle }) {
+  const [filter, setFilter] = useState('');
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[80] flex items-center justify-center p-4">
+      <div className="bg-white w-full max-w-3xl rounded-2xl overflow-hidden shadow-2xl flex flex-col max-h-[85vh]">
+        <div className="px-6 py-4 border-b border-zinc-100 flex justify-between items-center bg-indigo-50"><div><h3 className="text-lg font-bold text-indigo-900">Manage Products</h3><p className="text-xs text-indigo-600">Select products to display in {spaceId}</p></div><button onClick={onClose}><X className="w-5 h-5 text-indigo-400" /></button></div>
+        <div className="p-4 border-b border-zinc-100"><input type="text" placeholder="Filter products..." className="w-full px-4 py-2 bg-zinc-50 rounded-lg border border-zinc-200 text-sm focus:outline-none focus:border-indigo-500" value={filter} onChange={(e) => setFilter(e.target.value)} /></div>
+        <div className="flex-1 overflow-y-auto p-4 grid grid-cols-1 md:grid-cols-2 gap-3 custom-scrollbar">{products.filter(p => p.name.toLowerCase().includes(filter.toLowerCase())).map(product => { const isAdded = product.spaces && product.spaces.includes(spaceId); return (<div key={product.id} className={`flex items-center p-3 rounded-xl border cursor-pointer transition-all ${isAdded ? 'border-indigo-500 bg-indigo-50' : 'border-zinc-200 hover:border-zinc-300'}`} onClick={() => onToggle(product.id, !isAdded)}><div className={`w-5 h-5 rounded border flex items-center justify-center mr-3 ${isAdded ? 'bg-indigo-500 border-indigo-500' : 'bg-white border-zinc-300'}`}>{isAdded && <Check className="w-3.5 h-3.5 text-white" />}</div>{product.images?.[0] && <img src={product.images[0]} className="w-10 h-10 rounded-lg object-cover mr-3" />}<div><div className="text-sm font-bold text-zinc-900">{product.name}</div><div className="text-xs text-zinc-500">{product.category}</div></div></div>); })}</div>
+      </div>
+    </div>
+  );
+}
+
+function SceneEditModal({ initialData, allProducts, onClose, onSave, onDelete }) {
+  const [data, setData] = useState({ id: null, title: '', description: '', image: null, images: [], productIds: [] });
+  const [filter, setFilter] = useState('');
+  const mainInputRef = useRef(null);
+  const galleryInputRef = useRef(null);
+  
+  useEffect(() => {
+    if(initialData && !initialData.isNew) {
+      setData({ 
+        id: initialData.id, title: initialData.title || '', description: initialData.description || '', image: initialData.image || null, images: initialData.images || [], productIds: initialData.productIds || [] 
+      });
+    }
+  }, [initialData]);
+
+  const processImage = (file) => { return new Promise((resolve) => { const reader = new FileReader(); reader.onload = (e) => { const img = new Image(); img.onload = () => { const canvas = document.createElement('canvas'); const MAX_WIDTH = 1200; let width = img.width; let height = img.height; if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; } canvas.width = width; canvas.height = height; const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0, width, height); resolve(canvas.toDataURL('image/jpeg', 0.8)); }; img.src = e.target.result; }; reader.readAsDataURL(file); }); };
+  const handleMainImage = async (e) => { const file = e.target.files[0]; if (file) { const imageUrl = await processImage(file); setData(prev => ({ ...prev, image: imageUrl })); } };
+  const handleGalleryUpload = async (e) => { const files = Array.from(e.target.files); if(files.length > 0) { const newUrls = []; for(const file of files) { try { newUrls.push(await processImage(file)); } catch(e) {} } setData(prev => ({ ...prev, images: [...prev.images, ...newUrls] })); } };
+  const toggleProduct = (pid) => { setData(prev => { const ids = prev.productIds || []; return ids.includes(pid) ? { ...prev, productIds: ids.filter(id => id !== pid) } : { ...prev, productIds: [...ids, pid] }; }); };
+
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[80] flex items-center justify-center p-4">
+      <div className="bg-white w-full max-w-2xl rounded-2xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
+         <div className="px-6 py-4 border-b border-zinc-100 flex justify-between items-center bg-white z-10">
+            <h3 className="text-lg font-bold text-zinc-900">{initialData.isNew ? 'New Scene' : 'Edit Scene'}</h3>
+            <button onClick={onClose}><X className="w-5 h-5 text-zinc-400"/></button>
+         </div>
+         <div className="flex-1 overflow-y-auto p-6 space-y-8 bg-zinc-50">
+            <div className="space-y-4">
+              <div><label className="block text-xs font-bold text-zinc-500 uppercase mb-2">Main Image</label><div onClick={() => mainInputRef.current.click()} className="w-full h-48 bg-white rounded-xl flex items-center justify-center cursor-pointer border border-dashed border-zinc-300 overflow-hidden relative hover:border-zinc-400 transition-colors shadow-sm">{data.image ? <img src={data.image} className="w-full h-full object-cover" /> : <div className="flex flex-col items-center text-zinc-400"><ImagePlus className="w-8 h-8 mb-2"/><span className="text-xs">Upload Main</span></div>}</div><input type="file" ref={mainInputRef} className="hidden" accept="image/*" onChange={handleMainImage} /></div>
+              <div>
+                 <div className="flex justify-between items-center mb-2"><label className="block text-xs font-bold text-zinc-500 uppercase">Additional Images</label><button type="button" onClick={() => galleryInputRef.current.click()} className="text-[10px] bg-white border px-2 py-1 rounded hover:bg-zinc-100">+ Add</button><input type="file" ref={galleryInputRef} multiple className="hidden" accept="image/*" onChange={handleGalleryUpload} /></div>
+                 {data.images.length > 0 && <div className="grid grid-cols-5 gap-2">{data.images.map((img, i) => (<div key={i} className="relative aspect-square rounded-lg overflow-hidden group border border-zinc-200"><img src={img} className="w-full h-full object-cover" /><button onClick={() => setData(prev => ({...prev, images: prev.images.filter((_, idx) => idx !== i)}))} className="absolute top-0.5 right-0.5 bg-red-500 text-white p-0.5 rounded-full opacity-0 group-hover:opacity-100"><X className="w-3 h-3"/></button></div>))}</div>}
+              </div>
+              <div className="grid grid-cols-1 gap-4">
+                <div><label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Title</label><input className="w-full border border-zinc-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-zinc-900 outline-none" value={data.title} onChange={e=>setData({...data, title: e.target.value})} placeholder="e.g. Modern Office Lounge" /></div>
+                <div><label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Description</label><textarea className="w-full border border-zinc-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-zinc-900 outline-none" rows={2} value={data.description} onChange={e=>setData({...data, description: e.target.value})} placeholder="Short description..." /></div>
+              </div>
+            </div>
+            <div className="pt-6 border-t border-zinc-200">
+               <div className="flex justify-between items-end mb-3"><div><h4 className="text-sm font-bold text-zinc-900">Related Products</h4><p className="text-[10px] text-zinc-500">Select products visible in this scene</p></div><span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded-full">{data.productIds.length} selected</span></div>
+               <div className="bg-white rounded-xl border border-zinc-200 overflow-hidden shadow-sm">
+                  <div className="p-2 border-b border-zinc-100 bg-zinc-50/50"><div className="flex items-center bg-white border border-zinc-200 rounded-lg px-2"><Search className="w-4 h-4 text-zinc-400 mr-2"/><input className="w-full py-2 text-xs outline-none bg-transparent" placeholder="Search product name..." value={filter} onChange={e => setFilter(e.target.value)} /></div></div>
+                  <div className="h-48 overflow-y-auto p-2 space-y-1 custom-scrollbar">{allProducts.filter(p => p.name.toLowerCase().includes(filter.toLowerCase())).map(p => { const isSelected = data.productIds.includes(p.id); return (<div key={p.id} onClick={() => toggleProduct(p.id)} className={`flex items-center p-2 rounded-lg cursor-pointer transition-colors ${isSelected ? 'bg-indigo-50 border border-indigo-100' : 'hover:bg-zinc-50 border border-transparent'}`}><div className={`w-4 h-4 rounded border flex items-center justify-center mr-3 flex-shrink-0 ${isSelected ? 'bg-indigo-500 border-indigo-500' : 'bg-white border-zinc-300'}`}>{isSelected && <Check className="w-3 h-3 text-white"/>}</div>{p.images?.[0] && <img src={p.images[0]} className="w-8 h-8 rounded object-cover mr-3 bg-zinc-100" />}<div className="min-w-0"><div className={`text-xs font-bold truncate ${isSelected ? 'text-indigo-900' : 'text-zinc-700'}`}>{p.name}</div><div className="text-[10px] text-zinc-400 truncate">{p.category}</div></div></div>) })}</div>
+               </div>
+            </div>
+         </div>
+         <div className="px-6 py-4 border-t border-zinc-100 bg-white flex justify-between items-center z-10">
+            {!initialData.isNew ? <button onClick={()=>onDelete(data.id)} className="text-red-500 text-xs font-bold flex items-center hover:bg-red-50 px-2 py-1 rounded"><Trash2 className="w-3.5 h-3.5 mr-1"/> Delete Scene</button> : <div></div>}
+            <div className="flex space-x-3"><button onClick={onClose} className="px-4 py-2 border border-zinc-300 text-zinc-600 rounded-lg text-sm font-bold hover:bg-zinc-50">Cancel</button><button onClick={()=>onSave(data)} className="px-6 py-2 bg-zinc-900 text-white rounded-lg text-sm font-bold hover:bg-black shadow-md">Save Scene</button></div>
+         </div>
+      </div>
+    </div>
+  );
+}
+
+function SpaceSceneModal({ scene, products, allProducts, isAdmin, onClose, onEdit, onProductToggle, onNavigateProduct }) {
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const images = scene.images ? [scene.image, ...scene.images] : [scene.image];
+  const [isProductManagerOpen, setProductManagerOpen] = useState(false);
+  const [productFilter, setProductFilter] = useState('');
+
+  return (
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[60] flex items-center justify-center p-0 md:p-6 animate-in zoom-in-95 duration-200 print:hidden">
+      <div className="bg-white w-full h-full md:h-[90vh] md:max-w-6xl md:rounded-3xl overflow-hidden shadow-2xl flex flex-col md:flex-row relative">
+         <button onClick={onClose} className="absolute top-4 right-4 z-50 p-2 bg-black/20 text-white hover:bg-black/50 rounded-full backdrop-blur"><X className="w-6 h-6"/></button>
+         <div className="w-full md:w-2/3 bg-black relative flex flex-col justify-center h-[40vh] md:h-full">
+            <img src={images[currentImageIndex]} className="w-full h-full object-contain" alt="Scene" />
+            {images.length > 1 && (<div className="absolute bottom-4 left-0 right-0 flex justify-center space-x-2 px-4">{images.map((_, idx) => (<button key={idx} onClick={() => setCurrentImageIndex(idx)} className={`w-2 h-2 rounded-full transition-all ${currentImageIndex === idx ? 'bg-white w-6' : 'bg-white/40 hover:bg-white/80'}`} />))}</div>)}
+         </div>
+         <div className="w-full md:w-1/3 bg-white flex flex-col border-l border-zinc-100 h-[60vh] md:h-full relative">
+            <div className="p-6 md:p-8 border-b border-zinc-50">
+               <div className="flex justify-between items-start mb-4"><div><h2 className="text-2xl md:text-3xl font-black text-zinc-900 mb-2">{scene.title}</h2><p className="text-zinc-500 text-sm leading-relaxed">{scene.description}</p></div>{isAdmin && <button onClick={onEdit} className="p-2 text-zinc-400 hover:text-zinc-900"><Edit3 className="w-5 h-5"/></button>}</div>
+            </div>
+            <div className="flex-1 overflow-y-auto p-6 md:p-8 custom-scrollbar bg-zinc-50/50">
+               <div className="flex justify-between items-center mb-4"><h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Tagged Products</h3>{isAdmin && <button onClick={() => setProductManagerOpen(!isProductManagerOpen)} className="text-xs font-bold text-indigo-600 hover:text-indigo-800">+ Add Tag</button>}</div>
+               {isAdmin && isProductManagerOpen && (
+                 <div className="mb-4 bg-white p-3 rounded-xl border border-indigo-100 shadow-sm animate-in slide-in-from-top-2">
+                    <input type="text" placeholder="Search to tag..." className="w-full text-xs p-2 bg-zinc-50 rounded-lg border border-zinc-200 mb-2 outline-none focus:border-indigo-500" value={productFilter} onChange={(e) => setProductFilter(e.target.value)} />
+                    <div className="max-h-32 overflow-y-auto space-y-1 custom-scrollbar">{allProducts.filter(p => p.name.toLowerCase().includes(productFilter.toLowerCase())).map(p => { const isTagged = scene.productIds?.includes(p.id); return (<div key={p.id} onClick={() => onProductToggle(p.id, !isTagged)} className={`flex items-center p-1.5 rounded cursor-pointer ${isTagged ? 'bg-indigo-50 text-indigo-700' : 'hover:bg-zinc-50'}`}><div className={`w-3 h-3 border rounded mr-2 flex items-center justify-center ${isTagged ? 'bg-indigo-500 border-indigo-500' : 'border-zinc-300'}`}>{isTagged && <Check className="w-2 h-2 text-white"/>}</div><span className="text-xs truncate">{p.name}</span></div>) })}</div>
+                 </div>
+               )}
+               <div className="space-y-3">{products.length > 0 ? products.map(product => (<div key={product.id} onClick={() => onNavigateProduct(product)} className="flex items-center p-3 bg-white rounded-xl border border-zinc-100 shadow-sm hover:border-zinc-300 transition-all cursor-pointer group"><div className="w-12 h-12 bg-zinc-50 rounded-lg flex-shrink-0 flex items-center justify-center mr-3 overflow-hidden">{product.images?.[0] ? <img src={product.images[0]} className="w-full h-full object-cover" /> : <ImageIcon className="w-5 h-5 text-zinc-300"/>}</div><div className="flex-1 min-w-0"><h4 className="text-sm font-bold text-zinc-900 truncate group-hover:text-blue-600">{product.name}</h4><p className="text-xs text-zinc-500">{product.category}</p></div><ChevronRight className="w-4 h-4 text-zinc-300 group-hover:text-zinc-600"/></div>)) : (<div className="text-center py-8 text-zinc-400 text-xs">연관된 제품이 없습니다.</div>)}</div>
+            </div>
+         </div>
+      </div>
     </div>
   );
 }
