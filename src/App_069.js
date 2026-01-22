@@ -11,7 +11,7 @@ import {
   ChevronsUp, Camera, ImagePlus, Sofa, Briefcase, Users, Home as HomeIcon, MapPin,
   Edit3, Grid, MoreVertical, MousePointer2, CheckSquare, XCircle, Printer, List, Eye,
   PlayCircle, BarChart3, CornerUpLeft, Grid3X3, Droplet, Coffee, GraduationCap, ShoppingBag, FileDown, FileUp,
-  ArrowLeftRight, SlidersHorizontal, Move, Monitor, Maximize, EyeOff
+  ArrowLeftRight, SlidersHorizontal, Move, Monitor
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { 
@@ -37,7 +37,7 @@ const YOUR_FIREBASE_CONFIG = {
 // ----------------------------------------------------------------------
 // 상수 및 설정
 // ----------------------------------------------------------------------
-const APP_VERSION = "v0.7.1"; 
+const APP_VERSION = "v0.6.9"; 
 const BUILD_DATE = "2026.01.22";
 const ADMIN_PASSWORD = "adminlcg1"; 
 
@@ -131,7 +131,7 @@ export default function App() {
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [selectedSwatch, setSelectedSwatch] = useState(null);
   const [compareList, setCompareList] = useState([]);
-  const [hiddenCompareIds, setHiddenCompareIds] = useState([]); // Compare Page Toggle
+  const [isCompareModalOpen, setIsCompareModalOpen] = useState(false);
 
   // Edit & Admin
   const [isFormOpen, setIsFormOpen] = useState(false); 
@@ -182,15 +182,8 @@ export default function App() {
 
   useEffect(() => {
     const handlePopState = (event) => {
-      // Logic to handle back button for layered modals and views
-      if (selectedSwatch && selectedProduct) {
-          setSelectedSwatch(null); 
-          window.history.pushState({ modal: 'product' }, '', window.location.pathname + '?id=' + selectedProduct.id);
-      } else if (selectedProduct) {
+      if (selectedProduct) {
         setSelectedProduct(null);
-        window.history.replaceState(null, '', window.location.pathname);
-      } else if (activeCategory === 'COMPARE_PAGE') {
-        setActiveCategory('DASHBOARD');
         window.history.replaceState(null, '', window.location.pathname);
       } else if (activeCategory !== 'DASHBOARD') {
         setActiveCategory('DASHBOARD');
@@ -199,13 +192,13 @@ export default function App() {
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
-  }, [selectedProduct, selectedSwatch, activeCategory]);
+  }, [selectedProduct, activeCategory]);
 
   useEffect(() => {
     if (selectedProduct) {
       const url = new URL(window.location);
       url.searchParams.set('id', selectedProduct.id);
-      window.history.pushState({ modal: 'product' }, '', url);
+      window.history.pushState({ modal: true }, '', url);
     }
   }, [selectedProduct]);
 
@@ -325,19 +318,11 @@ export default function App() {
     if(e) e.stopPropagation();
     if(compareList.find(p => p.id === product.id)) {
         setCompareList(compareList.filter(p => p.id !== product.id));
-        setHiddenCompareIds(prev => prev.filter(id => id !== product.id)); // Also remove from hidden
     } else {
-        if(compareList.length >= 8) { showToast("비교함에는 최대 8개까지 담을 수 있습니다.", "error"); return; }
+        if(compareList.length >= 4) { showToast("비교는 최대 4개까지 가능합니다.", "error"); return; }
         setCompareList([...compareList, product]);
     }
   };
-  const toggleCompareVisibility = (id) => {
-      setHiddenCompareIds(prev => {
-          if (prev.includes(id)) return prev.filter(hid => hid !== id);
-          else return [...prev, id];
-      });
-  };
-
   const processImage = (file) => {
     return new Promise((resolve) => {
       const reader = new FileReader();
@@ -409,49 +394,8 @@ export default function App() {
   const fetchLogs = async () => { if (!isFirebaseAvailable || !db) return; const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'logs'), orderBy('timestamp', 'desc'), limit(100)); onSnapshot(q, (snapshot) => { setActivityLogs(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))); }); };
   const handleSaveSwatch = async (swatchData) => { const docId = swatchData.id ? String(swatchData.id) : String(Date.now()); const payload = { ...swatchData, id: docId, updatedAt: Date.now() }; if (isFirebaseAvailable && db) { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'swatches', docId), payload, { merge: true }); } else { const idx = swatches.findIndex(s => s.id === docId); let newSwatches = [...swatches]; if (idx >= 0) newSwatches[idx] = payload; else newSwatches = [payload, ...newSwatches]; saveSwatchesToLocal(newSwatches); } showToast("마감재가 저장되었습니다."); };
   const handleDeleteSwatch = async (swatchId) => { if (!window.confirm("정말 삭제하시겠습니까?")) return; if (isFirebaseAvailable && db) { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'swatches', String(swatchId))); } else { saveSwatchesToLocal(swatches.filter(s => s.id !== swatchId)); } showToast("마감재가 삭제되었습니다."); };
-  const handleSaveProduct = async (productData) => { 
-      const docId = productData.id ? String(productData.id) : String(Date.now()); 
-      const isEdit = !!productData.id && products.some(p => String(p.id) === docId); 
-      const payload = { 
-          ...productData, 
-          id: docId, 
-          updatedAt: Date.now(), 
-          createdAt: isEdit ? (products.find(p => String(p.id) === docId)?.createdAt || Date.now()) : Date.now(), 
-          orderIndex: isEdit ? (products.find(p => String(p.id) === docId)?.orderIndex || Date.now()) : Date.now() 
-      }; 
-      
-      if (isFirebaseAvailable && db) { 
-          try { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'products', docId), payload, { merge: true }); } 
-          catch (error) { showToast("저장 실패", "error"); return; } 
-      } else { 
-          const idx = products.findIndex(p => String(p.id) === docId); 
-          let newProducts = [...products]; 
-          if (idx >= 0) newProducts[idx] = payload; else newProducts = [payload, ...products]; 
-          saveToLocalStorage(newProducts); 
-      } 
-      
-      // Update local compare list if the product is being compared
-      setCompareList(prev => prev.map(p => p.id === docId ? payload : p));
-
-      if (selectedProduct && String(selectedProduct.id) === docId) setSelectedProduct(payload); 
-      setIsFormOpen(false); 
-      setEditingProduct(null); 
-      showToast(isEdit ? "수정 완료" : "등록 완료"); 
-  };
-  const handleDeleteProduct = async (productId, productName) => { 
-      if (!window.confirm('정말 삭제하시겠습니까?')) return; 
-      if (isFirebaseAvailable && db) { 
-          try { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'products', String(productId))); await logActivity("DELETE", productName, "삭제됨"); } 
-          catch (error) { showToast("삭제 실패", "error"); return; } 
-      } else { 
-          const newProducts = products.filter(p => String(p.id) !== String(productId)); saveToLocalStorage(newProducts); 
-      } 
-      
-      setCompareList(prev => prev.filter(p => p.id !== productId));
-      setSelectedProduct(null); 
-      setIsFormOpen(false); 
-      showToast("삭제되었습니다."); 
-  };
+  const handleSaveProduct = async (productData) => { const docId = productData.id ? String(productData.id) : String(Date.now()); const isEdit = !!productData.id && products.some(p => String(p.id) === docId); const payload = { ...productData, id: docId, updatedAt: Date.now(), createdAt: isEdit ? (products.find(p => String(p.id) === docId)?.createdAt || Date.now()) : Date.now(), orderIndex: isEdit ? (products.find(p => String(p.id) === docId)?.orderIndex || Date.now()) : Date.now() }; if (isFirebaseAvailable && db) { try { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'products', docId), payload, { merge: true }); } catch (error) { showToast("저장 실패", "error"); return; } } else { const idx = products.findIndex(p => String(p.id) === docId); let newProducts = [...products]; if (idx >= 0) newProducts[idx] = payload; else newProducts = [payload, ...products]; saveToLocalStorage(newProducts); } if (selectedProduct && String(selectedProduct.id) === docId) setSelectedProduct(payload); setIsFormOpen(false); setEditingProduct(null); showToast(isEdit ? "수정 완료" : "등록 완료"); };
+  const handleDeleteProduct = async (productId, productName) => { if (!window.confirm('정말 삭제하시겠습니까?')) return; if (isFirebaseAvailable && db) { try { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'products', String(productId))); await logActivity("DELETE", productName, "삭제됨"); } catch (error) { showToast("삭제 실패", "error"); return; } } else { const newProducts = products.filter(p => String(p.id) !== String(productId)); saveToLocalStorage(newProducts); } setSelectedProduct(null); setIsFormOpen(false); showToast("삭제되었습니다."); };
   
   // --- Duplication Logic ---
   const handleDuplicateProduct = async (product) => {
@@ -472,7 +416,7 @@ export default function App() {
   const getProcessedProducts = () => {
     let filtered = products.filter(product => {
       let matchesCategory = true;
-      if (activeCategory === 'DASHBOARD' || activeCategory === 'COMPARE_PAGE') matchesCategory = false; 
+      if (activeCategory === 'DASHBOARD') matchesCategory = false; 
       else if (activeCategory === 'MY_PICK') matchesCategory = favorites.includes(product.id);
       else if (activeCategory === 'NEW') matchesCategory = product.isNew;
       else if (activeCategory === 'ALL') matchesCategory = true;
@@ -569,7 +513,7 @@ export default function App() {
             <div className="relative w-full max-w-md group"><Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-zinc-400 w-4 h-4 group-focus-within:text-zinc-800 transition-colors" /><input type="text" placeholder="Search..." value={searchTerm} onChange={(e) => { setSearchTerm(e.target.value); if (activeCategory === 'DASHBOARD' && e.target.value) setActiveCategory('ALL'); }} className="w-full pl-10 pr-4 py-2 bg-zinc-50/50 border border-transparent focus:bg-white focus:border-zinc-200 focus:ring-4 focus:ring-zinc-50 rounded-full text-sm transition-all outline-none" /></div>
           </div>
           <div className="flex items-center space-x-2">
-             {compareList.length > 0 && <button onClick={() => setActiveCategory('COMPARE_PAGE')} className={`flex items-center px-3 py-1.5 rounded-full text-xs font-bold animate-in fade-in transition-all mr-2 shadow-lg ${activeCategory === 'COMPARE_PAGE' ? 'bg-black text-white ring-2 ring-zinc-200' : 'bg-zinc-900 text-white hover:bg-black'}`}><ArrowLeftRight className="w-3 h-3 mr-1.5"/> Compare ({compareList.length})</button>}
+             {compareList.length > 0 && <button onClick={() => setIsCompareModalOpen(true)} className="flex items-center px-3 py-1.5 bg-zinc-900 text-white rounded-full text-xs font-bold animate-in fade-in hover:bg-black mr-2 shadow-lg"><ArrowLeftRight className="w-3 h-3 mr-1.5"/> Compare ({compareList.length})</button>}
              <button onClick={() => setIsFilterOpen(!isFilterOpen)} className={`p-2 rounded-full transition-all ${isFilterOpen ? 'bg-zinc-200 text-black' : 'hover:bg-zinc-100 text-zinc-500'}`} title="Filters"><SlidersHorizontal className="w-5 h-5" /></button>
              <button onClick={() => setActiveCategory('MY_PICK')} className={`hidden md:flex p-2 rounded-full transition-all items-center space-x-1 ${activeCategory === 'MY_PICK' ? 'bg-yellow-100 text-yellow-600' : 'hover:bg-zinc-100 text-zinc-400 hover:text-zinc-600'}`} title="My Pick"><Heart className={`w-5 h-5 ${activeCategory === 'MY_PICK' ? 'fill-yellow-500 text-yellow-500' : ''}`} /></button>
              <div className="flex items-center bg-zinc-100 rounded-lg p-1">
@@ -592,15 +536,6 @@ export default function App() {
         <div ref={mainContentRef} className="flex-1 overflow-y-auto p-4 md:p-8 custom-scrollbar relative print:overflow-visible print:p-0">
           {activeCategory === 'DASHBOARD' && !searchTerm ? (
             <DashboardView products={products} favorites={favorites} setActiveCategory={setActiveCategory} setSelectedProduct={setSelectedProduct} isAdmin={isAdmin} bannerData={bannerData} onBannerUpload={handleBannerUpload} onLogoUpload={handleLogoUpload} onBannerTextChange={handleBannerTextChange} onSaveBannerText={saveBannerText} />
-          ) : activeCategory === 'COMPARE_PAGE' ? (
-            <CompareView 
-                products={compareList} 
-                hiddenIds={hiddenCompareIds}
-                onToggleVisibility={toggleCompareVisibility}
-                onRemove={(id) => setCompareList(prev => prev.filter(p => p.id !== id))}
-                onEdit={(product) => { setEditingProduct(product); setIsFormOpen(true); }}
-                isAdmin={isAdmin}
-            />
           ) : (
             <>
               {SPACES.find(s => s.id === activeCategory) && (
@@ -652,6 +587,34 @@ export default function App() {
 
       {toast && <div className="fixed bottom-8 right-8 bg-zinc-900 text-white px-5 py-3.5 rounded-xl shadow-2xl flex items-center space-x-3 animate-in slide-in-from-bottom-10 fade-in z-[90] print:hidden">{toast.type === 'success' ? <Check className="w-5 h-5 text-green-400" /> : <Info className="w-5 h-5 text-red-400" />}<span className="text-sm font-bold tracking-wide">{toast.message}</span></div>}
       
+      {isCompareModalOpen && (
+         <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[100] flex items-center justify-center p-4 animate-in zoom-in-95">
+            <div className="bg-white w-full max-w-6xl h-[80vh] rounded-3xl overflow-hidden shadow-2xl flex flex-col relative">
+               <div className="flex justify-between items-center p-6 border-b">
+                  <h3 className="text-xl font-black">Compare Products</h3>
+                  <button onClick={() => setIsCompareModalOpen(false)}><X className="w-6 h-6"/></button>
+               </div>
+               <div className="flex-1 overflow-auto p-6 grid grid-cols-2 md:grid-cols-4 gap-4">
+                  {compareList.map(p => (
+                     <div key={p.id} className="border border-zinc-200 rounded-xl p-4 flex flex-col">
+                        <div className="aspect-[4/3] bg-zinc-50 rounded-lg mb-4 flex items-center justify-center overflow-hidden">
+                           {p.images?.[0] ? <img src={p.images[0]} className="w-full h-full object-cover" /> : <ImageIcon/>}
+                        </div>
+                        <h4 className="font-bold text-lg mb-1">{p.name}</h4>
+                        <span className="text-xs text-zinc-500 mb-4">{p.category}</span>
+                        <div className="space-y-2 text-xs flex-1">
+                           <p><span className="font-bold text-zinc-400 block">Designer</span>{p.designer}</p>
+                           <p><span className="font-bold text-zinc-400 block">Launch</span>{p.launchDate}</p>
+                           <p><span className="font-bold text-zinc-400 block">Specs</span>{p.specs}</p>
+                        </div>
+                        <button onClick={() => setCompareList(compareList.filter(item=>item.id!==p.id))} className="mt-4 w-full py-2 bg-zinc-100 hover:bg-zinc-200 rounded-lg text-xs font-bold">Remove</button>
+                     </div>
+                  ))}
+               </div>
+            </div>
+         </div>
+      )}
+
       {selectedProduct && (
         <ProductDetailModal 
           product={selectedProduct} 
@@ -669,7 +632,7 @@ export default function App() {
           onNavigateSpace={(spaceId) => { setSelectedProduct(null); setActiveCategory(spaceId); }} 
           onNavigateScene={(scene) => { setSelectedProduct(null); setActiveCategory(scene.spaceId || scene.id); setSelectedScene({...scene, spaceId: scene.spaceId || 'UNKNOWN'}); }}
           onNavigateProduct={(product) => setSelectedProduct(product)}
-          onNavigateSwatch={(swatch) => { setSelectedSwatch(swatch); /* Don't close product modal, just open swatch on top */ }}
+          onNavigateSwatch={(swatch) => { setSelectedProduct(null); setSelectedSwatch(swatch); }}
         />
       )}
       
@@ -799,112 +762,6 @@ export default function App() {
 // Helper Components
 // ----------------------------------------------------------------------
 
-function CompareView({ products, hiddenIds, onToggleVisibility, onRemove, onEdit, isAdmin }) {
-    const visibleProducts = products.filter(p => !hiddenIds.includes(p.id));
-
-    return (
-        <div className="animate-in fade-in h-full flex flex-col">
-            <div className="bg-white border-b border-zinc-200 p-4 sticky top-0 z-20 shadow-sm flex items-center gap-4 overflow-x-auto custom-scrollbar">
-                <span className="text-sm font-bold text-zinc-500 uppercase flex-shrink-0 mr-2">Visibility</span>
-                {products.map(p => (
-                    <label key={p.id} className="flex items-center space-x-2 text-xs font-bold bg-zinc-50 px-3 py-1.5 rounded-lg border border-zinc-200 cursor-pointer hover:bg-zinc-100 flex-shrink-0">
-                        <input 
-                            type="checkbox" 
-                            checked={!hiddenIds.includes(p.id)} 
-                            onChange={() => onToggleVisibility(p.id)}
-                            className="rounded text-zinc-900 focus:ring-zinc-900"
-                        />
-                        <span className={`truncate max-w-[100px] ${hiddenIds.includes(p.id) ? 'text-zinc-400 line-through' : 'text-zinc-800'}`}>{p.name}</span>
-                    </label>
-                ))}
-            </div>
-
-            <div className="flex-1 overflow-auto bg-white relative">
-                <table className="w-full table-fixed border-collapse">
-                    <thead>
-                        <tr>
-                            <th className="w-32 bg-zinc-50 border-b border-r border-zinc-100 p-4 text-left text-xs font-bold text-zinc-400 uppercase sticky top-0 left-0 z-30 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">Feature</th>
-                            {visibleProducts.map(p => (
-                                <th key={p.id} className="w-72 bg-white border-b border-r border-zinc-100 p-4 align-top sticky top-0 z-10">
-                                    <div className="relative group">
-                                        <div className="aspect-[4/3] bg-zinc-50 rounded-xl mb-4 flex items-center justify-center overflow-hidden border border-zinc-100 relative">
-                                            {p.images?.[0] ? <img src={p.images[0]} className="w-full h-full object-cover mix-blend-multiply" /> : <ImageIcon className="text-zinc-300"/>}
-                                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors"></div>
-                                        </div>
-                                        <h4 className="font-bold text-lg text-zinc-900 mb-1">{p.name}</h4>
-                                        <button onClick={() => onRemove(p.id)} className="absolute top-0 right-0 bg-white rounded-full p-1.5 shadow-sm hover:text-red-500 border border-zinc-100"><X className="w-4 h-4"/></button>
-                                    </div>
-                                </th>
-                            ))}
-                            {/* Empty Placeholders to keep layout if few items */}
-                            {visibleProducts.length < 4 && Array(4 - visibleProducts.length).fill(0).map((_, i) => <th key={`ph-${i}`} className="w-72 bg-zinc-50/10 border-b border-zinc-50"></th>)}
-                        </tr>
-                    </thead>
-                    <tbody className="text-sm">
-                        <tr>
-                            <td className="bg-zinc-50 border-r border-b border-zinc-100 p-4 font-bold text-zinc-500 sticky left-0 z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">Category</td>
-                            {visibleProducts.map(p => <td key={p.id} className="border-r border-b border-zinc-100 p-4 text-zinc-700 font-medium">{p.category}</td>)}
-                            {visibleProducts.length < 4 && Array(4 - visibleProducts.length).fill(0).map((_, i) => <td key={i} className="border-b border-zinc-50"></td>)}
-                        </tr>
-                        <tr>
-                            <td className="bg-zinc-50 border-r border-b border-zinc-100 p-4 font-bold text-zinc-500 sticky left-0 z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">Designer</td>
-                            {visibleProducts.map(p => <td key={p.id} className="border-r border-b border-zinc-100 p-4 text-zinc-700">{p.designer || '-'}</td>)}
-                            {visibleProducts.length < 4 && Array(4 - visibleProducts.length).fill(0).map((_, i) => <td key={i} className="border-b border-zinc-50"></td>)}
-                        </tr>
-                        <tr>
-                            <td className="bg-zinc-50 border-r border-b border-zinc-100 p-4 font-bold text-zinc-500 sticky left-0 z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">Launch Year</td>
-                            {visibleProducts.map(p => <td key={p.id} className="border-r border-b border-zinc-100 p-4 text-zinc-700">{p.launchDate ? p.launchDate.substring(0,4) : '-'}</td>)}
-                            {visibleProducts.length < 4 && Array(4 - visibleProducts.length).fill(0).map((_, i) => <td key={i} className="border-b border-zinc-50"></td>)}
-                        </tr>
-                        <tr>
-                            <td className="bg-zinc-50 border-r border-b border-zinc-100 p-4 font-bold text-zinc-500 sticky left-0 z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">Specs</td>
-                            {visibleProducts.map(p => <td key={p.id} className="border-r border-b border-zinc-100 p-4 text-zinc-600 text-xs leading-relaxed whitespace-pre-wrap">{p.specs}</td>)}
-                            {visibleProducts.length < 4 && Array(4 - visibleProducts.length).fill(0).map((_, i) => <td key={i} className="border-b border-zinc-50"></td>)}
-                        </tr>
-                        <tr>
-                            <td className="bg-zinc-50 border-r border-b border-zinc-100 p-4 font-bold text-zinc-500 sticky left-0 z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">Options</td>
-                            {visibleProducts.map(p => (
-                                <td key={p.id} className="border-r border-b border-zinc-100 p-4">
-                                    <div className="flex flex-wrap gap-1">
-                                        {p.options?.map((opt, i) => <span key={i} className="px-2 py-0.5 bg-blue-50 text-blue-700 rounded text-[10px] font-bold border border-blue-100">{opt}</span>)}
-                                    </div>
-                                </td>
-                            ))}
-                            {visibleProducts.length < 4 && Array(4 - visibleProducts.length).fill(0).map((_, i) => <td key={i} className="border-b border-zinc-50"></td>)}
-                        </tr>
-                        <tr>
-                            <td className="bg-zinc-50 border-r border-b border-zinc-100 p-4 font-bold text-zinc-500 sticky left-0 z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">Colors</td>
-                            {visibleProducts.map(p => (
-                                <td key={p.id} className="border-r border-b border-zinc-100 p-4">
-                                    <div className="flex flex-wrap gap-1">
-                                        {[...(p.bodyColors||[]), ...(p.upholsteryColors||[])].map((c, i) => <SwatchDisplay key={i} color={c} size="small"/>)}
-                                    </div>
-                                </td>
-                            ))}
-                            {visibleProducts.length < 4 && Array(4 - visibleProducts.length).fill(0).map((_, i) => <td key={i} className="border-b border-zinc-50"></td>)}
-                        </tr>
-                        
-                        {/* Edit Row for Admins */}
-                        {isAdmin && (
-                            <tr>
-                                <td className="bg-zinc-50 border-r border-b border-zinc-100 p-4 font-bold text-zinc-500 sticky left-0 z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">Actions</td>
-                                {visibleProducts.map(p => (
-                                    <td key={p.id} className="border-r border-b border-zinc-100 p-4 text-center">
-                                        <button onClick={() => onEdit(p)} className="px-4 py-2 bg-zinc-900 text-white text-xs font-bold rounded-lg hover:bg-black transition-colors flex items-center justify-center w-full">
-                                            <Edit2 className="w-3 h-3 mr-2"/> Edit Product
-                                        </button>
-                                    </td>
-                                ))}
-                                {visibleProducts.length < 4 && Array(4 - visibleProducts.length).fill(0).map((_, i) => <td key={i} className="border-b border-zinc-50"></td>)}
-                            </tr>
-                        )}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    );
-}
-
 function SwatchDisplay({ color, size = 'medium', className = '', onClick }) {
   const isObject = typeof color === 'object' && color !== null;
   const hex = isObject ? color.hex : color;
@@ -913,6 +770,7 @@ function SwatchDisplay({ color, size = 'medium', className = '', onClick }) {
   const type = isObject ? color.textureType : 'SOLID';
   const sizeClass = size === 'large' ? 'w-10 h-10' : size === 'small' ? 'w-4 h-4' : 'w-6 h-6';
 
+  // Better Light Color Detection
   const isLight = hex && (
      hex.toLowerCase() === '#ffffff' || 
      hex.toLowerCase() === '#fff' || 
@@ -920,6 +778,12 @@ function SwatchDisplay({ color, size = 'medium', className = '', onClick }) {
      hex.toLowerCase().startsWith('#e')
   );
   
+  const getStyle = () => {
+     if(image) return { backgroundImage: `url(${image})`, backgroundSize: 'cover' };
+     if(type === 'GRADATION' && isObject && color.description) return { background: color.description }; // Assume description holds CSS gradient for now
+     return { backgroundColor: hex };
+  };
+
   return (
     <div className={`group relative inline-block ${className} ${onClick ? 'cursor-pointer' : ''}`} title={name} onClick={onClick}>
        <div className={`${sizeClass} rounded-full overflow-hidden flex items-center justify-center bg-zinc-50 box-border`} style={{boxShadow: isLight ? 'inset 0 0 0 1px rgba(0,0,0,0.15)' : 'inset 0 0 0 1px rgba(0,0,0,0.05)'}}>
@@ -939,6 +803,7 @@ function SwatchManager({ category, swatches, isAdmin, onSave, onDelete, onSelect
   const [editingSwatch, setEditingSwatch] = useState(null);
   const [activeTag, setActiveTag] = useState('ALL');
 
+  // Extract all unique tags
   const allTags = Array.from(new Set(swatches.flatMap(s => s.tags || []))).sort();
 
   const handleCardClick = (swatch) => { onSelect(swatch); };
@@ -1027,10 +892,12 @@ function SwatchDetailModal({ swatch, allProducts, swatches, onClose, onNavigateP
         return inBody || inUph;
     });
 
+    // Swipe Logic
     const currentIdx = swatches.findIndex(s => s.id === swatch.id);
     const handleNext = () => { if(currentIdx < swatches.length - 1) onNavigateSwatch(swatches[currentIdx + 1]); };
     const handlePrev = () => { if(currentIdx > 0) onNavigateSwatch(swatches[currentIdx - 1]); };
     
+    // Touch Logic
     const touchStart = useRef(null);
     const handleTouchStart = (e) => { touchStart.current = e.targetTouches[0].clientX; };
     const handleTouchEnd = (e) => {
@@ -1041,7 +908,7 @@ function SwatchDetailModal({ swatch, allProducts, swatches, onClose, onNavigateP
     };
 
     return (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[150] flex items-center justify-center md:p-4 animate-in zoom-in-95 duration-200" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[90] flex items-center justify-center md:p-4 animate-in zoom-in-95 duration-200" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
             <div className="bg-white w-full h-full md:h-auto md:max-w-4xl rounded-none md:rounded-3xl overflow-hidden shadow-2xl flex flex-col md:flex-row md:max-h-[90vh] relative">
                 <div className="absolute top-4 right-4 z-[100] flex gap-2">
                    {isAdmin && <button onClick={onEdit} className="p-2 bg-white/50 hover:bg-zinc-100 rounded-full backdrop-blur shadow-sm"><Edit3 className="w-6 h-6 text-zinc-900"/></button>}
@@ -1171,7 +1038,7 @@ function SwatchFormModal({ category, existingData, onClose, onSave }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[160] flex items-center justify-center p-4">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[90] flex items-center justify-center p-4">
        <div className="bg-white rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
           <div className="px-5 py-4 border-b border-zinc-100 font-bold text-lg flex-shrink-0">
              {existingData ? 'Edit Material' : 'Add Material'}
@@ -1243,11 +1110,14 @@ function PieChartComponent({ data, total, selectedIndex, onSelect }) {
   let cumulativePercent = 0;
   const radius = 0.7; 
 
+  const sortedData = [...data]; 
+  
   return (
     <div className="relative w-full h-full flex items-center justify-center">
       <svg viewBox="-1.2 -1.2 2.4 2.4" className="w-full h-full transform -rotate-90">
         {data.map((item, idx) => {
            const percent = item.count / total;
+           
            const startAngle = cumulativePercent * 2 * Math.PI;
            cumulativePercent += percent;
            const endAngle = cumulativePercent * 2 * Math.PI;
@@ -1263,7 +1133,7 @@ function PieChartComponent({ data, total, selectedIndex, onSelect }) {
            const isSelected = selectedIndex === idx;
            const isHovered = hoveredIndex === idx;
            const midAngle = startAngle + (endAngle - startAngle) / 2;
-           const explodeDist = isSelected ? 0.15 : (isHovered ? 0.05 : 0); 
+           const explodeDist = isSelected ? 0.2 : (isHovered ? 0.05 : 0); 
            const tx = Math.cos(midAngle) * explodeDist;
            const ty = Math.sin(midAngle) * explodeDist;
 
@@ -1287,34 +1157,6 @@ function PieChartComponent({ data, total, selectedIndex, onSelect }) {
         })}
       </svg>
       
-      {/* Labels Outside */}
-      {data.map((item, idx) => {
-          let prevPercent = 0;
-          for(let i=0; i<idx; i++) prevPercent += data[i].count/total;
-          const percent = item.count/total;
-          const midPercent = prevPercent + percent/2;
-          const angleRad = (midPercent * 2 * Math.PI) - (Math.PI / 2); 
-          
-          const labelRadius = 1.05; 
-          const lx = Math.cos(angleRad) * labelRadius;
-          const ly = Math.sin(angleRad) * labelRadius;
-          
-          if(percent < 0.03) return null; 
-
-          return (
-             <div 
-                key={`label-${item.id}`} 
-                className="absolute text-[9px] font-bold text-zinc-500 pointer-events-none whitespace-nowrap"
-                style={{ 
-                    left: '50%', top: '50%', 
-                    transform: `translate(calc(-50% + ${lx * 140}px), calc(-50% + ${ly * 140}px))` 
-                }}
-             >
-                {item.label}
-             </div>
-          );
-      })}
-
       <div className="absolute inset-0 flex items-center justify-center flex-col pointer-events-none transition-all duration-300">
          {selectedIndex !== null ? (
             <>
@@ -1345,25 +1187,6 @@ function DashboardView({ products, favorites, setActiveCategory, setSelectedProd
   const logoInputRef = useRef(null);
 
   const [selectedSlice, setSelectedSlice] = useState(null);
-
-  // Helper for Selected Slice Data
-  const getSelectedSliceDetails = () => {
-      if(selectedSlice === null) return null;
-      const catId = chartData[selectedSlice].id;
-      const catProducts = products.filter(p => p.category === catId);
-      
-      const years = [...new Set(catProducts.map(p => p.launchDate ? p.launchDate.substring(0,4) : 'Unknown'))].sort().join(', ');
-      const awardCount = catProducts.reduce((acc, curr) => acc + (curr.awards?.length || 0), 0);
-      const uniqueColors = new Set();
-      catProducts.forEach(p => {
-          (p.bodyColors || []).forEach(c => uniqueColors.add(typeof c === 'object' ? c.hex : c));
-          (p.upholsteryColors || []).forEach(c => uniqueColors.add(typeof c === 'object' ? c.hex : c));
-      });
-
-      return { products: catProducts, years, awardCount, uniqueColors: Array.from(uniqueColors) };
-  };
-
-  const sliceDetails = getSelectedSliceDetails();
 
   return (
     <div className="max-w-7xl mx-auto space-y-6 md:space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20 print:hidden" onClick={() => setSelectedSlice(null)}>
@@ -1442,49 +1265,21 @@ function DashboardView({ products, favorites, setActiveCategory, setSelectedProd
               </div>
               <div className="flex-1 w-full">
                  {selectedSlice !== null ? (
-                    <div className="animate-in fade-in slide-in-from-left-4 h-full flex flex-col justify-center">
-                        <div className="flex items-center gap-3 mb-4 pb-2 border-b border-zinc-100">
+                    <div className="animate-in fade-in slide-in-from-left-4">
+                        <div className="flex items-center gap-3 mb-6 pb-4 border-b border-zinc-100">
                              <div className="w-4 h-4 rounded-full" style={{backgroundColor: chartData[selectedSlice].color}}></div>
                              <h4 className="text-2xl font-black text-zinc-900">{chartData[selectedSlice].label}</h4>
-                             <button onClick={() => setActiveCategory(chartData[selectedSlice].id)} className="ml-auto text-xs font-bold text-blue-600 hover:underline flex items-center">Explore <ArrowRight className="w-3 h-3 ml-1"/></button>
+                             <button onClick={() => setActiveCategory(chartData[selectedSlice].id)} className="ml-auto text-xs font-bold text-blue-600 hover:underline">View All &rarr;</button>
                         </div>
-                        
-                        <div className="grid grid-cols-2 gap-4 mb-6">
-                           <div className="bg-zinc-50 p-3 rounded-xl border border-zinc-100">
-                              <span className="text-[10px] text-zinc-400 uppercase font-bold block mb-1">Products</span>
-                              <span className="text-xl font-black text-zinc-900">{chartData[selectedSlice].count}</span>
+                        <div className="grid grid-cols-2 gap-4">
+                           <div className="bg-zinc-50 p-4 rounded-xl">
+                              <span className="text-xs text-zinc-500 uppercase font-bold block mb-1">Total Items</span>
+                              <span className="text-2xl font-bold text-zinc-900">{chartData[selectedSlice].count}</span>
                            </div>
-                           <div className="bg-zinc-50 p-3 rounded-xl border border-zinc-100">
-                              <span className="text-[10px] text-zinc-400 uppercase font-bold block mb-1">New Arrivals</span>
-                              <span className="text-xl font-black text-zinc-900">{sliceDetails.products.filter(p=>p.isNew).length}</span>
+                           <div className="bg-zinc-50 p-4 rounded-xl">
+                              <span className="text-xs text-zinc-500 uppercase font-bold block mb-1">New Items</span>
+                              <span className="text-2xl font-bold text-zinc-900">{products.filter(p => p.category === chartData[selectedSlice].id && p.isNew).length}</span>
                            </div>
-                           <div className="bg-zinc-50 p-3 rounded-xl border border-zinc-100">
-                              <span className="text-[10px] text-zinc-400 uppercase font-bold block mb-1">Total Awards</span>
-                              <span className="text-xl font-black text-zinc-900">{sliceDetails.awardCount}</span>
-                           </div>
-                           <div className="bg-zinc-50 p-3 rounded-xl border border-zinc-100">
-                              <span className="text-[10px] text-zinc-400 uppercase font-bold block mb-1">Since</span>
-                              <span className="text-xs font-bold text-zinc-900 truncate" title={sliceDetails.years}>{sliceDetails.years.substring(0,12)}...</span>
-                           </div>
-                        </div>
-
-                        <div className="mb-4">
-                            <span className="text-xs text-zinc-400 uppercase font-bold block mb-2">Palette Preview</span>
-                            <div className="flex flex-wrap gap-1">
-                                {sliceDetails.uniqueColors.slice(0, 10).map((c, i) => (
-                                    <div key={i} className="w-4 h-4 rounded-full border border-zinc-200" style={{backgroundColor: c}}></div>
-                                ))}
-                                {sliceDetails.uniqueColors.length > 10 && <span className="text-[9px] text-zinc-400">+{sliceDetails.uniqueColors.length - 10}</span>}
-                            </div>
-                        </div>
-
-                        <div className="flex-1 overflow-y-auto max-h-40 custom-scrollbar bg-zinc-50 p-3 rounded-xl border border-zinc-100">
-                            <span className="text-[10px] text-zinc-400 uppercase font-bold block mb-2 sticky top-0 bg-zinc-50">Product List</span>
-                            <div className="grid grid-cols-2 gap-2">
-                                {sliceDetails.products.map(p => (
-                                    <div key={p.id} className="text-xs truncate text-zinc-600 hover:text-black cursor-pointer" onClick={() => setSelectedProduct(p)}>• {p.name}</div>
-                                ))}
-                            </div>
                         </div>
                     </div>
                  ) : (
@@ -1525,8 +1320,7 @@ function DashboardView({ products, favorites, setActiveCategory, setSelectedProd
             {recentUpdates.length > 0 ? recentUpdates.map(product => (
                <div key={product.id} onClick={() => setSelectedProduct(product)} className="flex flex-col p-3 rounded-xl border border-zinc-100 hover:border-zinc-300 hover:bg-zinc-50 cursor-pointer transition-all group">
                   <div className="aspect-[4/3] bg-zinc-100 rounded-lg flex items-center justify-center overflow-hidden border border-zinc-200 mb-2 relative">
-                     {/* Multiple Mix Blend Mode Overlay */}
-                     <div className="absolute inset-0 bg-zinc-100/50 mix-blend-multiply z-10 pointer-events-none"></div>
+                     <div className="absolute inset-0 bg-zinc-100/10 z-10"></div>
                      {product.images?.[0] ? <img src={product.images[0]} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" alt="" /> : <ImageIcon className="w-6 h-6 text-zinc-300"/>}
                   </div>
                   <h4 className="text-xs font-bold text-zinc-900 truncate">{product.name}</h4>
@@ -1610,8 +1404,8 @@ function ProductCard({ product, onClick, showMoveControls, onMove, isFavorite, o
   return (
     <div onClick={onClick} className="bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer group border border-zinc-100 relative flex flex-col h-full print:break-inside-avoid print:shadow-none print:border-zinc-200">
       <div className="relative aspect-[4/3] bg-zinc-50 flex items-center justify-center overflow-hidden">
-        {/* Light Gray Overlay with Multiply Blend Mode */}
-        <div className="absolute inset-0 bg-zinc-100/30 mix-blend-multiply pointer-events-none z-10"></div>
+        {/* Light Gray Overlay on Image */}
+        <div className="absolute inset-0 bg-zinc-100/30 pointer-events-none z-10"></div>
 
         <div className="absolute top-2 left-2 flex flex-wrap gap-1.5 z-20 items-start max-w-[80%]">
            {product.isNew && <span className="bg-black text-white text-[8px] font-extrabold px-1.5 py-0.5 rounded shadow-sm tracking-wide">NEW</span>}
@@ -1711,8 +1505,7 @@ function ProductDetailModal({ product, allProducts, swatches, spaceContents, onC
   const handleSwatchClick = (e, color) => {
       e.stopPropagation();
       const rect = e.currentTarget.getBoundingClientRect();
-      const code = typeof color === 'object' ? color.materialCode || 'NO CODE' : color;
-      const name = typeof color === 'object' ? color.name : '';
+      const code = typeof color === 'object' ? color.materialCode || color.name : color;
       
       const swatchId = typeof color === 'object' ? color.id : null;
       const foundSwatch = swatches.find(s => s.id === swatchId) || (typeof color === 'object' ? color : null);
@@ -1721,7 +1514,6 @@ function ProductDetailModal({ product, allProducts, swatches, spaceContents, onC
           x: rect.left,
           y: rect.top,
           code: code,
-          name: name,
           swatchObj: foundSwatch
       });
   };
@@ -1746,13 +1538,13 @@ function ProductDetailModal({ product, allProducts, swatches, spaceContents, onC
 
       {swatchPopup && (
           <div 
-             className="fixed z-[130] bg-black/60 backdrop-blur-md text-white px-4 py-3 rounded-xl shadow-2xl cursor-pointer hover:bg-black/80 transition-colors border border-white/10"
-             style={{ top: swatchPopup.y - 60, left: swatchPopup.x, transform: 'translateX(-50%)' }}
+             className="fixed z-[130] bg-zinc-900 text-white text-xs px-3 py-2 rounded-lg shadow-xl cursor-pointer hover:bg-black transition-colors"
+             style={{ top: swatchPopup.y - 40, left: swatchPopup.x, transform: 'translateX(-50%)' }}
              onClick={(e) => { e.stopPropagation(); navigateToSwatch(); }}
           >
-              <div className="text-lg font-black tracking-tight leading-none mb-1">{swatchPopup.code}</div>
-              <div className="text-[10px] font-medium text-white/70">{swatchPopup.name}</div>
-              <div className="absolute bottom-[-6px] left-1/2 -translate-x-1/2 w-3 h-3 bg-black/60 backdrop-blur-md border-r border-b border-white/10 rotate-45"></div>
+              <div className="font-bold mb-0.5">{swatchPopup.code}</div>
+              <div className="text-[9px] text-zinc-400">Click for Detail</div>
+              <div className="absolute bottom-[-4px] left-1/2 -translate-x-1/2 w-2 h-2 bg-zinc-900 rotate-45"></div>
           </div>
       )}
 
@@ -1774,7 +1566,7 @@ function ProductDetailModal({ product, allProducts, swatches, spaceContents, onC
         <div className="flex-1 overflow-y-auto custom-scrollbar flex flex-col md:flex-row h-full pb-safe print:overflow-visible print:h-auto">
           <div className="w-full md:w-1/2 bg-zinc-50 p-6 md:p-8 flex flex-col border-b md:border-b-0 md:border-r border-zinc-100 md:sticky md:top-0 print:static print:bg-white print:border-none">
             <div className="flex-1 w-full bg-white rounded-2xl flex items-center justify-center shadow-sm border border-zinc-100 overflow-hidden p-8 mb-4 relative group min-h-[300px] print:shadow-none print:border-zinc-200">
-               {currentImage ? (<img src={currentImage} alt="Main" className="w-full h-full object-contain cursor-zoom-in mix-blend-multiply" onClick={() => setIsZoomed(true)} />) : <ImageIcon className="w-20 h-20 opacity-20 text-zinc-400" />}
+               {currentImage ? (<><img src={currentImage} alt="Main" className="w-full h-full object-contain cursor-zoom-in mix-blend-multiply" onClick={() => setIsZoomed(true)} /><div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity print:hidden"><div className="bg-black/80 backdrop-blur text-white px-4 py-2 rounded-full text-xs font-bold flex items-center"><Maximize2 className="w-4 h-4 mr-2"/> ZOOM</div></div></>) : <ImageIcon className="w-20 h-20 opacity-20 text-zinc-400" />}
                <button onClick={onToggleFavorite} className="absolute top-4 left-4 p-3 bg-white rounded-full shadow-sm border border-zinc-100 hover:border-zinc-300 transition-all hidden md:flex print:hidden"><Star className={`w-5 h-5 ${isFavorite ? 'text-yellow-400 fill-yellow-400' : 'text-zinc-300'}`} /></button>
             </div>
             {images.length > 0 && (<div className="flex space-x-2 md:space-x-3 overflow-x-auto custom-scrollbar pb-1 px-1 print:hidden">{images.map((img, idx) => (<button key={idx} onClick={() => setCurrentImageIndex(idx)} className={`flex-shrink-0 w-10 h-10 md:w-20 md:h-20 rounded-lg md:rounded-xl overflow-hidden border-2 transition-all ${currentImageIndex === idx ? 'border-zinc-900 ring-2 ring-zinc-200' : 'border-transparent opacity-60 hover:opacity-100 bg-white'}`}><img src={img} alt={`Thumbnail ${idx}`} className="w-full h-full object-cover" /></button>))}</div>)}
@@ -1933,7 +1725,7 @@ function ProductFormModal({ categories, swatches = [], allProducts = [], existin
   const isEditMode = !!existingData;
   const fileInputRef = useRef(null);
   const contentInputRef = useRef(null);
-  const defaultCategory = (initialCategory && !['ALL','NEW','MY_PICK','DASHBOARD','COMPARE_PAGE'].includes(initialCategory) && !SPACES.find(s=>s.id===initialCategory)) ? initialCategory : 'EXECUTIVE';
+  const defaultCategory = (initialCategory && !['ALL','NEW','MY_PICK','DASHBOARD'].includes(initialCategory) && !SPACES.find(s=>s.id===initialCategory)) ? initialCategory : 'EXECUTIVE';
   
   const [formData, setFormData] = useState({ 
     id: null, name: '', category: defaultCategory, specs: '', designer: '',
@@ -1994,7 +1786,7 @@ function ProductFormModal({ categories, swatches = [], allProducts = [], existin
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[180] flex items-center justify-center p-4">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[70] flex items-center justify-center p-4">
       <div className="bg-white w-full max-w-3xl rounded-2xl overflow-hidden shadow-2xl flex flex-col max-h-[95vh] animate-in slide-in-from-bottom-4 duration-200">
         <div className="px-8 py-5 border-b border-zinc-100 flex justify-between items-center">
           <h2 className="text-xl font-bold text-zinc-900">{isEditMode ? 'Edit Product' : 'New Product'}</h2>
@@ -2091,7 +1883,7 @@ function SwatchSelector({ label, selected, swatches, onChange }) {
          id: swatch.id, name: swatch.name, hex: swatch.hex, image: swatch.image, 
          category: swatch.category, textureType: swatch.textureType 
      };
-     // Check if ID already exists in selected
+     // Check if ID already exists in selected (handling mixed legacy data of strings vs objects)
      if(!selected.find(s => (typeof s === 'object' ? s.id === swatch.id : false))) {
         onChange([...selected, snapshot]);
      }
