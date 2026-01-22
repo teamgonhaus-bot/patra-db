@@ -131,8 +131,8 @@ export default function App() {
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [selectedSwatch, setSelectedSwatch] = useState(null);
   const [compareList, setCompareList] = useState([]);
-  const [isCompareModalOpen, setIsCompareModalOpen] = useState(false); // Legacy modal check
   const [hiddenCompareIds, setHiddenCompareIds] = useState([]); 
+  const [isCompareModalOpen, setIsCompareModalOpen] = useState(false);
 
   // Edit & Admin
   const [isFormOpen, setIsFormOpen] = useState(false); 
@@ -1643,6 +1643,7 @@ function ProductCard({ product, onClick, showMoveControls, onMove, isFavorite, o
 }
 
 function ProductDetailModal({ product, allProducts, swatches, spaceContents, onClose, onEdit, isAdmin, showToast, isFavorite, onToggleFavorite, onNavigateSpace, onNavigateScene, onNavigateNext, onNavigatePrev, onNavigateProduct, onNavigateSwatch }) {
+  // 1. Declare all Hooks at the top level unconditionally
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [isZoomed, setIsZoomed] = useState(false);
   const canvasRef = useRef(null);
@@ -1655,8 +1656,10 @@ function ProductDetailModal({ product, allProducts, swatches, spaceContents, onC
       return () => window.removeEventListener('click', closePopup);
   }, []);
 
+  // 2. Early return check
   if (!product) return null;
 
+  // 3. Derived data & Handlers
   const handleTouchStart = (e) => { touchStart.current = e.targetTouches[0].clientX; };
   const handleTouchEnd = (e) => {
      if(!touchStart.current) return;
@@ -2377,7 +2380,7 @@ function SceneEditModal({ initialData, allProducts, spaceTags = [], spaceOptions
                <div className="flex justify-between items-end mb-3"><div><h4 className="text-sm font-bold text-zinc-900">Related Products</h4><p className="text-[10px] text-zinc-500">Select products visible in this scene</p></div><span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded-full">{data.productIds.length} selected</span></div>
                <div className="bg-white rounded-xl border border-zinc-200 overflow-hidden shadow-sm">
                   <div className="p-2 border-b border-zinc-100 bg-zinc-50/50"><div className="flex items-center bg-white border border-zinc-200 rounded-lg px-2"><Search className="w-4 h-4 text-zinc-400 mr-2"/><input className="w-full py-2 text-xs outline-none bg-transparent" placeholder="Search product name..." value={filter} onChange={e => setFilter(e.target.value)} /></div></div>
-                  <div className="h-48 overflow-y-auto p-2 space-y-1 custom-scrollbar">{allProducts.filter(p => p.name.toLowerCase().includes(filter.toLowerCase())).map(p => { const isSelected = data.productIds.includes(p.id); return (<div key={p.id} onClick={() => toggleProduct(p.id)} className={`flex items-center p-2 rounded-lg cursor-pointer transition-colors ${isSelected ? 'bg-indigo-50 border border-indigo-100' : 'hover:bg-zinc-50 border border-transparent'}`}><div className={`w-4 h-4 rounded border flex items-center justify-center mr-3 flex-shrink-0 ${isSelected ? 'bg-indigo-500 border-indigo-500' : 'bg-white border-zinc-300'}`}>{isSelected && <Check className="w-3 h-3 text-white"/>}</div>{p.images?.[0] && <img src={typeof p.images[0] === 'object' ? p.images[0].url : p.images[0]} className="w-8 h-8 rounded object-cover mr-3 bg-zinc-100" />}<div className="min-w-0"><div className={`text-xs font-bold truncate ${isSelected ? 'text-indigo-900' : 'text-zinc-700'}`}>{p.name}</div><div className="text-[10px] text-zinc-400 truncate">{p.category}</div></div></div>) })}</div>
+                  <div className="h-48 overflow-y-auto p-2 space-y-1 custom-scrollbar">{allProducts.filter(p => p.name.toLowerCase().includes(filter.toLowerCase())).map(p => { const isSelected = data.productIds.includes(p.id); return (<div key={p.id} onClick={() => toggleProduct(p.id)} className={`flex items-center p-2 rounded-lg cursor-pointer transition-colors ${isSelected ? 'bg-indigo-50 border border-indigo-100' : 'hover:bg-zinc-50 border border-transparent'}`}><div className={`w-4 h-4 rounded border flex items-center justify-center mr-3 flex-shrink-0 ${isSelected ? 'bg-indigo-500 border-indigo-500' : 'bg-white border-zinc-300'}`}>{isSelected && <Check className="w-3 h-3 text-white"/>}</div>{p.images?.[0] && <img src={p.images[0]} className="w-8 h-8 rounded object-cover mr-3 bg-zinc-100" />}<div className="min-w-0"><div className={`text-xs font-bold truncate ${isSelected ? 'text-indigo-900' : 'text-zinc-700'}`}>{p.name}</div><div className="text-[10px] text-zinc-400 truncate">{p.category}</div></div></div>) })}</div>
                </div>
             </div>
          </div>
