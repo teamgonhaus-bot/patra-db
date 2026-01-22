@@ -11,7 +11,7 @@ import {
   ChevronsUp, Camera, ImagePlus, Sofa, Briefcase, Users, Home as HomeIcon, MapPin,
   Edit3, Grid, MoreVertical, MousePointer2, CheckSquare, XCircle, Printer, List, Eye,
   PlayCircle, BarChart3, CornerUpLeft, Grid3X3, Droplet, Coffee, GraduationCap, ShoppingBag, FileDown, FileUp,
-  ArrowLeftRight, SlidersHorizontal, Move
+  ArrowLeftRight, SlidersHorizontal
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { 
@@ -37,7 +37,7 @@ const YOUR_FIREBASE_CONFIG = {
 // ----------------------------------------------------------------------
 // 상수 및 설정
 // ----------------------------------------------------------------------
-const APP_VERSION = "v0.6.8"; 
+const APP_VERSION = "v0.6.7"; 
 const BUILD_DATE = "2026.01.22";
 const ADMIN_PASSWORD = "adminlcg1"; 
 
@@ -102,15 +102,15 @@ const SPACES = [
   },
 ];
 
-// 스와치(마감재) 정의 (V0.6.8: STEEL -> METAL, ETC 추가)
+// 스와치(마감재) 정의 - v0.6.7 개편
 const SWATCH_CATEGORIES = [
   { id: 'MESH', label: 'Mesh', color: '#a1a1aa' },
   { id: 'FABRIC', label: 'Fabric', color: '#a1a1aa' },
   { id: 'LEATHER', label: 'Leather', color: '#78350f' },
   { id: 'RESIN', label: 'Resin', color: '#27272a' },
-  { id: 'METAL', label: 'Metal', color: '#64748b' },
+  { id: 'METAL', label: 'Metal', color: '#64748b' }, // Changed from STEEL
   { id: 'WOOD', label: 'Wood', color: '#92400e' },
-  { id: 'ETC', label: 'Etc', color: '#9ca3af' },
+  { id: 'ETC', label: 'Etc', color: '#9ca3af' }, // Added
 ];
 
 export default function App() {
@@ -345,49 +345,7 @@ export default function App() {
   const saveBannerText = async () => { if (isFirebaseAvailable && db) { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'banner'), bannerData, { merge: true }); showToast("배너 문구가 저장되었습니다."); } };
   const handleSpaceBannerUpload = async (e, spaceId) => { if (!isAdmin) return; const file = e.target.files[0]; if (!file) return; try { const resizedImage = await processImage(file); const currentContent = spaceContents[spaceId] || {}; const newContent = { ...currentContent, banner: resizedImage }; if (isFirebaseAvailable && db) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'space_contents', spaceId), newContent, { merge: true }); showToast("공간 배너가 업데이트되었습니다."); } catch (error) { showToast("이미지 처리 실패", "error"); } };
   const handleSpaceInfoSave = async (spaceId, info) => { const currentContent = spaceContents[spaceId] || {}; const newContent = { ...currentContent, ...info }; if (isFirebaseAvailable && db) { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'space_contents', spaceId), newContent, { merge: true }); } showToast("공간 정보가 저장되었습니다."); };
-  
-  // V 0.6.8: Handle Scene Save including moving between spaces
-  const handleSceneSave = async (targetSpaceId, sceneData) => { 
-      let originalSpaceId = targetSpaceId;
-      let isMove = false;
-      if(sceneData.id) {
-          for(const [sId, content] of Object.entries(spaceContents)) {
-              if(content.scenes?.some(s => s.id === sceneData.id)) {
-                  originalSpaceId = sId;
-                  break;
-              }
-          }
-      }
-      if(originalSpaceId !== targetSpaceId && sceneData.id) {
-          isMove = true;
-      }
-
-      const targetContent = spaceContents[targetSpaceId] || { scenes: [] };
-      let targetScenes = [...(targetContent.scenes || [])];
-      
-      if(isMove) {
-          const originalContent = spaceContents[originalSpaceId] || { scenes: [] };
-          const originalScenes = (originalContent.scenes || []).filter(s => s.id !== sceneData.id);
-          if (isFirebaseAvailable && db) { 
-              await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'space_contents', originalSpaceId), { scenes: originalScenes }, { merge: true }); 
-          }
-          targetScenes.push(sceneData);
-      } else {
-          if (sceneData.id) {
-              const idx = targetScenes.findIndex(s => s.id === sceneData.id);
-              if (idx >= 0) targetScenes[idx] = sceneData; else targetScenes.push(sceneData); 
-          } else { 
-              sceneData.id = Date.now().toString(); 
-              targetScenes.push(sceneData); 
-          }
-      }
-
-      if (isFirebaseAvailable && db) { 
-          await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'space_contents', targetSpaceId), { scenes: targetScenes }, { merge: true }); 
-      } 
-      showToast(isMove ? "장면이 이동되었습니다." : "장면이 저장되었습니다."); 
-  };
-
+  const handleSceneSave = async (spaceId, sceneData) => { const currentContent = spaceContents[spaceId] || { scenes: [] }; let newScenes = [...(currentContent.scenes || [])]; if (sceneData.id) { const idx = newScenes.findIndex(s => s.id === sceneData.id); if (idx >= 0) newScenes[idx] = sceneData; else newScenes.push(sceneData); } else { sceneData.id = Date.now().toString(); newScenes.push(sceneData); } if (isFirebaseAvailable && db) { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'space_contents', spaceId), { scenes: newScenes }, { merge: true }); } showToast("장면(Scene)이 저장되었습니다."); };
   const handleSceneDelete = async (spaceId, sceneId) => { if(!window.confirm("이 장면을 삭제하시겠습니까?")) return; const currentContent = spaceContents[spaceId] || { scenes: [] }; const newScenes = (currentContent.scenes || []).filter(s => s.id !== sceneId); if (isFirebaseAvailable && db) { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'space_contents', spaceId), { scenes: newScenes }, { merge: true }); } showToast("장면이 삭제되었습니다."); };
   const handleSpaceProductToggle = async (spaceId, productId, isAdded) => { const product = products.find(p => p.id === productId); if(!product) return; let newSpaces = product.spaces || []; if(isAdded) { if(!newSpaces.includes(spaceId)) newSpaces.push(spaceId); } else { newSpaces = newSpaces.filter(s => s !== spaceId); } if (isFirebaseAvailable && db) { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'products', product.id), { spaces: newSpaces }, { merge: true }); } else { const idx = products.findIndex(p => p.id === productId); const newProds = [...products]; newProds[idx] = { ...product, spaces: newSpaces }; saveToLocalStorage(newProds); } };
   const logActivity = async (action, productName, details = "") => { if (!isFirebaseAvailable || !db) return; try { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'logs'), { action, productName, details, timestamp: Date.now(), adminId: 'admin' }); } catch (e) { console.error(e); } };
@@ -588,8 +546,8 @@ export default function App() {
                <div className="flex-1 overflow-auto p-6 grid grid-cols-2 md:grid-cols-4 gap-4">
                   {compareList.map(p => (
                      <div key={p.id} className="border border-zinc-200 rounded-xl p-4 flex flex-col">
-                        <div className="aspect-[4/3] bg-zinc-50 rounded-lg mb-4 flex items-center justify-center overflow-hidden">
-                           {p.images?.[0] ? <img src={p.images[0]} className="w-full h-full object-cover" /> : <ImageIcon/>}
+                        <div className="aspect-square bg-zinc-50 rounded-lg mb-4 flex items-center justify-center overflow-hidden">
+                           {p.images?.[0] ? <img src={p.images[0]} className="w-full h-full object-contain mix-blend-multiply" /> : <ImageIcon/>}
                         </div>
                         <h4 className="font-bold text-lg mb-1">{p.name}</h4>
                         <span className="text-xs text-zinc-500 mb-4">{p.category}</span>
@@ -681,7 +639,6 @@ export default function App() {
            initialData={editingScene} 
            allProducts={products}
            spaceTags={SPACES.find(s => s.id === editingScene.spaceId)?.defaultTags || (spaceContents[editingScene.spaceId]?.tags) || []}
-           spaceOptions={SPACES}
            onClose={() => setEditingScene(null)} 
            onSave={(data) => { handleSceneSave(editingScene.spaceId, data); setEditingScene(null); }} 
            onDelete={(id) => { handleSceneDelete(editingScene.spaceId, id); setEditingScene(null); }} 
@@ -753,17 +710,9 @@ function SwatchDisplay({ color, size = 'medium', className = '' }) {
   const name = isObject ? color.name : color;
   const sizeClass = size === 'large' ? 'w-10 h-10' : size === 'small' ? 'w-4 h-4' : 'w-6 h-6';
 
-  // Better Light Color Detection
-  const isLight = hex && (
-     hex.toLowerCase() === '#ffffff' || 
-     hex.toLowerCase() === '#fff' || 
-     hex.toLowerCase().startsWith('#f') || 
-     hex.toLowerCase().startsWith('#e')
-  );
-
   return (
     <div className={`group relative inline-block ${className}`} title={name}>
-       <div className={`${sizeClass} rounded-full overflow-hidden flex items-center justify-center bg-zinc-50 box-border`} style={{boxShadow: isLight ? 'inset 0 0 0 1px rgba(0,0,0,0.15)' : 'inset 0 0 0 1px rgba(0,0,0,0.05)'}}>
+       <div className={`${sizeClass} rounded-full overflow-hidden flex items-center justify-center bg-zinc-50 box-border`} style={{boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.1)'}}>
          {image ? (
             <img src={image} alt={name} className="w-full h-full object-cover scale-110" />
          ) : (
@@ -860,7 +809,7 @@ function SwatchDetailModal({ swatch, allProducts, onClose, onNavigateProduct, is
                 </div>
                 
                 <div className="w-full md:w-5/12 bg-zinc-50 flex items-center justify-center p-8 relative">
-                    <div className="w-48 h-48 md:w-64 md:h-64 rounded-full shadow-2xl overflow-hidden border-4 border-white ring-1 ring-black/5">
+                    <div className="w-48 h-48 md:w-64 md:h-64 rounded-full shadow-2xl overflow-hidden border-4 border-white">
                         {swatch.image ? (
                             <img src={swatch.image} className="w-full h-full object-cover scale-110" alt={swatch.name} />
                         ) : (
@@ -1020,38 +969,33 @@ function PieChartComponent({ data, total }) {
       <svg viewBox="-1.2 -1.2 2.4 2.4" className="w-full h-full transform -rotate-90">
         {data.map((item, idx) => {
            const percent = item.count / total;
+           const dashArray = 2 * Math.PI * radius; 
+           const dashOffset = dashArray * (1 - percent); 
            
-           // Calculate start/end angles
-           const startAngle = cumulativePercent * 2 * Math.PI;
-           cumulativePercent += percent;
-           const endAngle = cumulativePercent * 2 * Math.PI;
-
-           // SVG Path for Arc
-           const x1 = Math.cos(startAngle) * radius;
-           const y1 = Math.sin(startAngle) * radius;
-           const x2 = Math.cos(endAngle) * radius;
-           const y2 = Math.sin(endAngle) * radius;
+           const startRotation = (cumulativePercent - percent) * 360; 
+           cumulativePercent += percent; 
            
-           const largeArcFlag = percent > 0.5 ? 1 : 0;
-           const pathData = `M ${x1} ${y1} A ${radius} ${radius} 0 ${largeArcFlag} 1 ${x2} ${y2}`;
-
-           // Explode the largest slice logic
+           // Explode the largest slice
            const isLargest = item.count === maxVal;
-           const midAngle = startAngle + (endAngle - startAngle) / 2;
-           const explodeDist = isLargest ? 0.15 : 0; // Increased distance for clarity
-           const tx = Math.cos(midAngle) * explodeDist;
-           const ty = Math.sin(midAngle) * explodeDist;
-
-           const strokeWidth = isLargest ? 0.25 : 0.2; 
+           const strokeWidth = isLargest ? 0.38 : 0.3; 
+           
+           // Calculate translation for explosion effect
+           const midAngle = startRotation + (percent * 360) / 2;
+           const radian = (midAngle * Math.PI) / 180;
+           const explodeDist = isLargest ? 0.08 : 0;
+           const transX = Math.cos(radian) * explodeDist;
+           const transY = Math.sin(radian) * explodeDist;
 
            return (
              <React.Fragment key={item.id}>
-                <path
-                  d={pathData}
-                  fill="none"
+                <circle
+                  r={radius}
+                  cx="0" cy="0"
+                  fill="transparent"
                   stroke={item.color}
                   strokeWidth={strokeWidth}
-                  transform={`translate(${tx}, ${ty})`}
+                  strokeDasharray={`${dashArray * percent} ${dashArray * (1 - percent)}`}
+                  transform={`translate(${transX}, ${transY}) rotate(${startRotation + (percent*360)} 0 0)`}
                   className="transition-all duration-500 hover:opacity-80"
                   onMouseEnter={() => setHoveredIndex(idx)}
                   onMouseLeave={() => setHoveredIndex(null)}
@@ -1060,7 +1004,6 @@ function PieChartComponent({ data, total }) {
            );
         })}
       </svg>
-      {/* Label Rendering adjusted */}
       {data.map((item, idx) => {
          let prevPercent = 0;
          for(let i=0; i<idx; i++) prevPercent += data[i].count/total;
@@ -1200,8 +1143,7 @@ function DashboardView({ products, favorites, setActiveCategory, setSelectedProd
          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
             {recentUpdates.length > 0 ? recentUpdates.map(product => (
                <div key={product.id} onClick={() => setSelectedProduct(product)} className="flex flex-col p-3 rounded-xl border border-zinc-100 hover:border-zinc-300 hover:bg-zinc-50 cursor-pointer transition-all group">
-                  {/* V0.6.7 Fixed: object-cover for full fill */}
-                  <div className="aspect-[4/3] bg-zinc-100 rounded-lg flex items-center justify-center overflow-hidden border border-zinc-200 mb-2">
+                  <div className="aspect-square bg-zinc-100 rounded-lg flex items-center justify-center overflow-hidden border border-zinc-200 mb-2">
                      {product.images?.[0] ? <img src={product.images[0]} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" alt="" /> : <ImageIcon className="w-6 h-6 text-zinc-300"/>}
                   </div>
                   <h4 className="text-xs font-bold text-zinc-900 truncate">{product.name}</h4>
@@ -1284,7 +1226,7 @@ function ProductCard({ product, onClick, showMoveControls, onMove, isFavorite, o
   
   return (
     <div onClick={onClick} className="bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer group border border-zinc-100 relative flex flex-col h-full print:break-inside-avoid print:shadow-none print:border-zinc-200">
-      <div className="relative aspect-[4/3] bg-zinc-50 flex items-center justify-center overflow-hidden">
+      <div className="relative aspect-square bg-zinc-50 p-6 flex items-center justify-center overflow-hidden">
         <div className="absolute top-2 left-2 flex flex-wrap gap-1.5 z-10 items-start max-w-[80%]">
            {product.isNew && <span className="bg-black text-white text-[8px] font-extrabold px-1.5 py-0.5 rounded shadow-sm tracking-wide">NEW</span>}
         </div>
@@ -1316,7 +1258,7 @@ function ProductCard({ product, onClick, showMoveControls, onMove, isFavorite, o
         )}
       </div>
       
-      {/* V0.6.6 Refined Layout: Name(Top), Designer(Left), Category(Right) */}
+      {/* V0.6.7 Refined Layout: Name(Top), Designer(Left), Category(Right) */}
       <div className="p-4 flex-1 flex flex-col bg-white">
         <h3 className="text-sm font-extrabold text-zinc-900 leading-tight group-hover:text-blue-600 transition-colors line-clamp-1 mb-3">{product.name}</h3>
         
@@ -1502,11 +1444,7 @@ function ProductDetailModal({ product, spaceContents, onClose, onEdit, isAdmin, 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-50 flex items-center justify-center p-0 md:p-4 animate-in fade-in duration-200 print:fixed print:inset-0 print:z-[100] print:bg-white print:h-auto print:overflow-visible" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
       <canvas ref={canvasRef} style={{ display: 'none' }} />
-      {isZoomed && currentImage && (<div className="fixed inset-0 z-[120] bg-black/95 flex items-center justify-center p-8 cursor-zoom-out print:hidden" onClick={() => setIsZoomed(false)}><img src={currentImage} className="max-w-full max-h-full object-contain" alt="Zoomed" /><button className="absolute top-6 right-6 text-white/50 hover:text-white"><X className="w-10 h-10" /></button></div>)}
-      
-      {/* V0.6.7 Zoom for Content Image */}
-      {isZoomed && typeof isZoomed === 'string' && (<div className="fixed inset-0 z-[120] bg-black/95 flex items-center justify-center p-8 cursor-zoom-out print:hidden" onClick={() => setIsZoomed(false)}><img src={isZoomed} className="max-w-full max-h-full object-contain" alt="Zoomed Content" /><button className="absolute top-6 right-6 text-white/50 hover:text-white"><X className="w-10 h-10" /></button></div>)}
-
+      {isZoomed && currentImage && (<div className="fixed inset-0 z-[70] bg-black/95 flex items-center justify-center p-8 cursor-zoom-out print:hidden" onClick={() => setIsZoomed(false)}><img src={currentImage} className="max-w-full max-h-full object-contain" alt="Zoomed" /><button className="absolute top-6 right-6 text-white/50 hover:text-white"><X className="w-10 h-10" /></button></div>)}
       <div className="bg-white w-full h-full md:h-[90vh] md:w-full md:max-w-6xl md:rounded-3xl overflow-hidden shadow-2xl flex flex-col md:flex-row relative print:h-auto print:overflow-visible print:shadow-none print:rounded-none">
         
         {/* Top Right Controls: Edit & Close */}
@@ -1601,7 +1539,7 @@ function ProductDetailModal({ product, spaceContents, onClose, onEdit, isAdmin, 
                 )}
               </div>
 
-              {contentImages.length > 0 && (<div className="pt-8 border-t border-zinc-100 space-y-4"><h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Detail View</h3><div className="flex flex-col gap-4">{contentImages.map((img, idx) => (<img key={idx} src={img} alt={`Detail ${idx+1}`} className="w-full h-auto rounded-xl border border-zinc-100 print:border-none cursor-zoom-in" onClick={() => setIsZoomed(img)} />))}</div></div>)}
+              {contentImages.length > 0 && (<div className="pt-8 border-t border-zinc-100 space-y-4"><h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Detail View</h3><div className="flex flex-col gap-4">{contentImages.map((img, idx) => (<img key={idx} src={img} alt={`Detail ${idx+1}`} className="w-full h-auto rounded-xl border border-zinc-100 print:border-none" />))}</div></div>)}
 
               <div className="md:hidden mt-8 pt-8 border-t border-zinc-100 pb-10 print:hidden">
                  <div className="flex justify-center gap-4 mb-4">
@@ -1614,7 +1552,6 @@ function ProductDetailModal({ product, spaceContents, onClose, onEdit, isAdmin, 
                         <span className="text-[9px] font-bold">PDF</span>
                     </button>
                  </div>
-                 {isAdmin && <button onClick={onEdit} className="w-full h-12 bg-zinc-900 text-white rounded-xl text-sm font-bold shadow-lg active:scale-95 transition-transform">Edit Product</button>}
               </div>
 
             </div>
@@ -1624,7 +1561,6 @@ function ProductDetailModal({ product, spaceContents, onClose, onEdit, isAdmin, 
                  <button onClick={handleShareImage} className="flex items-center px-5 py-2.5 bg-zinc-100 text-zinc-600 rounded-xl text-sm font-bold hover:bg-zinc-200 transition-colors shadow-sm"><ImgIcon className="w-4 h-4 mr-2" /> Share Image</button>
                  <button onClick={() => window.print()} className="flex items-center px-5 py-2.5 bg-zinc-100 text-zinc-600 rounded-xl text-sm font-bold hover:bg-zinc-200 transition-colors shadow-sm"><Printer className="w-4 h-4 mr-2" /> Print PDF</button>
               </div>
-              {isAdmin && (<button onClick={onEdit} className="flex items-center px-6 py-2.5 bg-zinc-900 text-white rounded-xl text-sm font-bold hover:bg-black hover:shadow-lg transition-all"><Edit2 className="w-4 h-4 mr-2" /> Edit</button>)}
             </div>
           </div>
         </div>
@@ -1892,23 +1828,16 @@ function SpaceProductManager({ spaceId, products, onClose, onToggle }) {
   );
 }
 
-function SceneEditModal({ initialData, allProducts, spaceTags = [], spaceOptions = [], onClose, onSave, onDelete }) {
-  const [data, setData] = useState({ id: null, title: '', description: '', image: null, images: [], productIds: [], tags: [], spaceId: '' });
+function SceneEditModal({ initialData, allProducts, spaceTags = [], onClose, onSave, onDelete }) {
+  const [data, setData] = useState({ id: null, title: '', description: '', image: null, images: [], productIds: [], tags: [] });
   const [filter, setFilter] = useState('');
   const mainInputRef = useRef(null);
   const galleryInputRef = useRef(null);
   
   useEffect(() => {
-    if(initialData) {
+    if(initialData && !initialData.isNew) {
       setData({ 
-        id: initialData.id || null, 
-        title: initialData.title || '', 
-        description: initialData.description || '', 
-        image: initialData.image || null, 
-        images: initialData.images || [], 
-        productIds: initialData.productIds || [], 
-        tags: initialData.tags || [],
-        spaceId: initialData.spaceId 
+        id: initialData.id, title: initialData.title || '', description: initialData.description || '', image: initialData.image || null, images: initialData.images || [], productIds: initialData.productIds || [], tags: initialData.tags || [] 
       });
     }
   }, [initialData]);
@@ -1923,27 +1852,13 @@ function SceneEditModal({ initialData, allProducts, spaceTags = [], spaceOptions
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[80] flex items-center justify-center p-4">
       <div className="bg-white w-full max-w-2xl rounded-2xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
          <div className="px-6 py-4 border-b border-zinc-100 flex justify-between items-center bg-white z-10">
-            <h3 className="text-lg font-bold text-zinc-900">{!initialData.id ? 'New Scene' : 'Edit Scene'}</h3>
-            <div className="flex gap-2">
-                {!(!initialData.id) && <button onClick={()=>onDelete(data.id)} className="text-red-500 p-2 hover:bg-red-50 rounded-full"><Trash2 className="w-5 h-5"/></button>}
-                <button onClick={onClose} className="p-2 bg-white/50 hover:bg-zinc-100 rounded-full backdrop-blur shadow-sm"><X className="w-5 h-5 text-zinc-400 hover:text-black"/></button>
-            </div>
+            <h3 className="text-lg font-bold text-zinc-900">{initialData.isNew ? 'New Scene' : 'Edit Scene'}</h3>
+            <button onClick={onClose} className="p-2 bg-white/50 hover:bg-zinc-100 rounded-full backdrop-blur shadow-sm"><X className="w-5 h-5 text-zinc-400"/></button>
          </div>
          <div className="flex-1 overflow-y-auto p-6 space-y-8 bg-zinc-50">
             <div className="space-y-4">
               <div><label className="block text-xs font-bold text-zinc-500 uppercase mb-2">Main Image</label><div onClick={() => mainInputRef.current.click()} className="w-full h-48 bg-white rounded-xl flex items-center justify-center cursor-pointer border border-dashed border-zinc-300 overflow-hidden relative hover:border-zinc-400 transition-colors shadow-sm">{data.image ? <img src={data.image} className="w-full h-full object-cover" /> : <div className="flex flex-col items-center text-zinc-400"><ImagePlus className="w-8 h-8 mb-2"/><span className="text-xs">Upload Main</span></div>}</div><input type="file" ref={mainInputRef} className="hidden" accept="image/*" onChange={handleMainImage} /></div>
               
-              {spaceOptions.length > 0 && (
-                  <div>
-                      <label className="block text-xs font-bold text-zinc-500 uppercase mb-2">Belongs To Space</label>
-                      <select className="w-full border border-zinc-300 rounded-lg p-2.5 text-sm bg-white" value={data.spaceId} onChange={e => setData({...data, spaceId: e.target.value})}>
-                          {spaceOptions.map(s => (
-                              <option key={s.id} value={s.id}>{s.label}</option>
-                          ))}
-                      </select>
-                  </div>
-              )}
-
               {spaceTags.length > 0 && (
                  <div>
                     <label className="block text-xs font-bold text-zinc-500 uppercase mb-2">Space Tags (Filter)</label>
@@ -1974,9 +1889,9 @@ function SceneEditModal({ initialData, allProducts, spaceTags = [], spaceOptions
                </div>
             </div>
          </div>
-         <div className="px-6 py-4 border-t border-zinc-100 bg-white flex justify-end items-center z-10 gap-3">
-            <button onClick={onClose} className="px-4 py-2 border border-zinc-300 text-zinc-600 rounded-lg text-sm font-bold hover:bg-zinc-50">Cancel</button>
-            <button onClick={()=>onSave(data)} className="px-6 py-2 bg-zinc-900 text-white rounded-lg text-sm font-bold hover:bg-black shadow-md">Save Scene</button>
+         <div className="px-6 py-4 border-t border-zinc-100 bg-white flex justify-between items-center z-10">
+            {!initialData.isNew ? <button onClick={()=>onDelete(data.id)} className="text-red-500 text-xs font-bold flex items-center hover:bg-red-50 px-2 py-1 rounded"><Trash2 className="w-3.5 h-3.5 mr-1"/> Delete Scene</button> : <div></div>}
+            <div className="flex space-x-3"><button onClick={onClose} className="px-4 py-2 border border-zinc-300 text-zinc-600 rounded-lg text-sm font-bold hover:bg-zinc-50">Cancel</button><button onClick={()=>onSave(data)} className="px-6 py-2 bg-zinc-900 text-white rounded-lg text-sm font-bold hover:bg-black shadow-md">Save Scene</button></div>
          </div>
       </div>
     </div>
@@ -1988,27 +1903,21 @@ function SpaceSceneModal({ scene, products, allProducts, isAdmin, onClose, onEdi
   const images = scene.images ? [scene.image, ...scene.images] : [scene.image];
   const [isProductManagerOpen, setProductManagerOpen] = useState(false);
   const [productFilter, setProductFilter] = useState('');
-  const [isZoomed, setIsZoomed] = useState(false);
 
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[60] flex items-center justify-center p-0 md:p-6 animate-in zoom-in-95 duration-200 print:hidden">
-      {isZoomed && images[currentImageIndex] && (<div className="fixed inset-0 z-[120] bg-black/95 flex items-center justify-center p-8 cursor-zoom-out print:hidden" onClick={() => setIsZoomed(false)}><img src={images[currentImageIndex]} className="max-w-full max-h-full object-contain" alt="Zoomed" /><button className="absolute top-6 right-6 text-white/50 hover:text-white"><X className="w-10 h-10" /></button></div>)}
-      
       <div className="bg-white w-full h-full md:h-[90vh] md:max-w-6xl md:rounded-3xl overflow-hidden shadow-2xl flex flex-col md:flex-row relative">
          <div className="absolute top-4 right-4 z-[100] flex gap-2">
             {isAdmin && <button onClick={onEdit} className="p-2 bg-white/50 hover:bg-zinc-100 rounded-full backdrop-blur shadow-sm"><Edit3 className="w-6 h-6 text-zinc-900" /></button>}
             <button onClick={onClose} className="p-2 bg-white/50 hover:bg-zinc-100 rounded-full backdrop-blur shadow-sm"><X className="w-6 h-6 text-zinc-900" /></button>
          </div>
          <div className="w-full md:w-2/3 bg-black relative flex flex-col justify-center h-[40vh] md:h-full">
-            <img src={images[currentImageIndex]} className="w-full h-full object-contain cursor-zoom-in" alt="Scene" onClick={() => setIsZoomed(true)} />
+            <img src={images[currentImageIndex]} className="w-full h-full object-contain" alt="Scene" />
             {images.length > 1 && (<div className="absolute bottom-4 left-0 right-0 flex justify-center space-x-2 px-4">{images.map((_, idx) => (<button key={idx} onClick={() => setCurrentImageIndex(idx)} className={`w-2 h-2 rounded-full transition-all ${currentImageIndex === idx ? 'bg-white w-6' : 'bg-white/40 hover:bg-white/80'}`} />))}</div>)}
          </div>
          <div className="w-full md:w-1/3 bg-white flex flex-col border-l border-zinc-100 h-[60vh] md:h-full relative">
-            <div className="p-6 md:p-8 border-b border-zinc-50 pt-16 md:pt-8">
-               <div className="mb-4">
-                   <h2 className="text-2xl md:text-3xl font-black text-zinc-900 mb-2">{scene.title}</h2>
-                   <p className="text-zinc-500 text-sm leading-relaxed">{scene.description}</p>
-               </div>
+            <div className="p-6 md:p-8 border-b border-zinc-50">
+               <div className="flex justify-between items-start mb-4"><div><h2 className="text-2xl md:text-3xl font-black text-zinc-900 mb-2">{scene.title}</h2><p className="text-zinc-500 text-sm leading-relaxed">{scene.description}</p></div></div>
             </div>
             <div className="flex-1 overflow-y-auto p-6 md:p-8 custom-scrollbar bg-zinc-50/50">
                <div className="flex justify-between items-center mb-4"><h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Tagged Products</h3>{isAdmin && <button onClick={() => setProductManagerOpen(!isProductManagerOpen)} className="text-xs font-bold text-indigo-600 hover:text-indigo-800">+ Add Tag</button>}</div>
