@@ -37,7 +37,7 @@ const YOUR_FIREBASE_CONFIG = {
 // ----------------------------------------------------------------------
 // 상수 및 설정
 // ----------------------------------------------------------------------
-const APP_VERSION = "v0.7.6"; 
+const APP_VERSION = "v0.7.5"; 
 const BUILD_DATE = "2026.01.23";
 const ADMIN_PASSWORD = "adminlcg1"; 
 
@@ -70,6 +70,7 @@ try {
 // 카테고리 정의
 const CATEGORIES = [
   { id: 'ALL', label: 'Total View', isSpecial: true, color: '#18181b' },
+  // New Arrivals Removed in v0.7.5
   { id: 'EXECUTIVE', label: 'Executive', color: '#2563eb' },
   { id: 'TASK', label: 'Task', color: '#0891b2' },
   { id: 'CONFERENCE', label: 'Conference', color: '#7c3aed' },
@@ -163,7 +164,7 @@ export default function App() {
 
   // Selection & Compare (Stacked Modals)
   const [selectedProduct, setSelectedProduct] = useState(null);
-  const [selectedSwatch, setSelectedSwatch] = useState(null); 
+  const [selectedSwatch, setSelectedSwatch] = useState(null); // Now can exist WITH selectedProduct
   const [compareList, setCompareList] = useState([]);
   const [hiddenCompareIds, setHiddenCompareIds] = useState([]); 
   const [isCompareModalOpen, setIsCompareModalOpen] = useState(false);
@@ -206,6 +207,7 @@ export default function App() {
   useEffect(() => {
     const handleEsc = (e) => {
         if (e.key === 'Escape') {
+            // Stacked closing logic
             if (editingSwatchFromModal) setEditingSwatchFromModal(null);
             else if (selectedSwatch) setSelectedSwatch(null);
             else if (selectedProduct) setSelectedProduct(null);
@@ -237,10 +239,12 @@ export default function App() {
 
   useEffect(() => {
     const handlePopState = (event) => {
+      // Handle browser back button for modals
       if (selectedSwatch) {
           setSelectedSwatch(null);
       } else if (selectedProduct) {
           setSelectedProduct(null);
+          // Clean URL
           window.history.replaceState(null, '', window.location.pathname);
       } else if (activeCategory === 'COMPARE_PAGE') {
         setActiveCategory(previousCategory || 'DASHBOARD');
@@ -271,6 +275,9 @@ export default function App() {
     const sharedId = params.get('id');
     const sharedSpace = params.get('space');
     
+    // Fix: Only open modal if we are NOT on dashboard initial load (unless sharedId exists)
+    // The bug was: refreshing dashboard opens modal. 
+    // Logic: If sharedId exists, find and open. If not, do nothing.
     if (sharedId && products.length > 0) {
       const found = products.find(p => String(p.id) === sharedId);
       if (found) setSelectedProduct(found);
@@ -340,6 +347,7 @@ export default function App() {
 
   // --- Handlers ---
   const handleHomeClick = () => {
+    // Reset everything
     setActiveCategory('DASHBOARD');
     setSearchTerm('');
     setSearchTags([]);
@@ -350,7 +358,7 @@ export default function App() {
   
   const handleCategoryClick = (catId) => {
       setActiveCategory(catId);
-      setSearchTerm(''); 
+      setSearchTerm(''); // Clear search on category change
       setSearchTags([]);
       setIsMobileMenuOpen(false);
   };
@@ -597,8 +605,8 @@ export default function App() {
       let matchesCategory = true;
       if (activeCategory === 'DASHBOARD' || activeCategory === 'COMPARE_PAGE') matchesCategory = false; 
       else if (activeCategory === 'MY_PICK') matchesCategory = favorites.includes(product.id);
-      else if (activeCategory === 'ALL') matchesCategory = true; // ALL now means Total View (Master List)
-      else if (activeCategory === 'SPACES_ROOT' || activeCategory === 'COLLECTIONS_ROOT' || activeCategory === 'MATERIALS_ROOT') matchesCategory = false; 
+      else if (activeCategory === 'ALL') matchesCategory = true;
+      else if (activeCategory === 'SPACES_ROOT' || activeCategory === 'COLLECTIONS_ROOT' || activeCategory === 'MATERIALS_ROOT') matchesCategory = false; // Handled in view
       else if (SPACES.find(s => s.id === activeCategory)) {
          matchesCategory = product.spaces && product.spaces.includes(activeCategory);
          if (matchesCategory && activeSpaceTag !== 'ALL') { matchesCategory = product.spaceTags && product.spaceTags.includes(activeSpaceTag); }
@@ -745,7 +753,7 @@ export default function App() {
         <header className="h-14 md:h-16 bg-white/80 backdrop-blur-md border-b border-zinc-100 flex items-center justify-between px-4 md:px-8 z-30 flex-shrink-0 sticky top-0 transition-all print:hidden">
           <div className="flex items-center space-x-3 w-full md:w-auto flex-1 mr-4">
             <button onClick={() => setIsMobileMenuOpen(true)} className="md:hidden p-2 -ml-2 text-zinc-600 hover:bg-zinc-100 rounded-lg active:scale-95 transition-transform"><Menu className="w-6 h-6" /></button>
-            <div className="relative w-full max-w-md group flex items-center gap-2 flex-1">
+            <div className="relative w-full max-w-md group flex items-center gap-2">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-zinc-400 w-4 h-4 group-focus-within:text-zinc-800 transition-colors" />
                 <div className="w-full pl-10 pr-4 py-2 bg-zinc-50/50 border border-transparent focus-within:bg-white focus-within:border-zinc-200 focus-within:ring-4 focus-within:ring-zinc-50 rounded-full text-sm transition-all flex items-center flex-wrap gap-1">
                     {searchTags.map((tag, idx) => (
@@ -764,11 +772,11 @@ export default function App() {
                 </div>
             </div>
           </div>
-          <div className="flex items-center space-x-2 flex-shrink-0">
+          <div className="flex items-center space-x-2">
              {compareList.length > 0 && <button onClick={handleCompareButtonClick} className={`flex items-center px-3 py-1.5 rounded-full text-xs font-bold animate-in fade-in transition-all mr-2 shadow-lg ${activeCategory === 'COMPARE_PAGE' ? 'bg-black text-white ring-2 ring-zinc-200' : 'bg-zinc-900 text-white hover:bg-black'}`}><ArrowLeftRight className="w-3 h-3 mr-1.5"/> Compare ({compareList.length})</button>}
              <button onClick={() => setIsFilterOpen(!isFilterOpen)} className={`p-2 rounded-full transition-all ${isFilterOpen ? 'bg-zinc-200 text-black' : 'hover:bg-zinc-100 text-zinc-500'}`} title="Filters"><SlidersHorizontal className="w-5 h-5" /></button>
              <button onClick={() => setActiveCategory('MY_PICK')} className={`hidden md:flex p-2 rounded-full transition-all items-center space-x-1 ${activeCategory === 'MY_PICK' ? 'bg-yellow-100 text-yellow-600' : 'hover:bg-zinc-100 text-zinc-400 hover:text-zinc-600'}`} title="My Pick"><Heart className={`w-5 h-5 ${activeCategory === 'MY_PICK' ? 'fill-yellow-500 text-yellow-500' : ''}`} /></button>
-             <div className="flex items-center bg-zinc-100 rounded-lg p-1 hidden md:flex">
+             <div className="flex items-center bg-zinc-100 rounded-lg p-1">
                 <select value={sortOption} onChange={(e) => setSortOption(e.target.value)} className="bg-transparent text-xs font-bold text-zinc-600 outline-none px-2 py-1 max-w-[80px] md:max-w-none cursor-pointer"><option value="manual">Manual</option><option value="launchDate">Launch</option><option value="createdAt">Added</option><option value="name">Name</option></select>
                 <button onClick={() => setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc')} className="p-1.5 rounded-md hover:bg-white hover:shadow-sm transition-all text-zinc-500" title="Sort">{sortDirection === 'asc' ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />}</button>
              </div>
@@ -798,25 +806,13 @@ export default function App() {
                 onProductClick={(product) => setSelectedProduct(product)}
                 isAdmin={isAdmin}
             />
-          ) : activeCategory === 'ALL' ? (
-             <TotalView 
-                products={processedProducts} 
-                categories={CATEGORIES.filter(c => !c.isSpecial)}
-                onProductClick={(p) => setSelectedProduct(p)}
-             />
           ) : activeCategory.endsWith('_ROOT') ? (
              <CategoryRootView 
                 type={activeCategory} 
                 spaces={SPACES} 
-                spaceContents={spaceContents}
                 collections={CATEGORIES.filter(c => !c.isSpecial)} 
                 materials={SWATCH_CATEGORIES}
-                products={products}
-                swatches={swatches}
                 onNavigate={handleCategoryClick}
-                onProductClick={(p) => setSelectedProduct(p)}
-                onSwatchClick={(s) => setSelectedSwatch(s)}
-                onSceneClick={(s) => setSelectedScene(s)}
              />
           ) : (
             <>
@@ -1017,57 +1013,15 @@ export default function App() {
 // Helper Components
 // ----------------------------------------------------------------------
 
-function TotalView({ products, categories, onProductClick }) {
-    return (
-        <div className="animate-in fade-in slide-in-from-bottom-4 pb-32">
-            <div className="mb-8 flex items-center">
-                <div className="p-3 bg-zinc-900 text-white rounded-xl mr-4">
-                    <LayoutGrid className="w-6 h-6" />
-                </div>
-                <h2 className="text-4xl font-black text-zinc-900 tracking-tight">Total View</h2>
-            </div>
-            
-            <div className="space-y-12">
-                {categories.map(cat => {
-                    const catProducts = products.filter(p => p.category === cat.id);
-                    if (catProducts.length === 0) return null;
-                    
-                    return (
-                        <div key={cat.id}>
-                            <div className="flex items-center mb-4 border-b border-zinc-100 pb-2">
-                                <span className="w-3 h-3 rounded-full mr-3" style={{backgroundColor: cat.color}}></span>
-                                <h3 className="text-xl font-bold text-zinc-900">{cat.label}</h3>
-                                <span className="ml-3 text-xs font-medium text-zinc-400 bg-zinc-50 px-2 py-0.5 rounded-full">{catProducts.length}</span>
-                            </div>
-                            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
-                                {catProducts.map(product => (
-                                    <div key={product.id} onClick={() => onProductClick(product)} className="group cursor-pointer">
-                                        <div className="aspect-square bg-zinc-50 rounded-xl mb-2 overflow-hidden border border-zinc-100 relative">
-                                            {product.images?.[0] ? <img src={typeof product.images[0] === 'object' ? product.images[0].url : product.images[0]} className="w-full h-full object-contain mix-blend-multiply group-hover:scale-105 transition-transform" /> : <ImageIcon className="w-8 h-8 text-zinc-300 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"/>}
-                                        </div>
-                                        <h4 className="text-xs font-bold text-zinc-900 truncate group-hover:text-blue-600">{product.name}</h4>
-                                        <p className="text-[10px] text-zinc-400 truncate">{product.designer || 'Patra Design'}</p>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    );
-                })}
-            </div>
-        </div>
-    );
-}
-
-function CategoryRootView({ type, spaces, spaceContents, collections, materials, products, swatches, onNavigate, onProductClick, onSwatchClick, onSceneClick }) {
+function CategoryRootView({ type, spaces, collections, materials, onNavigate }) {
     let title = "";
     let items = [];
     let icon = null;
-    let isMaterial = false;
 
     if (type === 'SPACES_ROOT') {
         title = "Spaces";
         items = spaces;
-        icon = Briefcase;
+        icon = LayoutGrid;
     } else if (type === 'COLLECTIONS_ROOT') {
         title = "Collections";
         items = collections;
@@ -1076,7 +1030,6 @@ function CategoryRootView({ type, spaces, spaceContents, collections, materials,
         title = "Materials";
         items = materials;
         icon = Palette;
-        isMaterial = true;
     }
 
     return (
@@ -1088,62 +1041,34 @@ function CategoryRootView({ type, spaces, spaceContents, collections, materials,
                 <h2 className="text-4xl font-black text-zinc-900 tracking-tight">{title}</h2>
             </div>
             
-            <div className="space-y-16">
-                {items.map(item => {
-                    let subItems = [];
-                    
-                    if (type === 'SPACES_ROOT') {
-                        const content = spaceContents[item.id] || {};
-                        subItems = content.scenes || [];
-                    } else if (type === 'COLLECTIONS_ROOT') {
-                        subItems = products.filter(p => p.category === item.id);
-                    } else if (type === 'MATERIALS_ROOT') {
-                        subItems = swatches.filter(s => s.category === item.id);
-                    }
-
-                    if (subItems.length === 0) return null;
-
-                    return (
-                        <div key={item.id}>
-                            <div className="flex items-center justify-between mb-4">
-                                <div className="flex items-center cursor-pointer hover:opacity-70" onClick={() => onNavigate(item.id)}>
-                                    {isMaterial && <div className="w-4 h-4 rounded-full mr-3" style={{backgroundColor: item.color}}></div>}
-                                    <h3 className="text-2xl font-bold text-zinc-900">{item.label}</h3>
-                                    <ChevronRight className="w-5 h-5 ml-2 text-zinc-400"/>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {items.map(item => (
+                    <button 
+                        key={item.id} 
+                        onClick={() => onNavigate(item.id)}
+                        className="group flex flex-col bg-white border border-zinc-200 rounded-2xl overflow-hidden hover:shadow-xl hover:border-zinc-300 transition-all text-left h-48 md:h-64 relative"
+                    >
+                        <div className="absolute inset-0 bg-zinc-50 group-hover:bg-zinc-100 transition-colors"></div>
+                        {/* Placeholder for category image if available in future */}
+                        <div className="absolute inset-0 flex items-center justify-center opacity-10 group-hover:opacity-20 transition-opacity">
+                            {item.icon ? React.createElement(item.icon, { className: "w-32 h-32" }) : <div className="w-32 h-32 rounded-full bg-current" style={{color: item.color}}></div>}
+                        </div>
+                        
+                        <div className="absolute bottom-0 left-0 right-0 p-6">
+                            <div className="flex items-center justify-between mb-2">
+                                <span className="text-2xl font-bold text-zinc-900 group-hover:translate-x-2 transition-transform">{item.label}</span>
+                                <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center shadow-sm group-hover:bg-black group-hover:text-white transition-colors">
+                                    <ArrowRight className="w-4 h-4"/>
                                 </div>
                             </div>
-                            
-                            {/* Horizontal Scroll Container */}
-                            <div className="flex overflow-x-auto gap-4 pb-4 custom-scrollbar">
-                                {subItems.map(sub => (
-                                    <div 
-                                        key={sub.id} 
-                                        onClick={() => {
-                                            if (type === 'SPACES_ROOT') onSceneClick({...sub, spaceId: item.id});
-                                            else if (type === 'COLLECTIONS_ROOT') onProductClick(sub);
-                                            else onSwatchClick(sub);
-                                        }}
-                                        className="flex-shrink-0 w-40 md:w-56 group cursor-pointer"
-                                    >
-                                        <div className={`aspect-square ${isMaterial ? 'rounded-full' : 'rounded-xl'} bg-zinc-50 overflow-hidden border border-zinc-100 relative mb-2`}>
-                                            {type === 'SPACES_ROOT' ? (
-                                                <img src={sub.image} className="w-full h-full object-cover group-hover:scale-105 transition-transform"/>
-                                            ) : type === 'MATERIALS_ROOT' ? (
-                                                <SwatchDisplay color={sub} className="w-full h-full rounded-none scale-100"/>
-                                            ) : (
-                                                sub.images?.[0] ? <img src={typeof sub.images[0] === 'object' ? sub.images[0].url : sub.images[0]} className="w-full h-full object-contain mix-blend-multiply group-hover:scale-105 transition-transform"/> : <ImageIcon className="w-8 h-8 text-zinc-300 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"/>
-                                            )}
-                                        </div>
-                                        <h4 className="text-sm font-bold text-zinc-900 truncate group-hover:text-blue-600">
-                                            {type === 'SPACES_ROOT' ? sub.title : sub.name}
-                                        </h4>
-                                        {type !== 'MATERIALS_ROOT' && <p className="text-xs text-zinc-400 truncate">{type === 'SPACES_ROOT' ? sub.description : (sub.designer || item.label)}</p>}
-                                    </div>
-                                ))}
-                            </div>
+                            {item.defaultTags && (
+                                <div className="flex flex-wrap gap-1 opacity-60">
+                                    {item.defaultTags.slice(0,3).map(t => <span key={t} className="text-xs">{t}</span>)}
+                                </div>
+                            )}
                         </div>
-                    );
-                })}
+                    </button>
+                ))}
             </div>
         </div>
     );
@@ -1289,7 +1214,7 @@ function SwatchDisplay({ color, size = 'medium', className = '', onClick }) {
       switch(type) {
           case 'DOT': return { backgroundImage: `radial-gradient(${pColor} 1px, transparent 1px)`, backgroundSize: '4px 4px' };
           case 'DIAGONAL': return { backgroundImage: `repeating-linear-gradient(45deg, ${pColor} 0, ${pColor} 1px, transparent 0, transparent 50%)`, backgroundSize: '6px 6px' };
-          case 'GRID': return { backgroundImage: `linear-gradient(${pColor} 1px, transparent 1px), linear-gradient(90deg, ${pColor} 1px, transparent 1px)`, linearGradient: `90deg, ${pColor} 1px, transparent 1px`, backgroundSize: '6px 6px' };
+          case 'GRID': return { backgroundImage: `linear-gradient(${pColor} 1px, transparent 1px), linear-gradient(90deg, ${pColor} 1px, transparent 1px)`, backgroundSize: '6px 6px' };
           case 'KNIT': return { backgroundImage: `repeating-linear-gradient(45deg, transparent, transparent 2px, ${pColor} 2px, ${pColor} 4px), repeating-linear-gradient(-45deg, transparent, transparent 2px, ${pColor} 2px, ${pColor} 4px)` };
           case 'WEAVE': return { backgroundImage: `linear-gradient(45deg, ${pColor} 25%, transparent 25%, transparent 75%, ${pColor} 75%, ${pColor}), linear-gradient(45deg, ${pColor} 25%, transparent 25%, transparent 75%, ${pColor} 75%, ${pColor})`, backgroundPosition: '0 0, 4px 4px', backgroundSize: '8px 8px' };
           case 'FUR': return { backgroundImage: `repeating-radial-gradient(circle at 50% 50%, ${pColor} 0, transparent 2px)`, backgroundSize: '3px 3px' }; 
@@ -1799,7 +1724,6 @@ function DashboardView({ products, favorites, setActiveCategory, setSelectedProd
 
   const [selectedSlice, setSelectedSlice] = useState(null);
   const [isListExpanded, setIsListExpanded] = useState(false); // For Dropdown
-  const [isLaunchExpanded, setIsLaunchExpanded] = useState(false); // For Launching Dropdown
 
   // Helper for Selected Slice Data
   const getSelectedSliceDetails = () => {
@@ -1910,17 +1834,12 @@ function DashboardView({ products, favorites, setActiveCategory, setSelectedProd
                            </div>
                            
                            {/* Dropdown for Launch Years if many */}
-                           <div className="bg-zinc-50 p-3 rounded-xl border border-zinc-100 relative group cursor-pointer" onClick={() => setIsLaunchExpanded(!isLaunchExpanded)}>
-                              <div className="flex justify-between items-center">
-                                  <span className="text-[10px] text-zinc-400 uppercase font-bold block mb-1">Launching</span>
-                                  <ChevronDown className={`w-3 h-3 text-zinc-400 transition-transform ${isLaunchExpanded ? 'rotate-180' : ''}`}/>
-                              </div>
+                           <div className="bg-zinc-50 p-3 rounded-xl border border-zinc-100 relative group">
+                              <span className="text-[10px] text-zinc-400 uppercase font-bold block mb-1">Launching</span>
                               <span className="text-xs font-bold text-zinc-900 truncate block">{sliceDetails.years.substring(0,15)}...</span>
-                              {isLaunchExpanded && (
-                                  <div className="absolute top-full left-0 w-full bg-white border border-zinc-200 shadow-lg rounded-lg p-2 z-10 text-xs mt-1 max-h-32 overflow-y-auto custom-scrollbar">
-                                      {sliceDetails.years}
-                                  </div>
-                              )}
+                              <div className="absolute top-full left-0 w-full bg-white border border-zinc-200 shadow-lg rounded-lg p-2 z-10 hidden group-hover:block text-xs">
+                                  {sliceDetails.years}
+                              </div>
                            </div>
                         </div>
 
@@ -2082,7 +2001,14 @@ function ProductCard({ product, onClick, showMoveControls, onMove, isFavorite, o
         <div className="absolute inset-0 bg-zinc-100/30 mix-blend-multiply pointer-events-none z-10"></div>
 
         <div className="absolute top-2 left-2 flex flex-wrap gap-1.5 z-20 items-start max-w-[80%]">
-           {product.isNew && <span className="bg-black text-white text-[8px] font-extrabold px-1.5 py-0.5 rounded shadow-sm tracking-wide">NEW</span>}
+           {product.isNew && <span className="bg-black text-white text-[8px] font-extrabold 네, ProductCard 컴포넌트 내부에서 끊긴 부분부터 코드를 이어서 작성해 드리겠습니다.
+
+code
+JavaScript
+download
+content_copy
+expand_less
+px-1.5 py-0.5 rounded shadow-sm tracking-wide">NEW</span>}
         </div>
         
         {/* Top Right Controls */}
@@ -2212,14 +2138,6 @@ function ProductDetailModal({ product, allProducts, swatches, spaceContents, onC
     <div key={product.id} className="fixed inset-0 bg-black/60 backdrop-blur-md z-50 flex items-center justify-center p-0 md:p-4 animate-in fade-in duration-300 slide-in-animation print:fixed print:inset-0 print:z-[100] print:bg-white print:h-auto print:overflow-visible">
       <canvas ref={canvasRef} style={{ display: 'none' }} />
       
-      {/* Full Screen Image View */}
-      {isZoomed && currentImageUrl && (
-          <div className="fixed inset-0 z-[120] bg-black flex items-center justify-center p-4 cursor-zoom-out" onClick={() => setIsZoomed(false)}>
-              <img src={currentImageUrl} className="max-w-full max-h-full object-contain" alt="Full Screen" />
-              <button className="absolute top-6 right-6 text-white/50 hover:text-white"><X className="w-10 h-10" /></button>
-          </div>
-      )}
-
       {swatchPopup && (
           <div 
              className="fixed z-[160] bg-black/60 backdrop-blur-sm text-white px-3 py-2 rounded-lg shadow-lg cursor-pointer hover:bg-black/80 transition-colors border border-white/10 pointer-events-auto"
@@ -2252,21 +2170,19 @@ function ProductDetailModal({ product, allProducts, swatches, spaceContents, onC
 
         <div className="flex-1 overflow-y-auto custom-scrollbar flex flex-col md:flex-row h-full pb-safe print:overflow-visible print:h-auto">
           <div className="w-full md:w-1/2 bg-zinc-50 p-6 md:p-8 flex flex-col border-b md:border-b-0 md:border-r border-zinc-100 md:sticky md:top-0 print:static print:bg-white print:border-none">
-            <div className="flex-1 w-full bg-white rounded-2xl flex items-center justify-center shadow-sm border border-zinc-100 overflow-hidden p-8 mb-4 relative group min-h-[300px] print:shadow-none print:border-zinc-200 cursor-zoom-in" onClick={() => setIsZoomed(true)}>
+            <div className="flex-1 w-full bg-white rounded-2xl flex items-center justify-center shadow-sm border border-zinc-100 overflow-hidden p-8 mb-4 relative group min-h-[300px] print:shadow-none print:border-zinc-200">
                {currentImageUrl ? (
                    <div className="relative w-full h-full flex items-center justify-center">
                        <img src={currentImageUrl} alt="Main" className="w-full h-full object-contain mix-blend-multiply" />
+                       {currentImageCaption && (
+                           <div className="absolute bottom-4 left-4 right-4 bg-black/50 backdrop-blur-md text-white text-xs p-3 rounded-xl text-center">
+                               {currentImageCaption}
+                           </div>
+                       )}
                    </div>
                ) : <ImageIcon className="w-20 h-20 opacity-20 text-zinc-400" />}
-               <button onClick={(e) => {e.stopPropagation(); onToggleFavorite(e);}} className="absolute top-4 left-4 p-3 bg-white rounded-full shadow-sm border border-zinc-100 hover:border-zinc-300 transition-all hidden md:flex print:hidden"><Star className={`w-5 h-5 ${isFavorite ? 'text-yellow-400 fill-yellow-400' : 'text-zinc-300'}`} /></button>
+               <button onClick={onToggleFavorite} className="absolute top-4 left-4 p-3 bg-white rounded-full shadow-sm border border-zinc-100 hover:border-zinc-300 transition-all hidden md:flex print:hidden"><Star className={`w-5 h-5 ${isFavorite ? 'text-yellow-400 fill-yellow-400' : 'text-zinc-300'}`} /></button>
             </div>
-            {/* Caption Outside */}
-            {currentImageCaption && (
-                <div className="text-center text-sm font-medium text-black mb-4 px-4">
-                    {currentImageCaption}
-                </div>
-            )}
-
             {images.length > 0 && (<div className="flex space-x-2 md:space-x-3 overflow-x-auto custom-scrollbar pb-1 px-1 print:hidden">{images.map((img, idx) => (<button key={idx} onClick={() => setCurrentImageIndex(idx)} className={`flex-shrink-0 w-10 h-10 md:w-20 md:h-20 rounded-lg md:rounded-xl overflow-hidden border-2 transition-all ${currentImageIndex === idx ? 'border-zinc-900 ring-2 ring-zinc-200' : 'border-transparent opacity-60 hover:opacity-100 bg-white'}`}><img src={typeof img === 'object' ? img.url : img} alt={`Thumbnail ${idx}`} className="w-full h-full object-cover" /></button>))}</div>)}
           </div>
           <div className="w-full md:w-1/2 p-6 md:p-12 bg-white pb-12 print:pb-0">
@@ -2361,12 +2277,12 @@ function ProductDetailModal({ product, allProducts, swatches, spaceContents, onC
               {contentImages.length > 0 && (<div className="pt-8 border-t border-zinc-100 space-y-4"><h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Detail View</h3><div className="flex flex-col gap-4">{contentImages.map((img, idx) => (
                   <div key={idx} className="relative">
                       <img src={typeof img === 'object' ? img.url : img} alt={`Detail ${idx+1}`} className="w-full h-auto rounded-xl border border-zinc-100 print:border-none cursor-zoom-in" onClick={() => setIsZoomed(typeof img === 'object' ? img.url : img)} />
-                      {typeof img === 'object' && img.caption && <div className="text-center text-sm font-medium text-black mt-2">{img.caption}</div>}
+                      {typeof img === 'object' && img.caption && <div className="absolute bottom-3 left-3 right-3 bg-black/60 text-white text-xs p-2 rounded-lg text-center backdrop-blur-sm">{img.caption}</div>}
                   </div>
               ))}</div></div>)}
 
-              <div className="md:hidden mt-4 pt-4 border-t border-zinc-100 pb-4 print:hidden mb-safe">
-                 <div className="flex justify-center gap-4">
+              <div className="md:hidden mt-8 pt-8 border-t border-zinc-100 pb-10 print:hidden mb-safe">
+                 <div className="flex justify-center gap-4 mb-4">
                     <button onClick={handleShareImage} className="flex flex-col items-center justify-center w-14 h-14 bg-zinc-50 rounded-2xl text-zinc-600 active:scale-95 transition-transform border border-zinc-100">
                         <ImgIcon className="w-5 h-5 mb-1"/>
                         <span className="text-[9px] font-bold">Image</span>
@@ -2843,7 +2759,7 @@ function SceneEditModal({ initialData, allProducts, spaceTags = [], spaceOptions
                <div className="flex justify-between items-end mb-3"><div><h4 className="text-sm font-bold text-zinc-900">Related Products</h4><p className="text-[10px] text-zinc-500">Select products visible in this scene</p></div><span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded-full">{data.productIds.length} selected</span></div>
                <div className="bg-white rounded-xl border border-zinc-200 overflow-hidden shadow-sm">
                   <div className="p-2 border-b border-zinc-100 bg-zinc-50/50"><div className="flex items-center bg-white border border-zinc-200 rounded-lg px-2"><Search className="w-4 h-4 text-zinc-400 mr-2"/><input className="w-full py-2 text-xs outline-none bg-transparent" placeholder="Search product name..." value={filter} onChange={e => setFilter(e.target.value)} /></div></div>
-                  <div className="h-48 overflow-y-auto p-2 space-y-1 custom-scrollbar">{allProducts.filter(p => p.name.toLowerCase().includes(filter.toLowerCase())).map(p => { const isSelected = data.productIds.includes(p.id); return (<div key={p.id} onClick={() => toggleProduct(p.id)} className={`flex items-center p-2 rounded-lg cursor-pointer transition-colors ${isSelected ? 'bg-indigo-50 border border-indigo-100' : 'hover:bg-zinc-50 border border-transparent'}`}><div className={`w-4 h-4 rounded border flex items-center justify-center mr-3 flex-shrink-0 ${isSelected ? 'bg-indigo-500 border-indigo-500' : 'bg-white border-zinc-300'}`}>{isSelected && <Check className="w-2 h-2 text-white"/>}</div>{p.images?.[0] && <img src={p.images[0]} className="w-8 h-8 rounded object-cover mr-3 bg-zinc-100" />}<div className="min-w-0"><div className={`text-xs font-bold truncate ${isSelected ? 'text-indigo-900' : 'text-zinc-700'}`}>{p.name}</div><div className="text-[10px] text-zinc-400 truncate">{p.category}</div></div></div>) })}</div>
+                  <div className="h-48 overflow-y-auto p-2 space-y-1 custom-scrollbar">{allProducts.filter(p => p.name.toLowerCase().includes(filter.toLowerCase())).map(p => { const isSelected = data.productIds.includes(p.id); return (<div key={p.id} onClick={() => toggleProduct(p.id)} className={`flex items-center p-2 rounded-lg cursor-pointer transition-colors ${isSelected ? 'bg-indigo-50 border border-indigo-100' : 'hover:bg-zinc-50 border border-transparent'}`}><div className={`w-4 h-4 rounded border flex items-center justify-center mr-3 flex-shrink-0 ${isSelected ? 'bg-indigo-500 border-indigo-500' : 'bg-white border-zinc-300'}`}>{isSelected && <Check className="w-3 h-3 text-white"/>}</div>{p.images?.[0] && <img src={p.images[0]} className="w-8 h-8 rounded object-cover mr-3 bg-zinc-100" />}<div className="min-w-0"><div className={`text-xs font-bold truncate ${isSelected ? 'text-indigo-900' : 'text-zinc-700'}`}>{p.name}</div><div className="text-[10px] text-zinc-400 truncate">{p.category}</div></div></div>) })}</div>
                </div>
             </div>
          </div>
@@ -2872,7 +2788,7 @@ function SpaceSceneModal({ scene, products, allProducts, isAdmin, onClose, onEdi
 
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[60] flex items-center justify-center p-0 md:p-6 animate-in zoom-in-95 duration-200 print:hidden">
-      {isZoomed && currentImgUrl && (<div className="fixed inset-0 z-[120] bg-black flex items-center justify-center p-8 cursor-zoom-out print:hidden" onClick={() => setIsZoomed(false)}><img src={currentImgUrl} className="max-w-full max-h-full object-contain" alt="Zoomed" /><button className="absolute top-6 right-6 text-white/50 hover:text-white"><X className="w-10 h-10" /></button></div>)}
+      {isZoomed && currentImgUrl && (<div className="fixed inset-0 z-[120] bg-black/95 flex items-center justify-center p-8 cursor-zoom-out print:hidden" onClick={() => setIsZoomed(false)}><img src={currentImgUrl} className="max-w-full max-h-full object-contain" alt="Zoomed" /><button className="absolute top-6 right-6 text-white/50 hover:text-white"><X className="w-10 h-10" /></button></div>)}
       
       <div className="bg-white w-full h-full md:h-[90vh] md:max-w-6xl md:rounded-3xl overflow-hidden shadow-2xl flex flex-col md:flex-row relative">
          <div className="absolute top-4 right-4 z-[100] flex gap-2">
@@ -2882,14 +2798,12 @@ function SpaceSceneModal({ scene, products, allProducts, isAdmin, onClose, onEdi
          <div className="w-full md:w-2/3 bg-black relative flex flex-col justify-center h-[40vh] md:h-full">
             <div className="relative w-full h-full">
                 <img src={currentImgUrl} className="w-full h-full object-contain cursor-zoom-in" alt="Scene" onClick={() => setIsZoomed(true)} />
+                {currentImgCaption && <div className="absolute bottom-8 left-0 right-0 text-center text-white/90 text-sm bg-black/40 backdrop-blur-sm p-2 mx-auto max-w-md rounded-xl">{currentImgCaption}</div>}
             </div>
-            {/* Caption Outside */}
-            {currentImgCaption && <div className="absolute bottom-8 left-0 right-0 text-center text-white/90 text-sm bg-black/40 backdrop-blur-sm p-2 mx-auto max-w-md rounded-xl">{currentImgCaption}</div>}
-            
             {images.length > 1 && (<div className="absolute bottom-4 left-0 right-0 flex justify-center space-x-2 px-4">{images.map((_, idx) => (<button key={idx} onClick={() => setCurrentImageIndex(idx)} className={`w-2 h-2 rounded-full transition-all ${currentImageIndex === idx ? 'bg-white w-6' : 'bg-white/40 hover:bg-white/80'}`} />))}</div>)}
          </div>
-         <div className="w-full md:w-1/3 bg-white flex flex-col border-l border-zinc-100 h-[60vh] md:h-full relative overflow-hidden">
-            <div className="p-6 md:p-8 border-b border-zinc-50 pt-16 md:pt-16 flex-shrink-0">
+         <div className="w-full md:w-1/3 bg-white flex flex-col border-l border-zinc-100 h-[60vh] md:h-full relative">
+            <div className="p-6 md:p-8 border-b border-zinc-50 pt-16 md:pt-16">
                <div className="mb-4">
                    <h2 className="text-2xl md:text-3xl font-black text-zinc-900 mb-2">{scene.title}</h2>
                    <p className="text-zinc-500 text-sm leading-relaxed">{scene.description}</p>
@@ -2906,7 +2820,7 @@ function SpaceSceneModal({ scene, products, allProducts, isAdmin, onClose, onEdi
                <div className="space-y-3 mb-8">{products.length > 0 ? products.map(product => (<div key={product.id} onClick={() => onNavigateProduct(product)} className="flex items-center p-3 bg-white rounded-xl border border-zinc-100 shadow-sm hover:border-zinc-300 transition-all cursor-pointer group"><div className="w-12 h-12 bg-zinc-50 rounded-lg flex-shrink-0 flex items-center justify-center mr-3 overflow-hidden">{product.images?.[0] ? <img src={typeof product.images[0] === 'object' ? product.images[0].url : product.images[0]} className="w-full h-full object-cover" /> : <ImageIcon className="w-5 h-5 text-zinc-300"/>}</div><div className="flex-1 min-w-0"><h4 className="text-sm font-bold text-zinc-900 truncate group-hover:text-blue-600">{product.name}</h4><p className="text-xs text-zinc-500">{product.category}</p></div><ChevronRight className="w-4 h-4 text-zinc-300 group-hover:text-zinc-600"/></div>)) : (<div className="text-center py-8 text-zinc-400 text-xs">연관된 제품이 없습니다.</div>)}</div>
             
                {/* Share & Print for Mobile Consistency */}
-               <div className="pt-4 border-t border-zinc-100 flex gap-3 print:hidden mb-safe">
+               <div className="pt-6 border-t border-zinc-100 flex gap-3 print:hidden">
                     <button onClick={handleShareImage} className="flex-1 py-3 bg-white border border-zinc-200 text-zinc-600 rounded-xl text-xs font-bold hover:bg-zinc-50 flex items-center justify-center"><ImgIcon className="w-4 h-4 mr-2"/> Share</button>
                     <button onClick={() => window.print()} className="flex-1 py-3 bg-white border border-zinc-200 text-zinc-600 rounded-xl text-xs font-bold hover:bg-zinc-50 flex items-center justify-center"><Printer className="w-4 h-4 mr-2"/> PDF</button>
                </div>
