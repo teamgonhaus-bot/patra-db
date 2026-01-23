@@ -678,7 +678,9 @@ export default function App() {
           <div className="py-2">
               <div className={`w-full text-left px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 flex items-center justify-between group border bg-white text-zinc-600 border-zinc-100 hover:bg-zinc-50 hover:border-zinc-300 mb-1 shadow-sm`}>
                   <button onClick={() => { setActiveCategory('SPACES_HUB'); setIsMobileMenuOpen(false); }} className="flex-1 text-left font-bold tracking-tight">SPACES</button>
-                  <button onClick={(e) => { e.stopPropagation(); setSidebarState(p => ({...p, spaces: !p.spaces})); }}><{sidebarState.spaces ? ChevronUp : ChevronDown} className="w-4 h-4 text-zinc-400 hover:text-zinc-900" /></button>
+                  <button onClick={(e) => { e.stopPropagation(); setSidebarState(p => ({...p, spaces: !p.spaces})); }}>
+                    {sidebarState.spaces ? <ChevronUp className="w-4 h-4 text-zinc-400 hover:text-zinc-900" /> : <ChevronDown className="w-4 h-4 text-zinc-400 hover:text-zinc-900" />}
+                  </button>
               </div>
               {sidebarState.spaces && (<div className="space-y-1 mt-2 pl-2 animate-in slide-in-from-top-2 duration-200">{SPACES.map((space) => (<button key={space.id} onClick={() => { setActiveCategory(space.id); setIsMobileMenuOpen(false); }} className={`w-full text-left px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 flex items-center justify-between group ${activeCategory === space.id ? 'bg-zinc-800 text-white font-bold' : 'text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900'}`}><div className="flex items-center"><space.icon className={`w-3.5 h-3.5 mr-3 ${activeCategory === space.id ? 'text-white' : 'text-zinc-400'}`} />{space.label}</div>{activeCategory === space.id && <div className="w-1.5 h-1.5 rounded-full bg-green-500"></div>}</button>))}</div>)}
           </div>
@@ -686,7 +688,9 @@ export default function App() {
           <div className="py-2">
               <div className={`w-full text-left px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 flex items-center justify-between group border bg-white text-zinc-600 border-zinc-100 hover:bg-zinc-50 hover:border-zinc-300 mb-1 shadow-sm`}>
                   <button onClick={() => { setActiveCategory('MATERIALS_HUB'); setIsMobileMenuOpen(false); }} className="flex-1 text-left font-bold tracking-tight">MATERIALS</button>
-                  <button onClick={(e) => { e.stopPropagation(); setSidebarState(p => ({...p, materials: !p.materials})); }}><{sidebarState.materials ? ChevronUp : ChevronDown} className="w-4 h-4 text-zinc-400 hover:text-zinc-900" /></button>
+                  <button onClick={(e) => { e.stopPropagation(); setSidebarState(p => ({...p, materials: !p.materials})); }}>
+                     {sidebarState.materials ? <ChevronUp className="w-4 h-4 text-zinc-400 hover:text-zinc-900" /> : <ChevronDown className="w-4 h-4 text-zinc-400 hover:text-zinc-900" />}
+                  </button>
               </div>
               {sidebarState.materials && (<div className="space-y-0.5 mt-2 pl-2 animate-in slide-in-from-top-2 duration-200">{SWATCH_CATEGORIES.map((cat) => (<button key={cat.id} onClick={() => { setActiveCategory(cat.id); setIsMobileMenuOpen(false); }} className={`w-full text-left px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center justify-between group ${activeCategory === cat.id ? 'bg-zinc-100 text-zinc-900 font-bold' : 'text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900'}`}>{cat.label}</button>))}</div>)}
           </div>
@@ -874,7 +878,6 @@ export default function App() {
                         const newPids = add ? [...(modal.data.productIds||[]), pid] : (modal.data.productIds||[]).filter(id=>id!==pid);
                         const updatedScene = { ...modal.data, productIds: newPids };
                         await handleSceneSave(modal.data.spaceId, updatedScene);
-                        // Update current modal data locally
                         setModalStack(prev => prev.map((m, i) => i === index ? { ...m, data: updatedScene } : m));
                      }}
                      onNavigateProduct={(p) => pushModal('product', p)}
