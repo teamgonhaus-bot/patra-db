@@ -1,5 +1,5 @@
 /* global __firebase_config, __app_id, __initial_auth_token */
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { 
   Plus, Search, X, Check, Tag, Palette, Settings, Image as ImageIcon,
   Upload, Trash2, Edit2, RefreshCw, Cloud, CloudOff, Lock, Unlock,
@@ -11,7 +11,7 @@ import {
   ChevronsUp, Camera, ImagePlus, Sofa, Briefcase, Users, Home as HomeIcon, MapPin,
   Edit3, Grid, MoreVertical, MousePointer2, CheckSquare, XCircle, Printer, List, Eye,
   PlayCircle, BarChart3, CornerUpLeft, Grid3X3, Droplet, Coffee, GraduationCap, ShoppingBag, FileDown, FileUp,
-  ArrowLeftRight, SlidersHorizontal, Move, Monitor, Maximize, EyeOff, Type, ExternalLink
+  ArrowLeftRight, SlidersHorizontal, Move, Monitor, Maximize, EyeOff, Type
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { 
@@ -37,8 +37,8 @@ const YOUR_FIREBASE_CONFIG = {
 // ----------------------------------------------------------------------
 // 상수 및 설정
 // ----------------------------------------------------------------------
-const APP_VERSION = "v0.7.5"; 
-const BUILD_DATE = "2026.01.24";
+const APP_VERSION = "v0.7.3"; 
+const BUILD_DATE = "2026.01.22";
 const ADMIN_PASSWORD = "adminlcg1"; 
 
 // Firebase 초기화
@@ -70,7 +70,7 @@ try {
 // 카테고리 정의
 const CATEGORIES = [
   { id: 'ALL', label: 'Total View', isSpecial: true, color: '#18181b' },
-  // { id: 'NEW', label: 'New Arrivals', isSpecial: true, color: '#ef4444' }, // v0.7.5 Removed
+  { id: 'NEW', label: 'New Arrivals', isSpecial: true, color: '#ef4444' },
   { id: 'EXECUTIVE', label: 'Executive', color: '#2563eb' },
   { id: 'TASK', label: 'Task', color: '#0891b2' },
   { id: 'CONFERENCE', label: 'Conference', color: '#7c3aed' },
@@ -140,24 +140,20 @@ export default function App() {
   const [activeCategory, setActiveCategory] = useState('DASHBOARD');
   const [previousCategory, setPreviousCategory] = useState('DASHBOARD'); 
   const [activeSpaceTag, setActiveSpaceTag] = useState('ALL'); 
+  const [searchTerm, setSearchTerm] = useState('');
   
-  // Search Chips (v0.7.5)
-  const [searchTags, setSearchTags] = useState([]);
-  const [currentSearchInput, setCurrentSearchInput] = useState('');
-
-  // Modal Stack (v0.7.5)
-  // Each item: { type: 'PRODUCT'|'SWATCH'|'SCENE', data: object, id: unique }
-  const [modalStack, setModalStack] = useState([]);
-
   // Sorting & Filtering
   const [sortOption, setSortOption] = useState('manual'); 
   const [sortDirection, setSortDirection] = useState('desc'); 
   const [filters, setFilters] = useState({ year: '', color: '', isNew: false });
   const [isFilterOpen, setIsFilterOpen] = useState(false);
 
-  // Compare
+  // Selection & Compare
+  const [selectedProduct, setSelectedProduct] = useState(null);
+  const [selectedSwatch, setSelectedSwatch] = useState(null);
   const [compareList, setCompareList] = useState([]);
   const [hiddenCompareIds, setHiddenCompareIds] = useState([]); 
+  const [isCompareModalOpen, setIsCompareModalOpen] = useState(false);
 
   // Edit & Admin
   const [isFormOpen, setIsFormOpen] = useState(false); 
@@ -184,6 +180,7 @@ export default function App() {
   const [editingSpaceInfoId, setEditingSpaceInfoId] = useState(null);
   const [managingSpaceProductsId, setManagingSpaceProductsId] = useState(null);
   const [editingScene, setEditingScene] = useState(null);
+  const [selectedScene, setSelectedScene] = useState(null);
   
   // Drag & Drop
   const dragItem = useRef(null);
@@ -192,22 +189,14 @@ export default function App() {
   const mainContentRef = useRef(null);
   const sidebarLogoInputRef = useRef(null);
 
-  // --- v0.7.5 Effects ---
-  // Modal Scroll Lock
-  useEffect(() => {
-    if (modalStack.length > 0 || isFormOpen || editingScene || showAdminDashboard) {
-        document.body.style.overflow = 'hidden';
-    } else {
-        document.body.style.overflow = '';
-    }
-    return () => { document.body.style.overflow = ''; };
-  }, [modalStack.length, isFormOpen, editingScene, showAdminDashboard]);
-
+  // --- Effects ---
   useEffect(() => {
     const handleEsc = (e) => {
         if (e.key === 'Escape') {
             if (editingSwatchFromModal) setEditingSwatchFromModal(null);
-            else if (modalStack.length > 0) popModal();
+            else if (selectedSwatch) setSelectedSwatch(null);
+            else if (selectedProduct) setSelectedProduct(null);
+            else if (selectedScene) setSelectedScene(null);
             else if (editingScene) setEditingScene(null);
             else if (isFormOpen) setIsFormOpen(false);
             else if (managingSpaceProductsId) setManagingSpaceProductsId(null);
@@ -217,49 +206,7 @@ export default function App() {
     };
     window.addEventListener('keydown', handleEsc);
     return () => window.removeEventListener('keydown', handleEsc);
-  }, [modalStack, editingSwatchFromModal, editingScene, isFormOpen, managingSpaceProductsId, editingSpaceInfoId, showAdminDashboard]);
-
-  // Modal Stack Management Helpers
-  const pushModal = (type, data) => {
-      setModalStack(prev => [...prev, { type, data, key: Date.now() + Math.random() }]);
-      // Update URL for the top modal if it's a product
-      if (type === 'PRODUCT') {
-          const url = new URL(window.location);
-          url.searchParams.set('id', data.id);
-          window.history.pushState({ modal: 'product' }, '', url);
-      }
-  };
-
-  const popModal = () => {
-      setModalStack(prev => {
-          const newStack = prev.slice(0, -1);
-          // Restore URL if stack is empty or top item changed
-          if (newStack.length === 0) {
-              window.history.replaceState(null, '', window.location.pathname);
-          } else {
-              const top = newStack[newStack.length - 1];
-              if(top.type === 'PRODUCT') {
-                  const url = new URL(window.location);
-                  url.searchParams.set('id', top.data.id);
-                  window.history.replaceState({ modal: 'product' }, '', url);
-              }
-          }
-          return newStack;
-      });
-  };
-
-  const replaceModal = (type, data) => {
-      // Used when navigating "Next/Prev"
-      setModalStack(prev => {
-         const newStack = prev.slice(0, -1);
-         return [...newStack, { type, data, key: Date.now() }];
-      });
-       if (type === 'PRODUCT') {
-          const url = new URL(window.location);
-          url.searchParams.set('id', data.id);
-          window.history.replaceState({ modal: 'product' }, '', url);
-      }
-  };
+  }, [editingSwatchFromModal, selectedSwatch, selectedProduct, selectedScene, editingScene, isFormOpen, managingSpaceProductsId, editingSpaceInfoId, showAdminDashboard]);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -277,17 +224,31 @@ export default function App() {
 
   useEffect(() => {
     const handlePopState = (event) => {
-      if (modalStack.length > 0) {
-          popModal();
+      if (selectedSwatch && selectedProduct) {
+          setSelectedSwatch(null); 
+          window.history.pushState({ modal: 'product' }, '', window.location.pathname + '?id=' + selectedProduct.id);
+      } else if (selectedProduct) {
+        setSelectedProduct(null);
+        window.history.replaceState(null, '', window.location.pathname);
       } else if (activeCategory === 'COMPARE_PAGE') {
         setActiveCategory(previousCategory || 'DASHBOARD');
+        window.history.replaceState(null, '', window.location.pathname);
       } else if (activeCategory !== 'DASHBOARD') {
         setActiveCategory('DASHBOARD');
+        window.history.replaceState(null, '', window.location.pathname);
       }
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
-  }, [modalStack, activeCategory, previousCategory]);
+  }, [selectedProduct, selectedSwatch, activeCategory, previousCategory]);
+
+  useEffect(() => {
+    if (selectedProduct) {
+      const url = new URL(window.location);
+      url.searchParams.set('id', selectedProduct.id);
+      window.history.pushState({ modal: 'product' }, '', url);
+    }
+  }, [selectedProduct]);
 
   useEffect(() => {
      setActiveSpaceTag('ALL');
@@ -300,7 +261,7 @@ export default function App() {
     
     if (sharedId && products.length > 0) {
       const found = products.find(p => String(p.id) === sharedId);
-      if (found) pushModal('PRODUCT', found);
+      if (found) setSelectedProduct(found);
     }
     if (sharedSpace && SPACES.find(s => s.id === sharedSpace)) {
        setActiveCategory(sharedSpace);
@@ -466,15 +427,11 @@ export default function App() {
           showToast("헤더 로고가 변경되었습니다.");
       } catch(e) { showToast("이미지 처리 실패", "error"); }
   };
-  const handleSidebarTitleChange = async (key, value) => {
+  const handleSidebarTitleChange = async () => {
       if(!isAdmin) return;
-      // if value provided use it, else prompt
-      let val = value;
-      if(val === undefined) {
-         val = prompt("새로운 타이틀을 입력하세요:", appSettings[key]);
-      }
-      if(val !== null && val !== undefined) {
-          const newData = { ...appSettings, [key]: val };
+      const newTitle = prompt("새로운 타이틀을 입력하세요:", appSettings.title);
+      if(newTitle !== null) {
+          const newData = { ...appSettings, title: newTitle };
           if(isFirebaseAvailable && db) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'app'), newData, {merge: true});
           else { localStorage.setItem('patra_app_settings', JSON.stringify(newData)); setAppSettings(newData); }
       }
@@ -552,13 +509,8 @@ export default function App() {
       } 
       
       setCompareList(prev => prev.map(p => p.id === docId ? payload : p));
-      
-      // If editing a product in modal stack, update it
-      setModalStack(prev => prev.map(item => {
-          if(item.type === 'PRODUCT' && String(item.data.id) === docId) return { ...item, data: payload };
-          return item;
-      }));
 
+      if (selectedProduct && String(selectedProduct.id) === docId) setSelectedProduct(payload); 
       setIsFormOpen(false); 
       setEditingProduct(null); 
       showToast(isEdit ? "수정 완료" : "등록 완료"); 
@@ -573,12 +525,7 @@ export default function App() {
       } 
       
       setCompareList(prev => prev.filter(p => p.id !== productId));
-      
-      // Remove from stack if open
-      if (modalStack.some(m => m.type === 'PRODUCT' && m.data.id === productId)) {
-          popModal();
-      }
-
+      setSelectedProduct(null); 
       setIsFormOpen(false); 
       showToast("삭제되었습니다."); 
   };
@@ -597,32 +544,13 @@ export default function App() {
      showToast("스와치가 복제되었습니다.");
   };
 
-  // --- Search Chip Logic (v0.7.5) ---
-  const handleSearchKeyDown = (e) => {
-      if (e.key === 'Enter' || e.key === ',') {
-          e.preventDefault();
-          const val = currentSearchInput.trim();
-          if (val && !searchTags.includes(val)) {
-              setSearchTags([...searchTags, val]);
-              setCurrentSearchInput('');
-              if (activeCategory !== 'DASHBOARD' && activeCategory !== 'ALL' && !activeCategory.includes('_HUB')) {
-                   // Optional: force dashboard if needed, but Contextual search is requested.
-              }
-          }
-      } else if (e.key === 'Backspace' && !currentSearchInput && searchTags.length > 0) {
-          setSearchTags(searchTags.slice(0, -1));
-      }
-  };
-  const removeSearchTag = (tag) => setSearchTags(searchTags.filter(t => t !== tag));
-
   // --- Data & Filters ---
   const getProcessedProducts = () => {
     let filtered = products.filter(product => {
       let matchesCategory = true;
       if (activeCategory === 'DASHBOARD' || activeCategory === 'COMPARE_PAGE') matchesCategory = false; 
       else if (activeCategory === 'MY_PICK') matchesCategory = favorites.includes(product.id);
-      else if (activeCategory === 'SPACES_HUB') matchesCategory = false; // Hub handles own filtering
-      else if (activeCategory === 'MATERIALS_HUB') matchesCategory = false;
+      else if (activeCategory === 'NEW') matchesCategory = product.isNew;
       else if (activeCategory === 'ALL') matchesCategory = true;
       else if (SPACES.find(s => s.id === activeCategory)) {
          matchesCategory = product.spaces && product.spaces.includes(activeCategory);
@@ -630,16 +558,9 @@ export default function App() {
       }
       else if (SWATCH_CATEGORIES.find(s => s.id === activeCategory)) matchesCategory = false; 
       else matchesCategory = product.category === activeCategory;
-      
-      // v0.7.5: Search Logic (AND logic for tags + input)
+      const searchLower = searchTerm.toLowerCase();
       const searchFields = [ product.name, product.specs, product.designer, ...(product.features || []), ...(product.options || []), ...(product.awards || []), ...(product.materials || []), ...(product.bodyColors || []).map(c => typeof c === 'object' ? c.name : c), ...(product.upholsteryColors || []).map(c => typeof c === 'object' ? c.name : c) ];
-      const joinedFields = searchFields.join(' ').toLowerCase();
-      
-      const inputMatch = !currentSearchInput || joinedFields.includes(currentSearchInput.toLowerCase());
-      const tagsMatch = searchTags.length === 0 || searchTags.every(tag => joinedFields.includes(tag.toLowerCase()));
-      
-      const matchesSearch = inputMatch && tagsMatch;
-
+      const matchesSearch = !searchTerm || searchFields.join(' ').toLowerCase().includes(searchLower);
       let matchesFilter = true;
       if(filters.isNew && !product.isNew) matchesFilter = false;
       if(filters.year && !product.launchDate?.startsWith(filters.year)) matchesFilter = false;
@@ -673,25 +594,9 @@ export default function App() {
      setProducts(_products); dragItem.current = null; dragOverItem.current = null;
   };
 
-  // --- Navigation (Modal Stack Aware) ---
-  const handleNavigateNext = () => { 
-      const topModal = modalStack[modalStack.length - 1];
-      if(!topModal || topModal.type !== 'PRODUCT') return;
-      
-      const currentIndex = processedProducts.findIndex(p => p.id === topModal.data.id); 
-      if(currentIndex >= 0 && currentIndex < processedProducts.length - 1) { 
-          replaceModal('PRODUCT', processedProducts[currentIndex + 1]); 
-      } 
-  };
-  const handleNavigatePrev = () => { 
-      const topModal = modalStack[modalStack.length - 1];
-      if(!topModal || topModal.type !== 'PRODUCT') return;
-
-      const currentIndex = processedProducts.findIndex(p => p.id === topModal.data.id); 
-      if(currentIndex > 0) { 
-          replaceModal('PRODUCT', processedProducts[currentIndex - 1]); 
-      } 
-  };
+  // --- Navigation (Swipe) ---
+  const handleNavigateNext = () => { if(!selectedProduct) return; const currentIndex = processedProducts.findIndex(p => p.id === selectedProduct.id); if(currentIndex >= 0 && currentIndex < processedProducts.length - 1) { setSelectedProduct(processedProducts[currentIndex + 1]); } };
+  const handleNavigatePrev = () => { if(!selectedProduct) return; const currentIndex = processedProducts.findIndex(p => p.id === selectedProduct.id); if(currentIndex > 0) { setSelectedProduct(processedProducts[currentIndex - 1]); } };
 
   // Import/Export
   const handleExportData = () => { const dataStr = JSON.stringify({ products, swatches, spaces: spaceContents, version: APP_VERSION }, null, 2); const blob = new Blob([dataStr], { type: "application/json" }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `patra_db_backup_${new Date().toISOString().slice(0,10)}.json`; a.click(); showToast("데이터 백업이 완료되었습니다."); };
@@ -707,8 +612,6 @@ export default function App() {
         .slide-in-animation {
           animation: slideIn 0.3s ease-out forwards;
         }
-        .pb-safe { padding-bottom: env(safe-area-inset-bottom, 20px); }
-        .mb-safe { margin-bottom: env(safe-area-inset-bottom, 20px); }
       `}</style>
       {isMobileMenuOpen && <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 md:hidden animate-in fade-in" onClick={() => setIsMobileMenuOpen(false)} />}
       
@@ -725,41 +628,20 @@ export default function App() {
                  {isAdmin && (
                      <div className="absolute right-12 top-6 opacity-0 group-hover/header:opacity-100 transition-opacity flex space-x-1">
                          <button onClick={(e)=>{e.stopPropagation(); sidebarLogoInputRef.current.click()}} className="p-1 bg-zinc-100 rounded hover:bg-zinc-200"><ImageIcon className="w-3 h-3"/></button>
-                         <button onClick={(e)=>{e.stopPropagation(); handleSidebarTitleChange('title')}} className="p-1 bg-zinc-100 rounded hover:bg-zinc-200"><Type className="w-3 h-3"/></button>
+                         <button onClick={(e)=>{e.stopPropagation(); handleSidebarTitleChange()}} className="p-1 bg-zinc-100 rounded hover:bg-zinc-200"><Type className="w-3 h-3"/></button>
                          <input type="file" ref={sidebarLogoInputRef} className="hidden" accept="image/*" onChange={handleSidebarLogoUpload}/>
                      </div>
                  )}
              </div>
-             <div className="flex items-center relative group/subtitle">
-                <span className="text-[10px] font-medium text-zinc-500 tracking-[0.2em] uppercase mt-0.5">{appSettings.subtitle || "Design Lab DB"}</span>
-                {isAdmin && <button onClick={(e)=>{e.stopPropagation(); handleSidebarTitleChange('subtitle')}} className="ml-1 opacity-0 group-hover/subtitle:opacity-100 p-0.5"><Edit2 className="w-2 h-2 text-zinc-400"/></button>}
-             </div>
+             <span className="text-[10px] font-medium text-zinc-500 tracking-[0.2em] uppercase mt-0.5">Design Lab DB</span>
           </div>
           <button onClick={(e) => { e.stopPropagation(); setIsMobileMenuOpen(false); }} className="md:hidden text-zinc-400 hover:text-zinc-600"><X className="w-6 h-6" /></button>
         </div>
         <nav className="flex-1 overflow-y-auto py-6 px-4 space-y-4 custom-scrollbar">
-          <div className="space-y-1">{CATEGORIES.filter(c => c.isSpecial).map((cat) => (<button key={cat.id} onClick={() => { setActiveCategory(cat.id); setIsMobileMenuOpen(false); }} className={`w-full text-left px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 flex items-center justify-between group border ${activeCategory === cat.id ? 'bg-zinc-900 text-white shadow-lg border-zinc-900' : 'bg-white text-zinc-600 border-zinc-100 hover:bg-zinc-50 hover:border-zinc-300'}`}><div className="flex items-center">{cat.id === 'ALL' && <LayoutGrid className="w-4 h-4 mr-3 opacity-70" />}<span className="font-bold tracking-tight">{cat.label}</span></div></button>))}</div>
-          
-          {/* SPACES: Click text -> SPACES_HUB, Click icon -> Toggle dropdown */}
-          <div className="py-2">
-              <div className={`w-full text-left px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 flex items-center justify-between group border bg-white text-zinc-600 border-zinc-100 hover:bg-zinc-50 hover:border-zinc-300 mb-1 shadow-sm`}>
-                  <button onClick={() => { setActiveCategory('SPACES_HUB'); setIsMobileMenuOpen(false); }} className="flex-1 text-left font-bold tracking-tight">SPACES</button>
-                  <button onClick={(e) => { e.stopPropagation(); setSidebarState(p => ({...p, spaces: !p.spaces})); }} className="p-1 hover:bg-zinc-200 rounded-full">{sidebarState.spaces ? <ChevronUp className="w-4 h-4 text-zinc-400" /> : <ChevronDown className="w-4 h-4 text-zinc-400" />}</button>
-              </div>
-              {sidebarState.spaces && (<div className="space-y-1 mt-2 pl-2 animate-in slide-in-from-top-2 duration-200">{SPACES.map((space) => (<button key={space.id} onClick={() => { setActiveCategory(space.id); setIsMobileMenuOpen(false); }} className={`w-full text-left px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 flex items-center justify-between group ${activeCategory === space.id ? 'bg-zinc-800 text-white font-bold' : 'text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900'}`}><div className="flex items-center"><space.icon className={`w-3.5 h-3.5 mr-3 ${activeCategory === space.id ? 'text-white' : 'text-zinc-400'}`} />{space.label}</div>{activeCategory === space.id && <div className="w-1.5 h-1.5 rounded-full bg-green-500"></div>}</button>))}</div>)}
-          </div>
-
+          <div className="space-y-1">{CATEGORIES.filter(c => c.isSpecial).map((cat) => (<button key={cat.id} onClick={() => { setActiveCategory(cat.id); setIsMobileMenuOpen(false); }} className={`w-full text-left px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 flex items-center justify-between group border ${activeCategory === cat.id ? 'bg-zinc-900 text-white shadow-lg border-zinc-900' : 'bg-white text-zinc-600 border-zinc-100 hover:bg-zinc-50 hover:border-zinc-300'}`}><div className="flex items-center">{cat.id === 'ALL' && <LayoutGrid className="w-4 h-4 mr-3 opacity-70" />}{cat.id === 'NEW' && <Zap className="w-4 h-4 mr-3 opacity-70" />}<span className="font-bold tracking-tight">{cat.label}</span></div>{cat.id === 'NEW' && <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse ml-auto"></span>}</button>))}</div>
+          <div className="py-2"><button onClick={() => setSidebarState(p => ({...p, spaces: !p.spaces}))} className={`w-full text-left px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 flex items-center justify-between group border bg-white text-zinc-600 border-zinc-100 hover:bg-zinc-50 hover:border-zinc-300 mb-1 shadow-sm`}><span className="font-bold tracking-tight">SPACES</span>{sidebarState.spaces ? <ChevronUp className="w-4 h-4 text-zinc-400" /> : <ChevronDown className="w-4 h-4 text-zinc-400" />}</button>{sidebarState.spaces && (<div className="space-y-1 mt-2 pl-2 animate-in slide-in-from-top-2 duration-200">{SPACES.map((space) => (<button key={space.id} onClick={() => { setActiveCategory(space.id); setIsMobileMenuOpen(false); }} className={`w-full text-left px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 flex items-center justify-between group ${activeCategory === space.id ? 'bg-zinc-800 text-white font-bold' : 'text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900'}`}><div className="flex items-center"><space.icon className={`w-3.5 h-3.5 mr-3 ${activeCategory === space.id ? 'text-white' : 'text-zinc-400'}`} />{space.label}</div>{activeCategory === space.id && <div className="w-1.5 h-1.5 rounded-full bg-green-500"></div>}</button>))}</div>)}</div>
           <div className="py-2"><button onClick={() => setSidebarState(p => ({...p, collections: !p.collections}))} className={`w-full text-left px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 flex items-center justify-between group border bg-white text-zinc-600 border-zinc-100 hover:bg-zinc-50 hover:border-zinc-300 mb-1 shadow-sm`}><div className="flex items-center"><span className="font-bold tracking-tight">COLLECTIONS</span>{isFirebaseAvailable ? <Cloud className="w-3 h-3 ml-2 text-green-500" /> : <CloudOff className="w-3 h-3 ml-2 text-zinc-300" />}</div>{sidebarState.collections ? <ChevronUp className="w-4 h-4 text-zinc-400" /> : <ChevronDown className="w-4 h-4 text-zinc-400" />}</button>{sidebarState.collections && (<div className="space-y-0.5 mt-2 pl-2 animate-in slide-in-from-top-2 duration-200">{CATEGORIES.filter(c => !c.isSpecial).map((cat) => (<button key={cat.id} onClick={() => { setActiveCategory(cat.id); setIsMobileMenuOpen(false); }} className={`w-full text-left px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center justify-between group ${activeCategory === cat.id ? 'bg-zinc-100 text-zinc-900 font-bold' : 'text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900'}`}>{cat.label}</button>))}</div>)}</div>
-          
-          {/* MATERIALS: Click text -> MATERIALS_HUB, Click icon -> Toggle dropdown */}
-          <div className="py-2">
-             <div className={`w-full text-left px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 flex items-center justify-between group border bg-white text-zinc-600 border-zinc-100 hover:bg-zinc-50 hover:border-zinc-300 mb-1 shadow-sm`}>
-                  <button onClick={() => { setActiveCategory('MATERIALS_HUB'); setIsMobileMenuOpen(false); }} className="flex-1 text-left flex items-center font-bold tracking-tight">MATERIALS</button>
-                  <button onClick={(e) => { e.stopPropagation(); setSidebarState(p => ({...p, materials: !p.materials})); }} className="p-1 hover:bg-zinc-200 rounded-full">{sidebarState.materials ? <ChevronUp className="w-4 h-4 text-zinc-400" /> : <ChevronDown className="w-4 h-4 text-zinc-400" />}</button>
-              </div>
-              {sidebarState.materials && (<div className="space-y-0.5 mt-2 pl-2 animate-in slide-in-from-top-2 duration-200">{SWATCH_CATEGORIES.map((cat) => (<button key={cat.id} onClick={() => { setActiveCategory(cat.id); setIsMobileMenuOpen(false); }} className={`w-full text-left px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center justify-between group ${activeCategory === cat.id ? 'bg-zinc-100 text-zinc-900 font-bold' : 'text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900'}`}>{cat.label}</button>))}</div>)}
-          </div>
-
+          <div className="py-2"><button onClick={() => setSidebarState(p => ({...p, materials: !p.materials}))} className={`w-full text-left px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 flex items-center justify-between group border bg-white text-zinc-600 border-zinc-100 hover:bg-zinc-50 hover:border-zinc-300 mb-1 shadow-sm`}><div className="flex items-center"><span className="font-bold tracking-tight">MATERIALS</span></div>{sidebarState.materials ? <ChevronUp className="w-4 h-4 text-zinc-400" /> : <ChevronDown className="w-4 h-4 text-zinc-400" />}</button>{sidebarState.materials && (<div className="space-y-0.5 mt-2 pl-2 animate-in slide-in-from-top-2 duration-200">{SWATCH_CATEGORIES.map((cat) => (<button key={cat.id} onClick={() => { setActiveCategory(cat.id); setIsMobileMenuOpen(false); }} className={`w-full text-left px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center justify-between group ${activeCategory === cat.id ? 'bg-zinc-100 text-zinc-900 font-bold' : 'text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900'}`}>{cat.label}</button>))}</div>)}</div>
           <div className="pt-2"><button onClick={() => { setActiveCategory('MY_PICK'); setIsMobileMenuOpen(false); }} className={`w-full text-left px-4 py-3 rounded-xl text-sm font-bold transition-all duration-200 flex items-center space-x-3 group border ${activeCategory === 'MY_PICK' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' : 'text-zinc-400 border-transparent hover:bg-zinc-50 hover:text-zinc-600'}`}><Heart className={`w-4 h-4 ${activeCategory === 'MY_PICK' ? 'fill-yellow-500 text-yellow-500' : ''}`} /><span>My Pick ({favorites.length})</span></button></div>
         </nav>
         <div className="p-4 border-t border-zinc-100 bg-zinc-50/50 space-y-3">
@@ -773,25 +655,7 @@ export default function App() {
         <header className="h-14 md:h-16 bg-white/80 backdrop-blur-md border-b border-zinc-100 flex items-center justify-between px-4 md:px-8 z-30 flex-shrink-0 sticky top-0 transition-all print:hidden">
           <div className="flex items-center space-x-3 w-full md:w-auto flex-1 mr-4">
             <button onClick={() => setIsMobileMenuOpen(true)} className="md:hidden p-2 -ml-2 text-zinc-600 hover:bg-zinc-100 rounded-lg active:scale-95 transition-transform"><Menu className="w-6 h-6" /></button>
-            <div className="relative w-full max-w-md group flex items-center bg-zinc-50/50 border border-transparent focus-within:bg-white focus-within:border-zinc-200 focus-within:ring-4 focus-within:ring-zinc-50 rounded-full transition-all">
-                <Search className="text-zinc-400 w-4 h-4 ml-3 flex-shrink-0" />
-                <div className="flex-1 flex flex-wrap gap-1 items-center px-2 py-1.5 overflow-hidden">
-                    {searchTags.map(tag => (
-                        <span key={tag} className="inline-flex items-center bg-zinc-200 text-zinc-800 text-xs px-2 py-0.5 rounded-full font-bold">
-                            {tag} <button onClick={()=>removeSearchTag(tag)} className="ml-1 hover:text-red-500"><X className="w-3 h-3"/></button>
-                        </span>
-                    ))}
-                    <input 
-                        type="text" 
-                        placeholder={searchTags.length > 0 ? "" : "Search..."}
-                        value={currentSearchInput} 
-                        onChange={(e) => setCurrentSearchInput(e.target.value)} 
-                        onKeyDown={handleSearchKeyDown}
-                        className="bg-transparent border-none outline-none text-sm min-w-[60px] flex-1" 
-                    />
-                </div>
-                {searchTags.length > 0 && <button onClick={() => setSearchTags([])} className="p-1 mr-2 text-zinc-400 hover:text-zinc-600"><X className="w-4 h-4"/></button>}
-            </div>
+            <div className="relative w-full max-w-md group"><Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-zinc-400 w-4 h-4 group-focus-within:text-zinc-800 transition-colors" /><input type="text" placeholder="Search..." value={searchTerm} onChange={(e) => { setSearchTerm(e.target.value); if (activeCategory === 'DASHBOARD' && e.target.value) setActiveCategory('ALL'); }} className="w-full pl-10 pr-4 py-2 bg-zinc-50/50 border border-transparent focus:bg-white focus:border-zinc-200 focus:ring-4 focus:ring-zinc-50 rounded-full text-sm transition-all outline-none" /></div>
           </div>
           <div className="flex items-center space-x-2">
              {compareList.length > 0 && <button onClick={handleCompareButtonClick} className={`flex items-center px-3 py-1.5 rounded-full text-xs font-bold animate-in fade-in transition-all mr-2 shadow-lg ${activeCategory === 'COMPARE_PAGE' ? 'bg-black text-white ring-2 ring-zinc-200' : 'bg-zinc-900 text-white hover:bg-black'}`}><ArrowLeftRight className="w-3 h-3 mr-1.5"/> Compare ({compareList.length})</button>}
@@ -807,27 +671,16 @@ export default function App() {
 
         {isFilterOpen && (
            <div className="bg-zinc-50 border-b border-zinc-200 p-4 flex gap-4 overflow-x-auto items-center animate-in slide-in-from-top-5">
-              <div className="flex items-center space-x-2"><span className="text-xs font-bold text-zinc-500">Year:</span><input type="number" placeholder="YYYY" className="px-2 py-1 rounded border text-xs" value={filters.year} onChange={e=>{setFilters({...filters, year: e.target.value}); if(activeCategory === 'DASHBOARD') setActiveCategory('ALL');}} /></div>
-              <div className="flex items-center space-x-2"><span className="text-xs font-bold text-zinc-500">Color:</span><input type="text" placeholder="Red, Blue..." className="px-2 py-1 rounded border text-xs" value={filters.color} onChange={e=>{setFilters({...filters, color: e.target.value}); if(activeCategory === 'DASHBOARD') setActiveCategory('ALL');}} /></div>
-              <label className="flex items-center space-x-2 text-xs font-bold text-zinc-600 cursor-pointer"><input type="checkbox" checked={filters.isNew} onChange={e=>{setFilters({...filters, isNew: e.target.checked}); if(activeCategory === 'DASHBOARD') setActiveCategory('ALL');}} /> <span>New Only</span></label>
+              <div className="flex items-center space-x-2"><span className="text-xs font-bold text-zinc-500">Year:</span><input type="number" placeholder="YYYY" className="px-2 py-1 rounded border text-xs" value={filters.year} onChange={e=>setFilters({...filters, year: e.target.value})} /></div>
+              <div className="flex items-center space-x-2"><span className="text-xs font-bold text-zinc-500">Color:</span><input type="text" placeholder="Red, Blue..." className="px-2 py-1 rounded border text-xs" value={filters.color} onChange={e=>setFilters({...filters, color: e.target.value})} /></div>
+              <label className="flex items-center space-x-2 text-xs font-bold text-zinc-600 cursor-pointer"><input type="checkbox" checked={filters.isNew} onChange={e=>setFilters({...filters, isNew: e.target.checked})} /> <span>New Only</span></label>
               <button onClick={() => setFilters({year:'', color:'', isNew:false})} className="text-xs text-red-500 hover:underline ml-auto">Reset</button>
            </div>
         )}
 
         <div ref={mainContentRef} className="flex-1 overflow-y-auto p-4 md:p-8 custom-scrollbar relative print:overflow-visible print:p-0">
-          {activeCategory === 'DASHBOARD' && (!currentSearchInput && searchTags.length===0) ? (
-            <DashboardView 
-                products={products} 
-                favorites={favorites} 
-                setActiveCategory={setActiveCategory} 
-                pushModal={pushModal} 
-                isAdmin={isAdmin} 
-                bannerData={bannerData} 
-                onBannerUpload={handleBannerUpload} 
-                onLogoUpload={handleLogoUpload} 
-                onBannerTextChange={handleBannerTextChange} 
-                onSaveBannerText={saveBannerText} 
-            />
+          {activeCategory === 'DASHBOARD' && !searchTerm ? (
+            <DashboardView products={products} favorites={favorites} setActiveCategory={setActiveCategory} setSelectedProduct={setSelectedProduct} isAdmin={isAdmin} bannerData={bannerData} onBannerUpload={handleBannerUpload} onLogoUpload={handleLogoUpload} onBannerTextChange={handleBannerTextChange} onSaveBannerText={saveBannerText} />
           ) : activeCategory === 'COMPARE_PAGE' ? (
             <CompareView 
                 products={compareList} 
@@ -835,68 +688,15 @@ export default function App() {
                 onToggleVisibility={toggleCompareVisibility}
                 onRemove={(id) => setCompareList(prev => prev.filter(p => p.id !== id))}
                 onEdit={(product) => { setEditingProduct(product); setIsFormOpen(true); }}
-                onProductClick={(product) => pushModal('PRODUCT', product)}
                 isAdmin={isAdmin}
             />
-          ) : activeCategory === 'SPACES_HUB' ? (
-              <SpacesHubView 
-                 spaces={SPACES} 
-                 spaceContents={spaceContents} 
-                 search={currentSearchInput} 
-                 onSelectSpace={setActiveCategory} 
-                 onViewScene={(scene) => pushModal('SCENE', scene)}
-              />
-          ) : activeCategory === 'MATERIALS_HUB' ? (
-              <div className="space-y-12">
-                  <div className="flex items-center justify-between mb-4 border-b border-zinc-200 pb-4">
-                      <h2 className="text-3xl font-extrabold text-zinc-900 tracking-tight">Materials Hub</h2>
-                      <span className="text-zinc-500 font-bold">{swatches.length} Total</span>
-                  </div>
-                  {SWATCH_CATEGORIES.map(cat => {
-                      const catSwatches = swatches.filter(s => s.category === cat.id && (searchTags.length===0 || searchTags.every(t=>s.name.toLowerCase().includes(t.toLowerCase()))));
-                      if(catSwatches.length === 0) return null;
-                      return (
-                        <div key={cat.id}>
-                            <SwatchManager 
-                                category={cat} 
-                                swatches={catSwatches} 
-                                isAdmin={isAdmin} 
-                                onSave={handleSaveSwatch} 
-                                onDelete={handleDeleteSwatch} 
-                                onSelect={(swatch) => pushModal('SWATCH', swatch)} 
-                                onDuplicate={handleDuplicateSwatch} 
-                            />
-                        </div>
-                      );
-                  })}
-              </div>
           ) : (
             <>
               {SPACES.find(s => s.id === activeCategory) && (
-                 <SpaceDetailView 
-                    space={SPACES.find(s => s.id === activeCategory)} 
-                    spaceContent={spaceContents[activeCategory] || {}} 
-                    isAdmin={isAdmin} 
-                    activeTag={activeSpaceTag} 
-                    setActiveTag={setActiveSpaceTag} 
-                    onBannerUpload={(e) => handleSpaceBannerUpload(e, activeCategory)} 
-                    onEditInfo={() => setEditingSpaceInfoId(activeCategory)} 
-                    onManageProducts={() => setManagingSpaceProductsId(activeCategory)} 
-                    onAddScene={() => setEditingScene({ isNew: true, spaceId: activeCategory })} 
-                    onViewScene={(scene) => pushModal('SCENE', { ...scene, spaceId: activeCategory })} 
-                    productCount={processedProducts.length} 
-                 />
+                 <SpaceDetailView space={SPACES.find(s => s.id === activeCategory)} spaceContent={spaceContents[activeCategory] || {}} isAdmin={isAdmin} activeTag={activeSpaceTag} setActiveTag={setActiveSpaceTag} onBannerUpload={(e) => handleSpaceBannerUpload(e, activeCategory)} onEditInfo={() => setEditingSpaceInfoId(activeCategory)} onManageProducts={() => setManagingSpaceProductsId(activeCategory)} onAddScene={() => setEditingScene({ isNew: true, spaceId: activeCategory })} onViewScene={(scene) => setSelectedScene({ ...scene, spaceId: activeCategory })} productCount={processedProducts.length} />
               )}
               {SWATCH_CATEGORIES.find(s => s.id === activeCategory) && (
-                <SwatchManager 
-                    category={SWATCH_CATEGORIES.find(s => s.id === activeCategory)} 
-                    swatches={swatches.filter(s => s.category === activeCategory)} 
-                    isAdmin={isAdmin} 
-                    onSave={handleSaveSwatch} 
-                    onDelete={handleDeleteSwatch} 
-                    onSelect={(swatch) => pushModal('SWATCH', swatch)} 
-                    onDuplicate={handleDuplicateSwatch} 
-                />
+                <SwatchManager category={SWATCH_CATEGORIES.find(s => s.id === activeCategory)} swatches={swatches.filter(s => s.category === activeCategory)} isAdmin={isAdmin} onSave={handleSaveSwatch} onDelete={handleDeleteSwatch} onSelect={(swatch) => setSelectedSwatch(swatch)} onDuplicate={handleDuplicateSwatch} />
               )}
               {!SWATCH_CATEGORIES.find(s => s.id === activeCategory) && (
                 <>
@@ -914,21 +714,21 @@ export default function App() {
                         </div>
                       )}
                       {activeCategory === 'MY_PICK' && myPickViewMode === 'list' ? (
-                        <div className="space-y-4 print:space-y-6 pb-32">
+                        <div className="space-y-4 print:space-y-6">
                             <div className="hidden print:block mb-8"><h1 className="text-4xl font-bold mb-2">MY PICK SELECTION</h1><p className="text-zinc-500">{new Date().toLocaleDateString()} · Patra Design Lab</p></div>
                             {processedProducts.map((product) => (<div key={product.id} className="flex flex-col md:flex-row gap-6 p-6 bg-white rounded-2xl border border-zinc-200 print:border-zinc-300 print:break-inside-avoid"><div className="w-full md:w-48 h-48 bg-zinc-50 rounded-xl overflow-hidden flex-shrink-0 border border-zinc-100 flex items-center justify-center">{product.images?.[0] ? <img src={typeof product.images[0] === 'object' ? product.images[0].url : product.images[0]} className="w-full h-full object-contain mix-blend-multiply" alt={product.name} /> : <ImageIcon className="w-8 h-8 text-zinc-300"/>}</div><div className="flex-1"><div className="flex justify-between items-start"><div><span className="inline-block px-2 py-0.5 bg-zinc-100 text-zinc-600 text-xs font-bold rounded mb-2">{product.category}</span><h3 className="text-2xl font-bold text-zinc-900 mb-1">{product.name}</h3><p className="text-zinc-500 font-medium text-sm mb-4">Designed by {product.designer || 'Patra Design Lab'}</p></div><button onClick={(e) => toggleFavorite(e, product.id)} className="print:hidden text-yellow-400 hover:scale-110 transition-transform"><Star className="w-6 h-6 fill-current"/></button></div><div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm"><div className="bg-zinc-50 p-3 rounded-lg"><span className="font-bold block text-xs text-zinc-400 uppercase mb-1">Specs</span>{product.specs}</div><div className="space-y-2"><div><span className="font-bold text-xs text-zinc-400 uppercase">Options</span> <span className="text-zinc-700">{product.options?.join(', ')}</span></div><div><span className="font-bold text-xs text-zinc-400 uppercase block mb-1">Colors</span> <div className="flex gap-2 mb-1"><span className="text-xs text-zinc-400 w-16">Body:</span><div className="flex gap-1">{product.bodyColors?.map((c, i) => <SwatchDisplay key={i} color={c} size="small" />)}</div></div><div className="flex gap-2"><span className="text-xs text-zinc-400 w-16">Upholstery:</span><div className="flex gap-1">{product.upholsteryColors?.map((c, i) => <SwatchDisplay key={i} color={c} size="small" />)}</div></div></div></div></div></div></div>))}
                         </div>
                       ) : (
-                        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-6 pb-32 print:grid-cols-3 print:gap-4">
+                        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-6 pb-20 print:grid-cols-3 print:gap-4">
                             {processedProducts.map((product, idx) => (
                                <div key={product.id} draggable={isAdmin && sortOption === 'manual'} onDragStart={(e) => handleDragStart(e, idx)} onDragEnter={(e) => handleDragEnter(e, idx)} onDragEnd={handleDragEnd} className={isAdmin && sortOption === 'manual' ? 'cursor-move active:opacity-50 transition-all' : ''}>
-                                  <ProductCard product={product} onClick={() => pushModal('PRODUCT', product)} isAdmin={isAdmin} isFavorite={favorites.includes(product.id)} onToggleFavorite={(e) => toggleFavorite(e, product.id)} onCompareToggle={(e) => toggleCompare(e, product)} onDuplicate={(e) => { e.stopPropagation(); handleDuplicateProduct(product); }} isCompared={!!compareList.find(p=>p.id===product.id)} />
+                                  <ProductCard product={product} onClick={() => setSelectedProduct(product)} isAdmin={isAdmin} isFavorite={favorites.includes(product.id)} onToggleFavorite={(e) => toggleFavorite(e, product.id)} onCompareToggle={(e) => toggleCompare(e, product)} onDuplicate={(e) => { e.stopPropagation(); handleDuplicateProduct(product); }} isCompared={!!compareList.find(p=>p.id===product.id)} />
                                </div>
                             ))}
-                            {isAdmin && activeCategory !== 'MY_PICK' && !activeCategory.includes('_HUB') && !SPACES.find(s => s.id === activeCategory) && (<button onClick={() => { setEditingProduct(null); setIsFormOpen(true); }} className="border-2 border-dashed border-zinc-200 rounded-2xl flex flex-col items-center justify-center min-h-[250px] md:min-h-[300px] text-zinc-400 hover:border-zinc-400 hover:text-zinc-600 hover:bg-zinc-50 transition-all group print:hidden"><div className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-zinc-100 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform"><Plus className="w-6 h-6" /></div><span className="text-xs md:text-sm font-bold">Add Product</span></button>)}
+                            {isAdmin && activeCategory !== 'MY_PICK' && activeCategory !== 'NEW' && !SPACES.find(s => s.id === activeCategory) && (<button onClick={() => { setEditingProduct(null); setIsFormOpen(true); }} className="border-2 border-dashed border-zinc-200 rounded-2xl flex flex-col items-center justify-center min-h-[250px] md:min-h-[300px] text-zinc-400 hover:border-zinc-400 hover:text-zinc-600 hover:bg-zinc-50 transition-all group print:hidden"><div className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-zinc-100 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform"><Plus className="w-6 h-6" /></div><span className="text-xs md:text-sm font-bold">Add Product</span></button>)}
                         </div>
                       )}
-                      {processedProducts.length === 0 && (<div className="flex flex-col items-center justify-center py-32 text-zinc-300"><CloudOff className="w-16 h-16 mb-4 opacity-50" /><p className="text-sm font-medium">No products found.</p>{isAdmin && SPACES.find(s => s.id === activeCategory) && (<button onClick={() => setManagingSpaceProductsId(activeCategory)} className="mt-4 px-4 py-2 bg-blue-50 text-blue-600 rounded-lg text-sm font-bold hover:bg-blue-100 transition-colors">+ Select Products</button>)}</div>)}
+                      {processedProducts.length === 0 && (<div className="flex flex-col items-center justify-center py-32 text-zinc-300"><CloudOff className="w-16 h-16 mb-4 opacity-50" /><p className="text-sm font-medium">No products found for this space.</p>{isAdmin && SPACES.find(s => s.id === activeCategory) && (<button onClick={() => setManagingSpaceProductsId(activeCategory)} className="mt-4 px-4 py-2 bg-blue-50 text-blue-600 rounded-lg text-sm font-bold hover:bg-blue-100 transition-colors">+ Select Products</button>)}</div>)}
                     </>
                   )}
                 </>
@@ -941,64 +741,32 @@ export default function App() {
 
       {toast && <div className="fixed bottom-8 right-8 bg-zinc-900 text-white px-5 py-3.5 rounded-xl shadow-2xl flex items-center space-x-3 animate-in slide-in-from-bottom-10 fade-in z-[90] print:hidden">{toast.type === 'success' ? <Check className="w-5 h-5 text-green-400" /> : <Info className="w-5 h-5 text-red-400" />}<span className="text-sm font-bold tracking-wide">{toast.message}</span></div>}
       
-      {/* Modal Stack Rendering */}
-      {modalStack.map((modal, index) => {
-         const isTop = index === modalStack.length - 1;
-         const zIndex = 50 + index * 10;
-         return (
-            <div key={modal.key} style={{ zIndex, position: 'relative' }}>
-                {modal.type === 'PRODUCT' && (
-                    <ProductDetailModal 
-                        product={modal.data}
-                        allProducts={products}
-                        swatches={swatches}
-                        spaceContents={spaceContents}
-                        onClose={popModal}
-                        onEdit={() => { setEditingProduct(modal.data); setIsFormOpen(true); }}
-                        isAdmin={isAdmin}
-                        showToast={showToast}
-                        isFavorite={favorites.includes(modal.data.id)}
-                        onToggleFavorite={(e) => toggleFavorite(e, modal.data.id)}
-                        onNavigateSpace={(spaceId) => { popModal(); setActiveCategory(spaceId); }}
-                        onNavigateScene={(scene) => pushModal('SCENE', { ...scene, spaceId: scene.spaceId || 'UNKNOWN' })}
-                        onNavigateProduct={(product) => pushModal('PRODUCT', product)}
-                        onNavigateSwatch={(swatch) => pushModal('SWATCH', swatch)}
-                        onNavigateNext={handleNavigateNext}
-                        onNavigatePrev={handleNavigatePrev}
-                    />
-                )}
-                {modal.type === 'SWATCH' && (
-                    <SwatchDetailModal 
-                        swatch={modal.data}
-                        allProducts={products}
-                        swatches={swatches}
-                        isAdmin={isAdmin}
-                        onClose={popModal}
-                        onNavigateProduct={(product) => pushModal('PRODUCT', product)}
-                        onNavigateSwatch={(swatch) => pushModal('SWATCH', swatch)}
-                        onEdit={() => { popModal(); setEditingSwatchFromModal(modal.data); }}
-                    />
-                )}
-                {modal.type === 'SCENE' && (
-                    <SpaceSceneModal 
-                        scene={modal.data}
-                        products={products.filter(p => modal.data.productIds && modal.data.productIds.includes(p.id))}
-                        allProducts={products}
-                        isAdmin={isAdmin}
-                        onClose={popModal}
-                        onEdit={() => { setEditingScene({ ...modal.data, isNew: false }); popModal(); }}
-                        onProductToggle={async (pid, add) => {
-                            const newPids = add ? [...(modal.data.productIds||[]), pid] : (modal.data.productIds||[]).filter(id=>id!==pid);
-                            const updatedScene = { ...modal.data, productIds: newPids };
-                            // Update scene in stack data? ideally yes, but saving handles DB
-                            await handleSceneSave(modal.data.spaceId || 'UNKNOWN', updatedScene);
-                        }}
-                        onNavigateProduct={(p) => pushModal('PRODUCT', p)}
-                    />
-                )}
-            </div>
-         );
-      })}
+      {isCompareModalOpen && (
+         <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[100] flex items-center justify-center p-4 animate-in zoom-in-95">
+            {/* Legacy modal - keep for safety, but compare view is now a page */}
+         </div>
+      )}
+
+      {selectedProduct && (
+        <ProductDetailModal 
+          product={selectedProduct} 
+          allProducts={products}
+          swatches={swatches}
+          spaceContents={spaceContents} 
+          onClose={() => setSelectedProduct(null)} 
+          onEdit={() => { setEditingProduct(selectedProduct); setIsFormOpen(true); }} 
+          isAdmin={isAdmin} 
+          showToast={showToast} 
+          isFavorite={favorites.includes(selectedProduct.id)} 
+          onToggleFavorite={(e) => toggleFavorite(e, selectedProduct.id)} 
+          onNavigateNext={handleNavigateNext}
+          onNavigatePrev={handleNavigatePrev}
+          onNavigateSpace={(spaceId) => { setSelectedProduct(null); setActiveCategory(spaceId); }} 
+          onNavigateScene={(scene) => { setSelectedProduct(null); setActiveCategory(scene.spaceId || scene.id); setSelectedScene({...scene, spaceId: scene.spaceId || 'UNKNOWN'}); }}
+          onNavigateProduct={(product) => setSelectedProduct(product)}
+          onNavigateSwatch={(swatch) => { setSelectedSwatch(swatch); /* Layer on top */ }}
+        />
+      )}
       
       {isFormOpen && (
         <ProductFormModal 
@@ -1012,6 +780,19 @@ export default function App() {
           onDelete={handleDeleteProduct} 
           isFirebaseAvailable={isFirebaseAvailable} 
           spaceTags={SPACES.find(s=>s.id===activeCategory)?.defaultTags || []} 
+        />
+      )}
+      
+      {selectedSwatch && (
+        <SwatchDetailModal 
+          swatch={selectedSwatch}
+          allProducts={products}
+          swatches={swatches}
+          isAdmin={isAdmin}
+          onClose={() => setSelectedSwatch(null)}
+          onNavigateProduct={(product) => { setSelectedSwatch(null); setSelectedProduct(product); }}
+          onNavigateSwatch={(swatch) => setSelectedSwatch(swatch)}
+          onEdit={() => { setSelectedSwatch(null); setEditingSwatchFromModal(selectedSwatch); }}
         />
       )}
       
@@ -1055,6 +836,24 @@ export default function App() {
         />
       )}
       
+      {selectedScene && (
+        <SpaceSceneModal 
+           scene={selectedScene} 
+           products={products.filter(p => selectedScene.productIds && selectedScene.productIds.includes(p.id))} 
+           allProducts={products}
+           isAdmin={isAdmin} 
+           onClose={() => setSelectedScene(null)} 
+           onEdit={() => { setEditingScene({ ...selectedScene, isNew: false }); setSelectedScene(null); }} 
+           onProductToggle={async (pid, add) => {
+              const newPids = add ? [...(selectedScene.productIds||[]), pid] : (selectedScene.productIds||[]).filter(id=>id!==pid);
+              const updatedScene = { ...selectedScene, productIds: newPids };
+              setSelectedScene(updatedScene);
+              await handleSceneSave(selectedScene.spaceId, updatedScene);
+           }}
+           onNavigateProduct={(p) => { setSelectedScene(null); setSelectedProduct(p); }}
+        />
+      )}
+      
       {showAdminDashboard && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4 print:hidden">
           <div className="bg-white w-full max-w-4xl rounded-2xl overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200 max-h-[85vh] flex flex-col">
@@ -1095,7 +894,7 @@ export default function App() {
 // Helper Components
 // ----------------------------------------------------------------------
 
-function CompareView({ products, hiddenIds, onToggleVisibility, onRemove, onEdit, onProductClick, isAdmin }) {
+function CompareView({ products, hiddenIds, onToggleVisibility, onRemove, onEdit, isAdmin }) {
     const visibleProducts = products.filter(p => !hiddenIds.includes(p.id));
 
     return (
@@ -1115,7 +914,7 @@ function CompareView({ products, hiddenIds, onToggleVisibility, onRemove, onEdit
                 ))}
             </div>
 
-            <div className="flex-1 overflow-auto bg-white relative pb-32">
+            <div className="flex-1 overflow-auto bg-white relative">
                 <table className="w-full table-fixed border-collapse">
                     <thead>
                         <tr>
@@ -1124,7 +923,7 @@ function CompareView({ products, hiddenIds, onToggleVisibility, onRemove, onEdit
                             {visibleProducts.map(p => (
                                 <th key={p.id} className="w-36 md:w-72 bg-white border-b border-r border-zinc-100 p-2 md:p-4 align-top sticky top-0 z-10">
                                     <div className="relative group">
-                                        <div onClick={() => onProductClick(p)} className="aspect-[4/3] bg-zinc-50 rounded-xl mb-2 md:mb-4 flex items-center justify-center overflow-hidden border border-zinc-100 relative max-h-24 md:max-h-full cursor-pointer">
+                                        <div className="aspect-[4/3] bg-zinc-50 rounded-xl mb-2 md:mb-4 flex items-center justify-center overflow-hidden border border-zinc-100 relative max-h-24 md:max-h-full">
                                             {p.images?.[0] ? <img src={typeof p.images[0] === 'object' ? p.images[0].url : p.images[0]} className="w-full h-full object-contain mix-blend-multiply" /> : <ImageIcon className="text-zinc-300"/>}
                                             <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors"></div>
                                         </div>
@@ -1209,16 +1008,13 @@ function SwatchDisplay({ color, size = 'medium', className = '', onClick }) {
   const image = isObject ? color.image : null;
   const name = isObject ? color.name : color;
   
+  // Advanced Visual Properties
   const visualType = isObject ? (color.visualType || 'SOLID') : 'SOLID';
   const textureType = isObject ? (color.textureType || 'SOLID') : 'SOLID';
   const gradient = isObject ? color.gradient : null;
   const pattern = isObject ? (color.pattern || 'NONE') : 'NONE';
-  const patternColor = isObject ? (color.patternColor || '#00000033') : '#00000033';
 
-  const hasSize = className.includes('w-') || className.includes('h-');
-  const sizeClass = hasSize ? '' : (size === 'large' ? 'w-10 h-10' : size === 'small' ? 'w-4 h-4' : 'w-6 h-6');
-
-  const roundedClass = className.includes('rounded') ? '' : 'rounded-full';
+  const sizeClass = size === 'large' ? 'w-10 h-10' : size === 'small' ? 'w-4 h-4' : 'w-6 h-6';
 
   const isLight = hex && (
      hex.toLowerCase() === '#ffffff' || 
@@ -1227,23 +1023,26 @@ function SwatchDisplay({ color, size = 'medium', className = '', onClick }) {
      hex.toLowerCase().startsWith('#e')
   );
 
-  const getPatternStyle = (type, pColor) => {
+  // CSS Pattern Generation (Simulated)
+  const getPatternStyle = (type) => {
       switch(type) {
-          case 'DOT': return { backgroundImage: `radial-gradient(${pColor} 1px, transparent 1px)`, backgroundSize: '4px 4px' };
-          case 'DIAGONAL': return { backgroundImage: `repeating-linear-gradient(45deg, ${pColor} 0, ${pColor} 1px, transparent 0, transparent 50%)`, backgroundSize: '6px 6px' };
-          case 'GRID': return { backgroundImage: `linear-gradient(${pColor} 1px, transparent 1px), linear-gradient(90deg, ${pColor} 1px, transparent 1px)`, backgroundSize: '6px 6px' };
-          case 'KNIT': return { backgroundImage: `repeating-linear-gradient(45deg, transparent, transparent 2px, ${pColor} 2px, ${pColor} 4px), repeating-linear-gradient(-45deg, transparent, transparent 2px, ${pColor} 2px, ${pColor} 4px)` };
-          case 'WEAVE': return { backgroundImage: `linear-gradient(45deg, ${pColor} 25%, transparent 25%, transparent 75%, ${pColor} 75%, ${pColor}), linear-gradient(45deg, ${pColor} 25%, transparent 25%, transparent 75%, ${pColor} 75%, ${pColor})`, backgroundPosition: '0 0, 4px 4px', backgroundSize: '8px 8px' };
-          case 'FUR': return { backgroundImage: `repeating-radial-gradient(circle at 50% 50%, ${pColor} 0, transparent 2px)`, backgroundSize: '3px 3px' }; 
-          case 'LEATHER': return { backgroundImage: `radial-gradient(${pColor} 1px, transparent 0)`, backgroundSize: '3px 3px' }; 
+          case 'DOT': return { backgroundImage: 'radial-gradient(#00000033 1px, transparent 1px)', backgroundSize: '4px 4px' };
+          case 'DIAGONAL': return { backgroundImage: 'repeating-linear-gradient(45deg, #0000001a 0, #0000001a 1px, transparent 0, transparent 50%)', backgroundSize: '6px 6px' };
+          case 'GRID': return { backgroundImage: 'linear-gradient(#0000001a 1px, transparent 1px), linear-gradient(90deg, #0000001a 1px, transparent 1px)', backgroundSize: '6px 6px' };
+          case 'KNIT': return { backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 2px, #0000001a 2px, #0000001a 4px), repeating-linear-gradient(-45deg, transparent, transparent 2px, #0000001a 2px, #0000001a 4px)' };
+          case 'WEAVE': return { backgroundImage: 'linear-gradient(45deg, #0000001a 25%, transparent 25%, transparent 75%, #0000001a 75%, #0000001a), linear-gradient(45deg, #0000001a 25%, transparent 25%, transparent 75%, #0000001a 75%, #0000001a)', backgroundPosition: '0 0, 4px 4px', backgroundSize: '8px 8px' };
+          case 'FUR': return { backgroundImage: 'repeating-radial-gradient(circle at 50% 50%, #0000000d 0, transparent 2px)', backgroundSize: '3px 3px' }; 
+          case 'LEATHER': return { backgroundImage: 'radial-gradient(#00000022 1px, transparent 0)', backgroundSize: '3px 3px' }; 
           default: return {};
       }
   };
 
+  // Base Background
   const baseStyle = image ? 
     { backgroundImage: `url(${image})`, backgroundSize: 'cover' } : 
     (visualType === 'GRADATION' && gradient) ? { background: gradient } : { backgroundColor: hex };
 
+  // Texture Gloss/Matte Effect (Overlay)
   const getTextureOverlay = (type) => {
       if(type === 'GLOSSY') return { background: 'linear-gradient(to bottom right, rgba(255,255,255,0.6) 0%, transparent 40%, transparent 100%)' };
       if(type === 'SEMI_GLOSSY') return { background: 'linear-gradient(to bottom right, rgba(255,255,255,0.3) 0%, transparent 50%, transparent 100%)' };
@@ -1253,30 +1052,53 @@ function SwatchDisplay({ color, size = 'medium', className = '', onClick }) {
   };
   
   return (
-    <div className={`group relative inline-block ${sizeClass} ${roundedClass} ${className} ${onClick ? 'cursor-pointer' : ''} overflow-hidden box-border`} title={name} onClick={onClick} style={{boxShadow: isLight ? 'inset 0 0 0 1px rgba(0,0,0,0.15)' : 'inset 0 0 0 1px rgba(0,0,0,0.05)'}}>
+    <div className={`group relative inline-block ${className} ${onClick ? 'cursor-pointer' : ''}`} title={name} onClick={onClick}>
+       <div className={`${sizeClass} rounded-full overflow-hidden flex items-center justify-center bg-zinc-50 box-border relative`} style={{boxShadow: isLight ? 'inset 0 0 0 1px rgba(0,0,0,0.15)' : 'inset 0 0 0 1px rgba(0,0,0,0.05)'}}>
+         
+         {/* Layer 1: Base Color/Gradient/Image */}
          <div className="absolute inset-0 w-full h-full" style={baseStyle}></div>
+
+         {/* Layer 2: Pattern Overlay */}
          {!image && pattern !== 'NONE' && (
-             <div className="absolute inset-0 w-full h-full" style={getPatternStyle(pattern, patternColor)}></div>
+             <div className="absolute inset-0 w-full h-full opacity-30" style={getPatternStyle(pattern)}></div>
          )}
+
+         {/* Layer 3: Texture/Finish Overlay */}
          <div className="absolute inset-0 w-full h-full pointer-events-none" style={getTextureOverlay(textureType)}></div>
+       </div>
     </div>
   );
 }
 
 function SwatchManager({ category, swatches, isAdmin, onSave, onDelete, onSelect, onDuplicate }) {
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingSwatch, setEditingSwatch] = useState(null);
   const [activeTag, setActiveTag] = useState('ALL');
+
   const allTags = Array.from(new Set(swatches.flatMap(s => s.tags || []))).sort();
+
   const handleCardClick = (swatch) => { onSelect(swatch); };
+  const handleEditClick = (e, swatch) => { e.stopPropagation(); setEditingSwatch(swatch); setIsModalOpen(true); };
 
   const filteredSwatches = activeTag === 'ALL' ? swatches : swatches.filter(s => s.tags && s.tags.includes(activeTag));
 
   return (
-    <div className="p-1 animate-in fade-in pb-32">
-       <div className="flex items-center justify-between mb-6">
-         <h3 className="text-2xl font-extrabold text-zinc-900 flex items-center tracking-tight">
-             <div className="w-3 h-6 mr-3 rounded-full" style={{backgroundColor: category.color}}></div>
-             {category.label}
-         </h3>
+    <div className="p-1 animate-in fade-in">
+       <div className="flex flex-col md:flex-row justify-between items-end mb-8 border-b border-zinc-100 pb-4 gap-4">
+          <div>
+            <h2 className="text-3xl font-extrabold text-zinc-900 tracking-tight flex items-center">
+              <div className="w-3 h-8 mr-3 rounded-full" style={{backgroundColor: category.color}}></div>
+              {category.label} Materials
+            </h2>
+            <p className="text-zinc-500 text-sm mt-1 ml-6">{filteredSwatches.length} finishes available</p>
+          </div>
+          <div className="flex items-center gap-2">
+             {isAdmin && (
+                <button onClick={() => { setEditingSwatch(null); setIsModalOpen(true); }} className="px-4 py-2 bg-zinc-900 text-white text-sm font-bold rounded-xl hover:bg-black transition-all flex items-center shadow-lg whitespace-nowrap">
+                   <Plus className="w-4 h-4 mr-2" /> Add Material
+                </button>
+             )}
+          </div>
        </div>
 
        {allTags.length > 0 && (
@@ -1292,10 +1114,11 @@ function SwatchManager({ category, swatches, isAdmin, onSave, onDelete, onSelect
           {filteredSwatches.map(swatch => (
              <div key={swatch.id} onClick={() => handleCardClick(swatch)} className="bg-white rounded-xl border border-zinc-200 overflow-hidden group hover:shadow-lg transition-all relative cursor-pointer">
                 <div className="aspect-square relative bg-zinc-100 flex items-center justify-center">
-                   <SwatchDisplay color={swatch} className="w-full h-full rounded-none scale-100"/>
+                   <SwatchDisplay color={swatch} size="large" className="w-full h-full scale-100 rounded-none"/>
                    {isAdmin && (
-                     <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                     <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                         <button onClick={(e) => {e.stopPropagation(); onDuplicate(swatch);}} className="p-1.5 bg-white rounded-full shadow hover:text-green-600"><Layers className="w-3 h-3"/></button>
+                        <button onClick={(e) => handleEditClick(e, swatch)} className="p-1.5 bg-white rounded-full shadow hover:text-blue-600"><Edit2 className="w-3 h-3"/></button>
                         <button onClick={(e) => { e.stopPropagation(); onDelete(swatch.id); }} className="p-1.5 bg-white rounded-full shadow hover:text-red-600"><Trash2 className="w-3 h-3"/></button>
                      </div>
                    )}
@@ -1312,10 +1135,19 @@ function SwatchManager({ category, swatches, isAdmin, onSave, onDelete, onSelect
           {filteredSwatches.length === 0 && (
              <div className="col-span-full py-20 text-center text-zinc-400 border-2 border-dashed border-zinc-100 rounded-xl">
                 <Palette className="w-10 h-10 mx-auto mb-2 opacity-20" />
-                No materials registered.
+                No materials registered in this category.
              </div>
           )}
        </div>
+
+       {isModalOpen && (
+         <SwatchFormModal 
+            category={category} 
+            existingData={editingSwatch} 
+            onClose={() => setIsModalOpen(false)} 
+            onSave={(data) => { onSave(data); setIsModalOpen(false); }} 
+         />
+       )}
     </div>
   );
 }
@@ -1327,10 +1159,21 @@ function SwatchDetailModal({ swatch, allProducts, swatches, onClose, onNavigateP
         return inBody || inUph;
     });
 
-    const handleShareImage = async () => { /* Placeholder */ };
+    const currentIdx = swatches.findIndex(s => s.id === swatch.id);
+    const handleNext = () => { if(currentIdx < swatches.length - 1) onNavigateSwatch(swatches[currentIdx + 1]); };
+    const handlePrev = () => { if(currentIdx > 0) onNavigateSwatch(swatches[currentIdx - 1]); };
+    
+    const touchStart = useRef(null);
+    const handleTouchStart = (e) => { touchStart.current = e.targetTouches[0].clientX; };
+    const handleTouchEnd = (e) => {
+        if(!touchStart.current) return;
+        const diff = touchStart.current - e.changedTouches[0].clientX;
+        if(Math.abs(diff) > 50) { if(diff > 0) handleNext(); else handlePrev(); }
+        touchStart.current = null;
+    };
 
     return (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-0 md:p-4 animate-in zoom-in-95 duration-200 pointer-events-auto">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[150] flex items-center justify-center md:p-4 animate-in zoom-in-95 duration-200" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
             <div className="bg-white w-full h-full md:h-auto md:max-w-4xl rounded-none md:rounded-3xl overflow-hidden shadow-2xl flex flex-col md:flex-row md:max-h-[90vh] relative">
                 <div className="absolute top-4 right-4 z-[100] flex gap-2">
                    {isAdmin && <button onClick={onEdit} className="p-2 bg-white/50 hover:bg-zinc-100 rounded-full backdrop-blur shadow-sm"><Edit3 className="w-6 h-6 text-zinc-900"/></button>}
@@ -1343,7 +1186,7 @@ function SwatchDetailModal({ swatch, allProducts, swatches, onClose, onNavigateP
                     </div>
                 </div>
 
-                <div className="w-full md:w-7/12 bg-white p-8 md:p-10 flex flex-col overflow-y-auto pb-safe">
+                <div className="w-full md:w-7/12 bg-white p-8 md:p-10 flex flex-col overflow-y-auto">
                     <div className="mb-6">
                         <div className="flex gap-2 mb-2">
                             <span className="inline-block px-2.5 py-0.5 bg-zinc-900 text-white text-[10px] font-bold rounded uppercase tracking-widest">{swatch.category}</span>
@@ -1406,38 +1249,22 @@ function SwatchFormModal({ category, existingData, onClose, onSave }) {
   const [data, setData] = useState({ 
      id: null, name: '', category: category.id, hex: '#000000', image: null, 
      description: '', materialCode: '', tags: '', textureType: 'SOLID',
-     visualType: 'SOLID', gradient: 'linear-gradient(to right, #000, #fff)', 
-     pattern: 'NONE', patternColor: '#00000033'
+     visualType: 'SOLID', gradient: '', pattern: 'NONE'
   });
-  
-  const [gradientColors, setGradientColors] = useState(['#000000', '#ffffff']);
   const fileRef = useRef(null);
 
   useEffect(() => {
-     if(existingData) {
-         setData({ 
-            ...existingData, 
-            description: existingData.description || '', 
-            materialCode: existingData.materialCode || '',
-            tags: existingData.tags ? existingData.tags.join(', ') : '',
-            textureType: existingData.textureType || 'SOLID',
-            visualType: existingData.visualType || 'SOLID',
-            gradient: existingData.gradient || 'linear-gradient(to right, #000, #fff)',
-            pattern: existingData.pattern || 'NONE',
-            patternColor: existingData.patternColor || '#00000033'
-         });
-         if(existingData.visualType === 'GRADATION' && existingData.gradient) {
-             const matches = existingData.gradient.match(/#[0-9a-fA-F]{3,6}/g);
-             if(matches && matches.length >= 2) setGradientColors([matches[0], matches[1]]);
-         }
-     }
+     if(existingData) setData({ 
+        ...existingData, 
+        description: existingData.description || '', 
+        materialCode: existingData.materialCode || '',
+        tags: existingData.tags ? existingData.tags.join(', ') : '',
+        textureType: existingData.textureType || 'SOLID',
+        visualType: existingData.visualType || 'SOLID',
+        gradient: existingData.gradient || '',
+        pattern: existingData.pattern || 'NONE'
+     });
   }, [existingData]);
-
-  useEffect(() => {
-      if(data.visualType === 'GRADATION') {
-          setData(prev => ({...prev, gradient: `linear-gradient(to right, ${gradientColors[0]}, ${gradientColors[1]})`}));
-      }
-  }, [gradientColors]);
 
   const processImage = (file) => {
     return new Promise((resolve) => {
@@ -1445,7 +1272,15 @@ function SwatchFormModal({ category, existingData, onClose, onSave }) {
       reader.onload = (e) => {
         const img = new Image();
         img.onload = () => {
-           const canvas = document.createElement('canvas'); const MAX = 500; let w = img.width; let h = img.height; const minDim = Math.min(w, h); const sx = (w - minDim) / 2; const sy = (h - minDim) / 2; canvas.width = MAX; canvas.height = MAX; const ctx = canvas.getContext('2d'); ctx.drawImage(img, sx, sy, minDim, minDim, 0, 0, MAX, MAX); resolve(canvas.toDataURL('image/jpeg', 0.9));
+           const canvas = document.createElement('canvas'); 
+           const MAX = 500; 
+           let w = img.width; let h = img.height; 
+           const minDim = Math.min(w, h);
+           const sx = (w - minDim) / 2; const sy = (h - minDim) / 2;
+           canvas.width = MAX; canvas.height = MAX;
+           const ctx = canvas.getContext('2d'); 
+           ctx.drawImage(img, sx, sy, minDim, minDim, 0, 0, MAX, MAX); 
+           resolve(canvas.toDataURL('image/jpeg', 0.9));
         };
         img.src = e.target.result;
       };
@@ -1453,17 +1288,28 @@ function SwatchFormModal({ category, existingData, onClose, onSave }) {
     });
   };
 
-  const handleUpload = async (e) => { const file = e.target.files[0]; if(file) { try { const url = await processImage(file); setData(p => ({...p, image: url})); } catch(e){} } };
-  const handleDeleteImage = () => setData(p => ({...p, image: null}));
-  const handleSubmit = () => { onSave({ ...data, tags: data.tags.split(',').map(t => t.trim()).filter(Boolean) }); };
+  const handleUpload = async (e) => {
+     const file = e.target.files[0];
+     if(file) {
+        try { const url = await processImage(file); setData(p => ({...p, image: url})); } catch(e){}
+     }
+  };
+
+  const handleSubmit = () => {
+      onSave({
+          ...data,
+          tags: data.tags.split(',').map(t => t.trim()).filter(Boolean)
+      });
+  };
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 pointer-events-auto" style={{ zIndex: 160 }}>
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[160] flex items-center justify-center p-4">
        <div className="bg-white rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
           <div className="px-5 py-4 border-b border-zinc-100 font-bold text-lg flex-shrink-0">
              {existingData ? 'Edit Material' : 'Add Material'}
           </div>
           <div className="p-6 space-y-4 overflow-y-auto custom-scrollbar">
+             {/* Preview */}
              <div className="flex justify-center mb-4">
                 <div onClick={() => fileRef.current.click()} className="w-24 h-24 rounded-full shadow-md border-4 border-white cursor-pointer overflow-hidden relative group bg-zinc-100 flex items-center justify-center">
                     <SwatchDisplay color={data} size="large" className="w-full h-full scale-100 rounded-none"/>
@@ -1471,28 +1317,66 @@ function SwatchFormModal({ category, existingData, onClose, onSave }) {
                 </div>
                 <input type="file" ref={fileRef} className="hidden" accept="image/*" onChange={handleUpload} />
              </div>
-             {data.image && (<button onClick={handleDeleteImage} className="w-full py-1 text-xs text-red-500 font-bold border border-red-100 rounded bg-red-50 hover:bg-red-100 mb-2">Delete Image</button>)}
-             <div className="bg-zinc-50 p-3 rounded-xl border border-zinc-100 space-y-3">
-                 <h4 className="text-[10px] font-bold text-zinc-400 uppercase">Visual Settings</h4>
-                 <div className="flex gap-2">
-                     <button onClick={()=>setData({...data, visualType: 'SOLID'})} className={`flex-1 py-1 text-xs font-bold rounded border ${data.visualType==='SOLID' ? 'bg-zinc-900 text-white' : 'bg-white'}`}>Solid</button>
-                     <button onClick={()=>setData({...data, visualType: 'GRADATION'})} className={`flex-1 py-1 text-xs font-bold rounded border ${data.visualType==='GRADATION' ? 'bg-zinc-900 text-white' : 'bg-white'}`}>Gradation</button>
-                 </div>
-                 {data.visualType === 'SOLID' ? (
-                     <div className="flex gap-2"><input type="color" value={data.hex} onChange={e=>setData({...data, hex: e.target.value})} className="h-9 w-12 p-0 border rounded overflow-hidden" /><input value={data.hex} onChange={e=>setData({...data, hex: e.target.value})} className="flex-1 border rounded-lg p-2 text-sm outline-none" /></div>
-                 ) : (
-                     <div><div className="flex gap-2 mb-2"><input type="color" value={gradientColors[0]} onChange={e=>setGradientColors([e.target.value, gradientColors[1]])} className="h-8 w-full rounded border" /><input type="color" value={gradientColors[1]} onChange={e=>setGradientColors([gradientColors[0], e.target.value])} className="h-8 w-full rounded border" /></div><input value={data.gradient} readOnly className="w-full border rounded-lg p-2 text-xs bg-white text-zinc-400"/></div>
-                 )}
-                 <div className="grid grid-cols-2 gap-2">
-                     <div><label className="text-[10px] font-bold text-zinc-500 uppercase mb-1 block">Pattern</label><select value={data.pattern} onChange={e=>setData({...data, pattern: e.target.value})} className="w-full border rounded p-1.5 text-xs bg-white">{PATTERN_TYPES.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}</select></div>
-                     <div><label className="text-[10px] font-bold text-zinc-500 uppercase mb-1 block">P. Color</label><div className="flex items-center gap-1"><input type="color" value={data.patternColor?.substring(0,7) || '#000000'} onChange={e=>setData({...data, patternColor: e.target.value})} className="h-7 w-7 rounded border p-0"/><span className="text-[10px] text-zinc-400">{data.patternColor}</span></div></div>
-                 </div>
-                 <div><label className="text-[10px] font-bold text-zinc-500 uppercase mb-1 block">Finish Type</label><select value={data.textureType} onChange={e=>setData({...data, textureType: e.target.value})} className="w-full border rounded p-1.5 text-xs bg-white">{TEXTURE_TYPES.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}</select></div>
+             
+             <div>
+                <label className="text-xs font-bold text-zinc-500 uppercase block mb-1">Visual Type</label>
+                <div className="flex gap-2">
+                    <button onClick={()=>setData({...data, visualType: 'SOLID'})} className={`flex-1 py-2 text-xs font-bold rounded border ${data.visualType==='SOLID' ? 'bg-zinc-900 text-white' : 'bg-white'}`}>Solid</button>
+                    <button onClick={()=>setData({...data, visualType: 'GRADATION'})} className={`flex-1 py-2 text-xs font-bold rounded border ${data.visualType==='GRADATION' ? 'bg-zinc-900 text-white' : 'bg-white'}`}>Gradation</button>
+                </div>
              </div>
-             <div><label className="text-xs font-bold text-zinc-500 uppercase block mb-1">Material Code</label><input value={data.materialCode} onChange={e=>setData({...data, materialCode: e.target.value})} className="w-full border rounded-lg p-2 text-sm outline-none font-mono font-bold" /></div>
-             <div><label className="text-xs font-bold text-zinc-500 uppercase block mb-1">Name</label><input value={data.name} onChange={e=>setData({...data, name: e.target.value})} className="w-full border rounded-lg p-2 text-sm outline-none" /></div>
-             <div><label className="text-xs font-bold text-zinc-500 uppercase block mb-1">Tags</label><input value={data.tags} onChange={e=>setData({...data, tags: e.target.value})} className="w-full border rounded-lg p-2 text-sm outline-none" /></div>
-             <div><label className="text-xs font-bold text-zinc-500 uppercase block mb-1">Category</label><select value={data.category} onChange={e=>setData({...data, category: e.target.value})} className="w-full border rounded-lg p-2 text-sm outline-none bg-white">{SWATCH_CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}</select></div>
+
+             {data.visualType === 'SOLID' ? (
+                 <div>
+                    <label className="text-xs font-bold text-zinc-500 uppercase block mb-1">Color (Hex)</label>
+                    <div className="flex gap-2">
+                       <input type="color" value={data.hex} onChange={e=>setData({...data, hex: e.target.value})} className="h-9 w-12 p-0 border rounded overflow-hidden" />
+                       <input value={data.hex} onChange={e=>setData({...data, hex: e.target.value})} className="flex-1 border rounded-lg p-2 text-sm outline-none" />
+                    </div>
+                 </div>
+             ) : (
+                 <div>
+                    <label className="text-xs font-bold text-zinc-500 uppercase block mb-1">Gradient (CSS)</label>
+                    <textarea rows={2} value={data.gradient} onChange={e=>setData({...data, gradient: e.target.value})} className="w-full border rounded-lg p-2 text-xs outline-none" placeholder="linear-gradient(to right, #000, #fff)"/>
+                 </div>
+             )}
+
+             <div className="grid grid-cols-2 gap-4">
+                 <div>
+                    <label className="text-xs font-bold text-zinc-500 uppercase block mb-1">Pattern Overlay</label>
+                    <select value={data.pattern} onChange={e=>setData({...data, pattern: e.target.value})} className="w-full border rounded-lg p-2 text-sm outline-none bg-white">
+                        {PATTERN_TYPES.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
+                    </select>
+                 </div>
+                 <div>
+                    <label className="text-xs font-bold text-zinc-500 uppercase block mb-1">Finish Type</label>
+                    <select value={data.textureType} onChange={e=>setData({...data, textureType: e.target.value})} className="w-full border rounded-lg p-2 text-sm outline-none bg-white">
+                        {TEXTURE_TYPES.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
+                    </select>
+                 </div>
+             </div>
+
+             <div>
+                <label className="text-xs font-bold text-zinc-500 uppercase block mb-1">Material Code</label>
+                <input value={data.materialCode} onChange={e=>setData({...data, materialCode: e.target.value})} className="w-full border rounded-lg p-2 text-sm outline-none font-mono font-bold" />
+             </div>
+
+             <div>
+                <label className="text-xs font-bold text-zinc-500 uppercase block mb-1">Name</label>
+                <input value={data.name} onChange={e=>setData({...data, name: e.target.value})} className="w-full border rounded-lg p-2 text-sm outline-none" />
+             </div>
+             
+             <div>
+                <label className="text-xs font-bold text-zinc-500 uppercase block mb-1">Tags</label>
+                <input value={data.tags} onChange={e=>setData({...data, tags: e.target.value})} className="w-full border rounded-lg p-2 text-sm outline-none" />
+             </div>
+
+             <div>
+                <label className="text-xs font-bold text-zinc-500 uppercase block mb-1">Type</label>
+                <select value={data.category} onChange={e=>setData({...data, category: e.target.value})} className="w-full border rounded-lg p-2 text-sm outline-none bg-white">
+                   {SWATCH_CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+                </select>
+             </div>
           </div>
           <div className="px-5 py-4 border-t border-zinc-100 bg-zinc-50 flex justify-end space-x-2 flex-shrink-0">
              <button onClick={onClose} className="px-4 py-2 text-sm font-bold text-zinc-500 hover:text-zinc-900">Cancel</button>
@@ -1531,6 +1415,7 @@ function PieChartComponent({ data, total, selectedIndex, onSelect }) {
            const explodeDist = isSelected ? 0.15 : (isHovered ? 0.05 : 0); 
            const tx = Math.cos(midAngle) * explodeDist;
            const ty = Math.sin(midAngle) * explodeDist;
+
            const strokeWidth = isSelected ? 0.22 : 0.2; 
 
            return (
@@ -1550,17 +1435,20 @@ function PieChartComponent({ data, total, selectedIndex, onSelect }) {
            );
         })}
       </svg>
+      
+      {/* Labels Outside */}
       {data.map((item, idx) => {
           let prevPercent = 0;
           for(let i=0; i<idx; i++) prevPercent += data[i].count/total;
           const percent = item.count/total;
           const midPercent = prevPercent + percent/2;
           const angleRad = (midPercent * 2 * Math.PI) - (Math.PI / 2); 
-          const labelRadius = 1.1; 
+          
+          const labelRadius = 1.05; 
           const lx = Math.cos(angleRad) * labelRadius;
           const ly = Math.sin(angleRad) * labelRadius;
           
-          if(percent < 0.05) return null; 
+          if(percent < 0.03) return null; 
 
           return (
              <div 
@@ -1593,7 +1481,7 @@ function PieChartComponent({ data, total, selectedIndex, onSelect }) {
   );
 }
 
-function DashboardView({ products, favorites, setActiveCategory, pushModal, isAdmin, bannerData, onBannerUpload, onLogoUpload, onBannerTextChange, onSaveBannerText }) {
+function DashboardView({ products, favorites, setActiveCategory, setSelectedProduct, isAdmin, bannerData, onBannerUpload, onLogoUpload, onBannerTextChange, onSaveBannerText }) {
   const totalCount = products.length; const newCount = products.filter(p => p.isNew).length; const pickCount = favorites.length;
   const categoryCounts = []; let totalStandardProducts = 0;
   CATEGORIES.filter(c => !c.isSpecial).forEach(c => { const count = products.filter(p => p.category === c.id).length; if (count > 0) { categoryCounts.push({ ...c, count }); totalStandardProducts += count; } });
@@ -1606,12 +1494,13 @@ function DashboardView({ products, favorites, setActiveCategory, pushModal, isAd
   const logoInputRef = useRef(null);
 
   const [selectedSlice, setSelectedSlice] = useState(null);
-  const [expandedSection, setExpandedSection] = useState(null); // 'YEARS' | 'PRODUCTS'
 
+  // Helper for Selected Slice Data
   const getSelectedSliceDetails = () => {
       if(selectedSlice === null) return null;
       const catId = chartData[selectedSlice].id;
       const catProducts = products.filter(p => p.category === catId);
+      
       const years = [...new Set(catProducts.map(p => p.launchDate ? p.launchDate.substring(0,4) : 'Unknown'))].sort().join(', ');
       const awardCount = catProducts.reduce((acc, curr) => acc + (curr.awards?.length || 0), 0);
       const uniqueColors = new Set();
@@ -1619,15 +1508,14 @@ function DashboardView({ products, favorites, setActiveCategory, pushModal, isAd
           (p.bodyColors || []).forEach(c => uniqueColors.add(c));
           (p.upholsteryColors || []).forEach(c => uniqueColors.add(c));
       });
+
       return { products: catProducts, years, awardCount, uniqueColors: Array.from(uniqueColors) };
   };
 
   const sliceDetails = getSelectedSliceDetails();
 
   return (
-    <div className="max-w-7xl mx-auto space-y-6 md:space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-32 print:hidden" onClick={() => setSelectedSlice(null)}>
-      
-      {/* Banner */}
+    <div className="max-w-7xl mx-auto space-y-6 md:space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20 print:hidden" onClick={() => setSelectedSlice(null)}>
       <div className="relative w-full h-48 md:h-80 rounded-3xl overflow-hidden shadow-lg border border-zinc-200 group bg-zinc-900">
          <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/40 to-transparent z-10"></div>
          {bannerData.url ? <img src={bannerData.url} alt="Dashboard Banner" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" /> : <div className="w-full h-full flex items-center justify-center opacity-20"><img src="/api/placeholder/1200/400" className="w-full h-full object-cover grayscale" alt="Pattern" /></div>}
@@ -1669,7 +1557,7 @@ function DashboardView({ products, favorites, setActiveCategory, pushModal, isAd
           </div>
           <ChevronRight className="w-5 h-5 text-zinc-300 group-hover:text-zinc-600 hidden md:block" />
         </div>
-        <div onClick={() => setActiveCategory('ALL')} className="bg-white p-3 md:p-5 rounded-xl md:rounded-2xl border border-zinc-100 shadow-sm hover:shadow-md cursor-pointer group flex flex-col md:flex-row items-center md:justify-between transition-all text-center md:text-left">
+        <div onClick={() => setActiveCategory('NEW')} className="bg-white p-3 md:p-5 rounded-xl md:rounded-2xl border border-zinc-100 shadow-sm hover:shadow-md cursor-pointer group flex flex-col md:flex-row items-center md:justify-between transition-all text-center md:text-left">
           <div className="flex flex-col md:flex-row items-center md:space-x-4 w-full justify-center md:justify-start">
              <div className="p-2 md:p-3 bg-red-50 rounded-xl text-red-500 group-hover:bg-red-500 group-hover:text-white transition-colors mb-1 md:mb-0"><Zap className="w-4 h-4 md:w-6 md:h-6" /></div>
              <div className="flex flex-col">
@@ -1701,7 +1589,7 @@ function DashboardView({ products, favorites, setActiveCategory, pushModal, isAd
               <div className="relative w-72 h-72 md:w-96 md:h-96 flex-shrink-0">
                  <PieChartComponent data={chartData} total={totalStandardProducts} selectedIndex={selectedSlice} onSelect={setSelectedSlice} />
               </div>
-              <div className="flex-1 w-full" onClick={(e) => e.stopPropagation()}>
+              <div className="flex-1 w-full">
                  {selectedSlice !== null ? (
                     <div className="animate-in fade-in slide-in-from-left-4 h-full flex flex-col justify-center">
                         <div className="flex items-center gap-3 mb-4 pb-2 border-b border-zinc-100">
@@ -1719,23 +1607,32 @@ function DashboardView({ products, favorites, setActiveCategory, pushModal, isAd
                               <span className="text-[10px] text-zinc-400 uppercase font-bold block mb-1">New Arrivals</span>
                               <span className="text-xl font-black text-zinc-900">{sliceDetails.products.filter(p=>p.isNew).length}</span>
                            </div>
+                           <div className="bg-zinc-50 p-3 rounded-xl border border-zinc-100">
+                              <span className="text-[10px] text-zinc-400 uppercase font-bold block mb-1">Total Awards</span>
+                              <span className="text-xl font-black text-zinc-900">{sliceDetails.awardCount}</span>
+                           </div>
+                           <div className="bg-zinc-50 p-3 rounded-xl border border-zinc-100">
+                              <span className="text-[10px] text-zinc-400 uppercase font-bold block mb-1">Launching</span>
+                              <span className="text-xs font-bold text-zinc-900 truncate" title={sliceDetails.years}>{sliceDetails.years.substring(0,12)}...</span>
+                           </div>
                         </div>
 
-                        {/* Accordion Style Details */}
-                        <div className="space-y-2 mb-6">
-                            <div className="border rounded-xl p-3 cursor-pointer hover:bg-zinc-50" onClick={()=>setExpandedSection(expandedSection === 'YEARS' ? null : 'YEARS')}>
-                                <div className="flex justify-between items-center"><span className="text-xs font-bold text-zinc-600">Launch Years</span><ChevronDown className={`w-4 h-4 transition-transform ${expandedSection==='YEARS'?'rotate-180':''}`}/></div>
-                                {expandedSection === 'YEARS' && <div className="mt-2 text-xs text-zinc-500 leading-relaxed">{sliceDetails.years}</div>}
+                        <div className="mb-4">
+                            <span className="text-xs text-zinc-400 uppercase font-bold block mb-2">Palette Preview</span>
+                            <div className="flex flex-wrap gap-1">
+                                {sliceDetails.uniqueColors.slice(0, 10).map((c, i) => (
+                                    <div key={i}><SwatchDisplay color={c} size="small"/></div>
+                                ))}
+                                {sliceDetails.uniqueColors.length > 10 && <span className="text-[9px] text-zinc-400">+{sliceDetails.uniqueColors.length - 10}</span>}
                             </div>
-                            <div className="border rounded-xl p-3 cursor-pointer hover:bg-zinc-50" onClick={()=>setExpandedSection(expandedSection === 'PRODUCTS' ? null : 'PRODUCTS')}>
-                                <div className="flex justify-between items-center"><span className="text-xs font-bold text-zinc-600">Product List</span><ChevronDown className={`w-4 h-4 transition-transform ${expandedSection==='PRODUCTS'?'rotate-180':''}`}/></div>
-                                {expandedSection === 'PRODUCTS' && (
-                                    <div className="mt-2 grid grid-cols-2 gap-2 max-h-40 overflow-y-auto custom-scrollbar">
-                                        {sliceDetails.products.map(p => (
-                                            <div key={p.id} className="text-xs truncate text-zinc-600 hover:text-black hover:bg-zinc-100 p-1 rounded" onClick={(e) => { e.stopPropagation(); pushModal('PRODUCT', p); }}>• {p.name}</div>
-                                        ))}
-                                    </div>
-                                )}
+                        </div>
+
+                        <div className="flex-1 overflow-y-auto max-h-60 custom-scrollbar bg-zinc-50 p-3 rounded-xl border border-zinc-100">
+                            <span className="text-[10px] text-zinc-400 uppercase font-bold block mb-2 sticky top-0 bg-zinc-50">Product List</span>
+                            <div className="grid grid-cols-2 gap-2">
+                                {sliceDetails.products.map(p => (
+                                    <div key={p.id} className="text-xs truncate text-zinc-600 hover:text-black cursor-pointer p-1 hover:bg-zinc-100 rounded" onClick={() => setSelectedProduct(p)}>• {p.name}</div>
+                                ))}
                             </div>
                         </div>
                     </div>
@@ -1771,12 +1668,13 @@ function DashboardView({ products, favorites, setActiveCategory, pushModal, isAd
       <div className="bg-white p-6 md:p-8 rounded-3xl border border-zinc-100 shadow-sm">
          <div className="flex items-center justify-between mb-6">
             <h3 className="text-xl font-bold text-zinc-900 flex items-center"><Clock className="w-6 h-6 mr-3 text-zinc-400" /> Recent Updates</h3>
-            <button className="text-xs font-bold text-blue-600 hover:text-blue-800 flex items-center" onClick={() => setActiveCategory('ALL')}>View All <ArrowRight className="w-3 h-3 ml-1"/></button>
+            <button className="text-xs font-bold text-blue-600 hover:text-blue-800 flex items-center" onClick={() => setActiveCategory('NEW')}>View All <ArrowRight className="w-3 h-3 ml-1"/></button>
          </div>
          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
             {recentUpdates.length > 0 ? recentUpdates.map(product => (
-               <div key={product.id} onClick={() => pushModal('PRODUCT', product)} className="flex flex-col p-3 rounded-xl border border-zinc-100 hover:border-zinc-300 hover:bg-zinc-50 cursor-pointer transition-all group">
+               <div key={product.id} onClick={() => setSelectedProduct(product)} className="flex flex-col p-3 rounded-xl border border-zinc-100 hover:border-zinc-300 hover:bg-zinc-50 cursor-pointer transition-all group">
                   <div className="aspect-[4/3] bg-zinc-100 rounded-lg flex items-center justify-center overflow-hidden border border-zinc-200 mb-2 relative">
+                     {/* Multiple Mix Blend Mode Overlay */}
                      <div className="absolute inset-0 bg-zinc-100/50 mix-blend-multiply z-10 pointer-events-none"></div>
                      {product.images?.[0] ? <img src={typeof product.images[0] === 'object' ? product.images[0].url : product.images[0]} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" alt="" /> : <ImageIcon className="w-6 h-6 text-zinc-300"/>}
                   </div>
@@ -1793,56 +1691,6 @@ function DashboardView({ products, favorites, setActiveCategory, pushModal, isAd
   );
 }
 
-function SpacesHubView({ spaces, spaceContents, search, onSelectSpace, onViewScene }) {
-    const filteredSpaces = spaces.filter(s => s.label.toLowerCase().includes(search.toLowerCase()));
-    
-    return (
-        <div className="animate-in fade-in pb-32">
-             <h2 className="text-3xl font-extrabold text-zinc-900 mb-8">Space Collection</h2>
-             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                 {filteredSpaces.map(space => {
-                     const content = spaceContents[space.id] || {};
-                     const scenes = content.scenes || [];
-                     return (
-                         <div key={space.id} className="bg-white rounded-3xl overflow-hidden border border-zinc-200 shadow-sm hover:shadow-xl transition-all group flex flex-col">
-                             <div className="h-48 overflow-hidden relative" onClick={() => onSelectSpace(space.id)}>
-                                 {content.banner ? (
-                                     <img src={content.banner} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" alt={space.label}/>
-                                 ) : (
-                                     <div className="w-full h-full bg-zinc-900 flex items-center justify-center"><space.icon className="w-12 h-12 text-white/20"/></div>
-                                 )}
-                                 <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent"></div>
-                                 <div className="absolute bottom-6 left-6 text-white">
-                                     <div className="flex items-center gap-2 mb-2">
-                                         <space.icon className="w-5 h-5"/>
-                                         <span className="text-xs font-bold uppercase tracking-widest opacity-80">Curated Space</span>
-                                     </div>
-                                     <h3 className="text-3xl font-black">{space.label}</h3>
-                                 </div>
-                             </div>
-                             <div className="p-6 flex-1 bg-zinc-50/50">
-                                 {content.description && <p className="text-sm text-zinc-600 mb-4 line-clamp-2">{content.description}</p>}
-                                 {scenes.length > 0 ? (
-                                     <div className="flex gap-2 overflow-x-auto pb-2 custom-scrollbar">
-                                         {scenes.map(scene => (
-                                             <div key={scene.id} onClick={() => onViewScene(scene)} className="w-24 h-24 flex-shrink-0 rounded-lg overflow-hidden relative cursor-pointer hover:ring-2 ring-indigo-500 transition-all">
-                                                 <img src={scene.image} className="w-full h-full object-cover"/>
-                                                 <div className="absolute inset-0 bg-black/0 hover:bg-black/10 transition-colors"></div>
-                                             </div>
-                                         ))}
-                                     </div>
-                                 ) : (
-                                     <div className="text-xs text-zinc-400 italic">No scenes available yet.</div>
-                                 )}
-                             </div>
-                         </div>
-                     );
-                 })}
-             </div>
-        </div>
-    );
-}
-
 function SpaceDetailView({ space, spaceContent, activeTag, setActiveTag, isAdmin, onBannerUpload, onEditInfo, onManageProducts, onAddScene, onViewScene, productCount }) {
   const banner = spaceContent.banner;
   const description = spaceContent.description || "이 공간에 대한 설명이 없습니다.";
@@ -1851,6 +1699,7 @@ function SpaceDetailView({ space, spaceContent, activeTag, setActiveTag, isAdmin
   const tags = spaceContent.tags || space.defaultTags || []; 
 
   const filteredScenes = activeTag === 'ALL' ? scenes : scenes.filter(s => s.tags && s.tags.includes(activeTag));
+
   const copySpaceLink = () => { navigator.clipboard.writeText(`${window.location.origin}${window.location.pathname}?space=${space.id}`); window.alert("공간 공유 링크가 복사되었습니다."); };
 
   return (
@@ -1905,15 +1754,21 @@ function SpaceDetailView({ space, spaceContent, activeTag, setActiveTag, isAdmin
 
 function ProductCard({ product, onClick, showMoveControls, onMove, isFavorite, onToggleFavorite, onCompareToggle, isCompared, isAdmin, onDuplicate }) {
   const mainImageEntry = product.images && product.images.length > 0 ? product.images[0] : null;
+  // Handle both string URL and object {url, caption}
   const mainImageUrl = mainImageEntry ? (typeof mainImageEntry === 'object' ? mainImageEntry.url : mainImageEntry) : null;
+  const awardCount = product.awards?.length || 0;
   
   return (
     <div onClick={onClick} className="bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer group border border-zinc-100 relative flex flex-col h-full print:break-inside-avoid print:shadow-none print:border-zinc-200">
       <div className="relative aspect-[4/3] bg-zinc-50 flex items-center justify-center overflow-hidden">
+        {/* Light Gray Overlay with Multiply Blend Mode */}
         <div className="absolute inset-0 bg-zinc-100/30 mix-blend-multiply pointer-events-none z-10"></div>
+
         <div className="absolute top-2 left-2 flex flex-wrap gap-1.5 z-20 items-start max-w-[80%]">
            {product.isNew && <span className="bg-black text-white text-[8px] font-extrabold px-1.5 py-0.5 rounded shadow-sm tracking-wide">NEW</span>}
         </div>
+        
+        {/* Top Right Controls */}
         <div className="absolute top-2 right-2 flex gap-1 z-20">
            {isAdmin && (
               <button onClick={onDuplicate} className="p-1.5 bg-white/80 rounded-full text-zinc-400 hover:text-green-600 hover:scale-110 transition-all" title="Duplicate">
@@ -1925,12 +1780,23 @@ function ProductCard({ product, onClick, showMoveControls, onMove, isFavorite, o
            </button>
            <button onClick={onToggleFavorite} className="p-1.5 bg-white/80 rounded-full text-zinc-300 hover:text-yellow-400 hover:scale-110 transition-all"><Star className={`w-3.5 h-3.5 ${isFavorite ? 'fill-yellow-400 text-yellow-400' : ''}`} /></button>
         </div>
+
         <div className="w-full h-full flex items-center justify-center transition-transform duration-500 group-hover:scale-105">
             {mainImageUrl ? <img src={mainImageUrl} alt={product.name} loading="lazy" className="w-full h-full object-cover" /> : <div className="text-center opacity-30"><ImageIcon className="w-8 h-8 text-zinc-400" /></div>}
         </div>
+        
+        {/* Sort Controls */}
+        {showMoveControls && (
+          <div className="absolute bottom-1 md:bottom-2 left-0 right-0 flex justify-center gap-2 z-20 print:hidden">
+             <button onClick={(e) => {e.stopPropagation(); onMove('left')}} className="p-1 md:p-1.5 bg-white/90 rounded-full shadow hover:bg-black hover:text-white text-zinc-700 transition-colors"><ArrowLeft className="w-3 h-3 md:w-4 md:h-4" /></button>
+             <button onClick={(e) => {e.stopPropagation(); onMove('right')}} className="p-1 md:p-1.5 bg-white/90 rounded-full shadow hover:bg-black hover:text-white text-zinc-700 transition-colors"><ArrowRight className="w-3 h-3 md:w-4 md:h-4" /></button>
+          </div>
+        )}
       </div>
+      
       <div className="p-4 flex-1 flex flex-col bg-white">
         <h3 className="text-sm font-extrabold text-zinc-900 leading-tight group-hover:text-blue-600 transition-colors line-clamp-1 mb-3">{product.name}</h3>
+        
         <div className="flex justify-between items-end mt-auto pt-2 border-t border-zinc-50">
            <span className="text-[10px] font-medium text-zinc-400 truncate max-w-[60%]">{product.designer || 'Patra Design'}</span>
            <span className="text-[9px] font-bold text-zinc-500 bg-zinc-50 px-1.5 py-0.5 rounded uppercase tracking-wider">{product.category}</span>
@@ -1941,7 +1807,11 @@ function ProductCard({ product, onClick, showMoveControls, onMove, isFavorite, o
 }
 
 function ProductDetailModal({ product, allProducts, swatches, spaceContents, onClose, onEdit, isAdmin, showToast, isFavorite, onToggleFavorite, onNavigateSpace, onNavigateScene, onNavigateNext, onNavigatePrev, onNavigateProduct, onNavigateSwatch }) {
+  // 1. Declare all Hooks at the top level unconditionally
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const [isZoomed, setIsZoomed] = useState(false);
+  const canvasRef = useRef(null);
+  const touchStart = useRef(null);
   const [swatchPopup, setSwatchPopup] = useState(null); 
 
   useEffect(() => {
@@ -1950,9 +1820,24 @@ function ProductDetailModal({ product, allProducts, swatches, spaceContents, onC
       return () => window.removeEventListener('click', closePopup);
   }, []);
 
+  // 2. Early return check
   if (!product) return null;
 
+  // 3. Derived data & Handlers
+  const handleTouchStart = (e) => { touchStart.current = e.targetTouches[0].clientX; };
+  const handleTouchEnd = (e) => {
+     if(!touchStart.current) return;
+     const currentX = e.changedTouches[0].clientX;
+     const diff = touchStart.current - currentX;
+     if(Math.abs(diff) > 50) {
+        if(diff > 0) onNavigateNext(); 
+        else onNavigatePrev();
+     }
+     touchStart.current = null;
+  };
+
   const images = product.images || [];
+  // Handle Object vs String for Images
   const currentImageEntry = images.length > 0 ? images[currentImageIndex] : null;
   const currentImageUrl = currentImageEntry ? (typeof currentImageEntry === 'object' ? currentImageEntry.url : currentImageEntry) : null;
   const currentImageCaption = currentImageEntry && typeof currentImageEntry === 'object' ? currentImageEntry.caption : '';
@@ -1973,26 +1858,44 @@ function ProductDetailModal({ product, allProducts, swatches, spaceContents, onC
   }
 
   const relatedItems = allProducts.filter(p => product.relatedProductIds?.includes(p.id));
+
   const copyToClipboard = () => { navigator.clipboard.writeText(`[${product.name}]\n${product.specs}`); showToast("Copied to clipboard"); };
   const launchYear = product.launchDate ? product.launchDate.substring(0, 4) : '';
 
   const handleSwatchClick = (e, color) => {
       e.stopPropagation();
       const rect = e.currentTarget.getBoundingClientRect();
-      let code = 'NO CODE', name = '', swatchId = null;
+      
+      // Resolve Material Code
+      let code = 'NO CODE';
+      let name = '';
+      let swatchId = null;
+
       if (typeof color === 'object') {
           swatchId = color.id;
           const globalSwatch = swatches.find(s => s.id === swatchId);
+          
           if(globalSwatch && globalSwatch.materialCode) code = globalSwatch.materialCode;
           else if (color.materialCode) code = color.materialCode; 
+          
           name = color.name || '';
-      } else { code = color; }
+      } else {
+          code = color; 
+      }
       
       const foundSwatch = swatches.find(s => s.id === swatchId) || (typeof color === 'object' ? color : null);
+      
+      // Calculate Position: Center Horizontally above the circle
       const centerX = rect.left + rect.width / 2;
       const topY = rect.top;
 
-      setSwatchPopup({ x: centerX, y: topY, code: code, name: name, swatchObj: foundSwatch });
+      setSwatchPopup({
+          x: centerX,
+          y: topY,
+          code: code,
+          name: name,
+          swatchObj: foundSwatch
+      });
   };
 
   const navigateToSwatch = () => {
@@ -2003,14 +1906,23 @@ function ProductDetailModal({ product, allProducts, swatches, spaceContents, onC
          setSwatchPopup(null);
       }
   };
-  const handleShareImage = async () => { /* Placeholder */ };
+
+  // Image Generation Logic (Simplified)
+  const handleShareImage = async () => { /* ... */ };
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center p-0 md:p-4 animate-in fade-in duration-300 slide-in-animation pointer-events-auto print:static print:bg-white">
+    <div key={product.id} className="fixed inset-0 bg-black/60 backdrop-blur-md z-50 flex items-center justify-center p-0 md:p-4 animate-in fade-in duration-300 slide-in-animation print:fixed print:inset-0 print:z-[100] print:bg-white print:h-auto print:overflow-visible" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
+      <canvas ref={canvasRef} style={{ display: 'none' }} />
+      {/* Zoom view removed as per v0.7.0 requirement, leaving clean image */}
+      
       {swatchPopup && (
           <div 
-             className="fixed z-[160] bg-black/60 backdrop-blur-sm text-white px-3 py-2 rounded-lg shadow-lg cursor-pointer hover:bg-black/80 transition-colors border border-white/10"
-             style={{ top: swatchPopup.y - 10, left: swatchPopup.x, transform: 'translate(-50%, -100%)' }}
+             className="fixed z-[160] bg-black/60 backdrop-blur-sm text-white px-3 py-2 rounded-lg shadow-lg cursor-pointer hover:bg-black/80 transition-colors border border-white/10 pointer-events-auto"
+             style={{ 
+                 top: swatchPopup.y - 10, 
+                 left: swatchPopup.x, 
+                 transform: 'translate(-50%, -100%)' 
+             }}
              onClick={(e) => { e.stopPropagation(); navigateToSwatch(); }}
           >
               <div className="text-sm font-bold tracking-tight leading-none mb-0.5 text-center">{swatchPopup.code}</div>
@@ -2019,7 +1931,9 @@ function ProductDetailModal({ product, allProducts, swatches, spaceContents, onC
           </div>
       )}
 
-      <div className="bg-white w-full h-full md:h-[90vh] md:w-full md:max-w-6xl md:rounded-3xl overflow-hidden shadow-2xl flex flex-col md:flex-row relative print:shadow-none print:rounded-none">
+      <div className="bg-white w-full h-full md:h-[90vh] md:w-full md:max-w-6xl md:rounded-3xl overflow-hidden shadow-2xl flex flex-col md:flex-row relative print:h-auto print:overflow-visible print:shadow-none print:rounded-none">
+        
+        {/* Top Right Controls: Edit & Close */}
         <div className="absolute top-4 right-4 z-[100] flex gap-2">
             {isAdmin && <button onClick={onEdit} className="p-2 bg-white/50 hover:bg-zinc-100 rounded-full backdrop-blur shadow-sm"><Edit3 className="w-6 h-6 text-zinc-900" /></button>}
             <button onClick={onClose} className="p-2 bg-white/50 hover:bg-zinc-100 rounded-full backdrop-blur shadow-sm"><X className="w-6 h-6 text-zinc-900" /></button>
@@ -2032,19 +1946,21 @@ function ProductDetailModal({ product, allProducts, swatches, spaceContents, onC
            </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto custom-scrollbar flex flex-col md:flex-row h-full pb-safe print:overflow-visible">
+        <div className="flex-1 overflow-y-auto custom-scrollbar flex flex-col md:flex-row h-full pb-safe print:overflow-visible print:h-auto">
           <div className="w-full md:w-1/2 bg-zinc-50 p-6 md:p-8 flex flex-col border-b md:border-b-0 md:border-r border-zinc-100 md:sticky md:top-0 print:static print:bg-white print:border-none">
             <div className="flex-1 w-full bg-white rounded-2xl flex items-center justify-center shadow-sm border border-zinc-100 overflow-hidden p-8 mb-4 relative group min-h-[300px] print:shadow-none print:border-zinc-200">
                {currentImageUrl ? (
                    <div className="relative w-full h-full flex items-center justify-center">
                        <img src={currentImageUrl} alt="Main" className="w-full h-full object-contain mix-blend-multiply" />
-                       {currentImageCaption && <div className="absolute bottom-4 left-4 right-4 bg-black/50 backdrop-blur-md text-white text-xs p-3 rounded-xl text-center">{currentImageCaption}</div>}
+                       {/* Image Caption Overlay */}
+                       {currentImageCaption && (
+                           <div className="absolute bottom-4 left-4 right-4 bg-black/50 backdrop-blur-md text-white text-xs p-3 rounded-xl text-center">
+                               {currentImageCaption}
+                           </div>
+                       )}
                    </div>
                ) : <ImageIcon className="w-20 h-20 opacity-20 text-zinc-400" />}
                <button onClick={onToggleFavorite} className="absolute top-4 left-4 p-3 bg-white rounded-full shadow-sm border border-zinc-100 hover:border-zinc-300 transition-all hidden md:flex print:hidden"><Star className={`w-5 h-5 ${isFavorite ? 'text-yellow-400 fill-yellow-400' : 'text-zinc-300'}`} /></button>
-               {/* Nav Buttons Overlay */}
-               <button onClick={(e) => { e.stopPropagation(); onNavigatePrev(); }} className="absolute left-4 top-1/2 -translate-y-1/2 p-2 bg-white/50 backdrop-blur hover:bg-white rounded-full shadow-sm opacity-0 group-hover:opacity-100 transition-opacity"><ArrowLeft className="w-5 h-5"/></button>
-               <button onClick={(e) => { e.stopPropagation(); onNavigateNext(); }} className="absolute right-4 top-1/2 -translate-y-1/2 p-2 bg-white/50 backdrop-blur hover:bg-white rounded-full shadow-sm opacity-0 group-hover:opacity-100 transition-opacity"><ArrowRight className="w-5 h-5"/></button>
             </div>
             {images.length > 0 && (<div className="flex space-x-2 md:space-x-3 overflow-x-auto custom-scrollbar pb-1 px-1 print:hidden">{images.map((img, idx) => (<button key={idx} onClick={() => setCurrentImageIndex(idx)} className={`flex-shrink-0 w-10 h-10 md:w-20 md:h-20 rounded-lg md:rounded-xl overflow-hidden border-2 transition-all ${currentImageIndex === idx ? 'border-zinc-900 ring-2 ring-zinc-200' : 'border-transparent opacity-60 hover:opacity-100 bg-white'}`}><img src={typeof img === 'object' ? img.url : img} alt={`Thumbnail ${idx}`} className="w-full h-full object-cover" /></button>))}</div>)}
           </div>
@@ -2139,12 +2055,12 @@ function ProductDetailModal({ product, allProducts, swatches, spaceContents, onC
 
               {contentImages.length > 0 && (<div className="pt-8 border-t border-zinc-100 space-y-4"><h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Detail View</h3><div className="flex flex-col gap-4">{contentImages.map((img, idx) => (
                   <div key={idx} className="relative">
-                      <img src={typeof img === 'object' ? img.url : img} alt={`Detail ${idx+1}`} className="w-full h-auto rounded-xl border border-zinc-100 print:border-none" />
+                      <img src={typeof img === 'object' ? img.url : img} alt={`Detail ${idx+1}`} className="w-full h-auto rounded-xl border border-zinc-100 print:border-none cursor-zoom-in" onClick={() => setIsZoomed(typeof img === 'object' ? img.url : img)} />
                       {typeof img === 'object' && img.caption && <div className="absolute bottom-3 left-3 right-3 bg-black/60 text-white text-xs p-2 rounded-lg text-center backdrop-blur-sm">{img.caption}</div>}
                   </div>
               ))}</div></div>)}
 
-              <div className="md:hidden mt-8 pt-8 border-t border-zinc-100 pb-10 print:hidden mb-safe">
+              <div className="md:hidden mt-8 pt-8 border-t border-zinc-100 pb-10 print:hidden">
                  <div className="flex justify-center gap-4 mb-4">
                     <button onClick={handleShareImage} className="flex flex-col items-center justify-center w-14 h-14 bg-zinc-50 rounded-2xl text-zinc-600 active:scale-95 transition-transform border border-zinc-100">
                         <ImgIcon className="w-5 h-5 mb-1"/>
@@ -2156,6 +2072,7 @@ function ProductDetailModal({ product, allProducts, swatches, spaceContents, onC
                     </button>
                  </div>
               </div>
+
             </div>
             
             <div className="hidden md:flex mt-12 pt-6 border-t border-zinc-100 justify-between items-center pb-8 print:hidden">
@@ -2171,14 +2088,42 @@ function ProductDetailModal({ product, allProducts, swatches, spaceContents, onC
   );
 }
 
-// ... ProductFormModal, SpaceInfoEditModal, SwatchSelector, SpaceProductManager, SceneEditModal, SpaceSceneModal ...
-// (Reusing existing implementations with minor scroll lock compatibility if needed, but useEffect handles it globally)
+function SpaceInfoEditModal({ spaceId, currentData = {}, defaultTags, onClose, onSave }) {
+  const [data, setData] = useState({ description: '', trend: '', tagsString: '' });
+  useEffect(() => { 
+     const tags = currentData.tags || defaultTags || [];
+     setData({ 
+        description: currentData.description || '', 
+        trend: currentData.trend || '',
+        tagsString: tags.join(', ')
+     }); 
+  }, [currentData, defaultTags]);
+
+  const handleSave = () => {
+     const tags = data.tagsString.split(',').map(t => t.trim()).filter(Boolean);
+     onSave({ ...data, tags });
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[80] flex items-center justify-center p-4">
+      <div className="bg-white w-full max-w-lg rounded-2xl overflow-hidden shadow-2xl">
+        <div className="px-6 py-4 border-b border-zinc-100 flex justify-between items-center"><h3 className="text-lg font-bold text-zinc-900">Edit Space Info</h3><button onClick={onClose}><X className="w-5 h-5 text-zinc-400" /></button></div>
+        <div className="p-6 space-y-4">
+           <div><label className="block text-xs font-bold text-zinc-500 uppercase mb-2">Description</label><textarea className="w-full border border-zinc-300 rounded-xl p-3 text-sm focus:ring-2 focus:ring-zinc-900 outline-none" rows={4} value={data.description} onChange={(e) => setData({...data, description: e.target.value})} /></div>
+           <div><label className="block text-xs font-bold text-zinc-500 uppercase mb-2">Design Trend Keywords</label><input type="text" className="w-full border border-zinc-300 rounded-xl p-3 text-sm focus:ring-2 focus:ring-zinc-900 outline-none" value={data.trend} onChange={(e) => setData({...data, trend: e.target.value})} placeholder="e.g. Minimalist, Eco-friendly, Open Plan" /></div>
+           <div><label className="block text-xs font-bold text-zinc-500 uppercase mb-2">Space Tags (comma separated)</label><input type="text" className="w-full border border-zinc-300 rounded-xl p-3 text-sm focus:ring-2 focus:ring-zinc-900 outline-none" value={data.tagsString} onChange={(e) => setData({...data, tagsString: e.target.value})} placeholder="Task, Executive, Meeting..." /></div>
+        </div>
+        <div className="px-6 py-4 border-t border-zinc-100 bg-zinc-50 flex justify-end"><button onClick={handleSave} className="px-6 py-2 bg-zinc-900 text-white rounded-xl text-sm font-bold hover:bg-black shadow-lg">Save Changes</button></div>
+      </div>
+    </div>
+  );
+}
 
 function ProductFormModal({ categories, swatches = [], allProducts = [], existingData, onClose, onSave, onDelete, isFirebaseAvailable, initialCategory, spaceTags = [] }) {
   const isEditMode = !!existingData;
   const fileInputRef = useRef(null);
   const contentInputRef = useRef(null);
-  const defaultCategory = (initialCategory && !['ALL','SPACES_HUB','MATERIALS_HUB','MY_PICK','DASHBOARD','COMPARE_PAGE'].includes(initialCategory) && !SPACES.find(s=>s.id===initialCategory)) ? initialCategory : 'EXECUTIVE';
+  const defaultCategory = (initialCategory && !['ALL','NEW','MY_PICK','DASHBOARD','COMPARE_PAGE'].includes(initialCategory) && !SPACES.find(s=>s.id===initialCategory)) ? initialCategory : 'EXECUTIVE';
   
   const [formData, setFormData] = useState({ 
     id: null, name: '', category: defaultCategory, specs: '', designer: '',
@@ -2190,6 +2135,7 @@ function ProductFormModal({ categories, swatches = [], allProducts = [], existin
   const [isProcessingImage, setIsProcessingImage] = useState(false);
   const [relatedFilter, setRelatedFilter] = useState('');
 
+  // Helper to normalize images to objects
   const normalizeImages = (imgs) => imgs.map(img => typeof img === 'string' ? { url: img, caption: '' } : img);
 
   useEffect(() => {
@@ -2232,6 +2178,7 @@ function ProductFormModal({ categories, swatches = [], allProducts = [], existin
           setIsProcessingImage(false); 
       } 
   };
+
   const handleCaptionChange = (index, value, type) => {
       setFormData(prev => {
           const list = type === 'main' ? [...prev.images] : [...prev.contentImages];
@@ -2239,6 +2186,7 @@ function ProductFormModal({ categories, swatches = [], allProducts = [], existin
           return type === 'main' ? { ...prev, images: list } : { ...prev, contentImages: list };
       });
   };
+
   const handleAttachmentUpload = (e) => { const files = Array.from(e.target.files); files.forEach(file => { if (file.size > 300*1024) return window.alert("Too large"); const reader = new FileReader(); reader.onload = (e) => setFormData(p => ({...p, attachments: [...p.attachments, {name: file.name, url: e.target.result}]})); reader.readAsDataURL(file); }); };
   const handleAddLinkAttachment = () => { const url = window.prompt("URL:"); const name = window.prompt("Name:"); if(url && name) setFormData(p => ({...p, attachments: [...p.attachments, {name, url}]})); };
   const removeImage = (i) => setFormData(p => ({...p, images: p.images.filter((_, idx) => idx !== i)}));
@@ -2247,7 +2195,14 @@ function ProductFormModal({ categories, swatches = [], allProducts = [], existin
   const removeAttachment = (i) => setFormData(p => ({...p, attachments: p.attachments.filter((_, idx) => idx !== i)}));
   const toggleSpace = (spaceId) => { setFormData(prev => { const currentSpaces = prev.spaces || []; if (currentSpaces.includes(spaceId)) { return { ...prev, spaces: currentSpaces.filter(id => id !== spaceId) }; } else { return { ...prev, spaces: [...currentSpaces, spaceId] }; } }); };
   const toggleSpaceTag = (tag) => { setFormData(prev => { const currentTags = prev.spaceTags || []; if (currentTags.includes(tag)) return { ...prev, spaceTags: currentTags.filter(t => t !== tag) }; else return { ...prev, spaceTags: [...currentTags, tag] }; }); };
-  const toggleRelatedProduct = (pid) => { setFormData(prev => { const ids = prev.relatedProductIds || []; if(ids.includes(pid)) return { ...prev, relatedProductIds: ids.filter(id => id !== pid) }; else return { ...prev, relatedProductIds: [...ids, pid] }; }); };
+  
+  const toggleRelatedProduct = (pid) => {
+      setFormData(prev => {
+          const ids = prev.relatedProductIds || [];
+          if(ids.includes(pid)) return { ...prev, relatedProductIds: ids.filter(id => id !== pid) };
+          else return { ...prev, relatedProductIds: [...ids, pid] };
+      });
+  };
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -2262,7 +2217,7 @@ function ProductFormModal({ categories, swatches = [], allProducts = [], existin
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[180] flex items-center justify-center p-4 pointer-events-auto">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[180] flex items-center justify-center p-4">
       <div className="bg-white w-full max-w-3xl rounded-2xl overflow-hidden shadow-2xl flex flex-col max-h-[95vh] animate-in slide-in-from-bottom-4 duration-200">
         <div className="px-8 py-5 border-b border-zinc-100 flex justify-between items-center">
           <h2 className="text-xl font-bold text-zinc-900">{isEditMode ? 'Edit Product' : 'New Product'}</h2>
@@ -2275,7 +2230,12 @@ function ProductFormModal({ categories, swatches = [], allProducts = [], existin
                {formData.images.map((img, i) => (
                    <div key={i} className="relative aspect-square bg-white rounded-lg border overflow-hidden group">
                        <img src={img.url || img} className="w-full h-full object-cover" />
-                       <input className="absolute bottom-0 w-full text-[9px] bg-white/90 border-t p-1 outline-none opacity-0 group-hover:opacity-100 transition-opacity" placeholder="Caption..." value={img.caption || ''} onChange={(e) => handleCaptionChange(i, e.target.value, 'main')}/>
+                       <input 
+                           className="absolute bottom-0 w-full text-[9px] bg-white/90 border-t p-1 outline-none opacity-0 group-hover:opacity-100 transition-opacity" 
+                           placeholder="Caption..." 
+                           value={img.caption || ''} 
+                           onChange={(e) => handleCaptionChange(i, e.target.value, 'main')}
+                       />
                        <button type="button" onClick={()=>removeImage(i)} className="absolute top-1 right-1 bg-red-500 text-white p-1 rounded-full opacity-0 group-hover:opacity-100"><X className="w-3 h-3"/></button>
                        {i===0 && <span className="absolute top-1 left-1 bg-black text-white text-[9px] px-1 rounded">MAIN</span>}
                        {i!==0 && <button type="button" onClick={()=>setMainImage(i)} className="absolute top-1 left-1 bg-white text-black text-[9px] px-1 rounded opacity-0 group-hover:opacity-100">Set Main</button>}
@@ -2284,42 +2244,74 @@ function ProductFormModal({ categories, swatches = [], allProducts = [], existin
              </div>
           </div>
           <div className="bg-zinc-50 p-6 rounded-xl border border-zinc-200">
-             <div className="flex justify-between mb-4"><span className="font-bold text-sm">Detailed Content Images</span><div className="space-x-2"><button type="button" onClick={() => contentInputRef.current.click()} className="text-xs bg-white border px-3 py-1 rounded-lg font-medium hover:bg-zinc-100">Upload</button></div><input ref={contentInputRef} type="file" multiple className="hidden" onChange={handleContentImageUpload} accept="image/*"/></div>
+             <div className="flex justify-between mb-4"><span className="font-bold text-sm">Detailed Content Images (Vertical Scroll)</span><div className="space-x-2"><button type="button" onClick={() => contentInputRef.current.click()} className="text-xs bg-white border px-3 py-1 rounded-lg font-medium hover:bg-zinc-100">Upload</button></div><input ref={contentInputRef} type="file" multiple className="hidden" onChange={handleContentImageUpload} accept="image/*"/></div>
              <div className="grid grid-cols-3 sm:grid-cols-5 gap-3">
                {formData.contentImages.map((img, i) => (
                    <div key={i} className="relative aspect-[3/4] bg-white rounded-lg border overflow-hidden group">
                        <img src={img.url || img} className="w-full h-full object-cover" />
-                       <input className="absolute bottom-0 w-full text-[9px] bg-white/90 border-t p-1 outline-none opacity-0 group-hover:opacity-100 transition-opacity" placeholder="Caption..." value={img.caption || ''} onChange={(e) => handleCaptionChange(i, e.target.value, 'content')}/>
+                       <input 
+                           className="absolute bottom-0 w-full text-[9px] bg-white/90 border-t p-1 outline-none opacity-0 group-hover:opacity-100 transition-opacity" 
+                           placeholder="Caption..." 
+                           value={img.caption || ''} 
+                           onChange={(e) => handleCaptionChange(i, e.target.value, 'content')}
+                       />
                        <button type="button" onClick={()=>removeContentImage(i)} className="absolute top-1 right-1 bg-red-500 text-white p-1 rounded-full opacity-0 group-hover:opacity-100"><X className="w-3 h-3"/></button>
                    </div>
                ))}
              </div>
           </div>
+          
           <div className="mb-4">
              <label className="block text-xs font-bold text-zinc-500 uppercase mb-2">Related Spaces</label>
              <div className="flex flex-wrap gap-2 mb-2">{SPACES.map(space => (<button key={space.id} type="button" onClick={() => toggleSpace(space.id)} className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-colors flex items-center ${formData.spaces.includes(space.id) ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-500 border-zinc-200 hover:border-zinc-400'}`}>{formData.spaces.includes(space.id) && <Check className="w-3 h-3 mr-1.5" />}{space.label}</button>))}</div>
              {spaceTags.length > 0 && (<div className="p-3 bg-zinc-50 rounded-lg border border-zinc-100"><label className="block text-[10px] font-bold text-zinc-400 uppercase mb-2">Detailed Space Tags</label><div className="flex flex-wrap gap-2">{spaceTags.map(tag => (<button key={tag} type="button" onClick={() => toggleSpaceTag(tag)} className={`px-2 py-1 rounded text-[10px] font-bold border ${formData.spaceTags.includes(tag) ? 'bg-blue-50 text-blue-600 border-blue-200' : 'bg-white text-zinc-500 border-zinc-200'}`}>{tag}</button>))}</div></div>)}
           </div>
+
           <div className="grid grid-cols-2 gap-6"><div><label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Name</label><input required className="w-full border p-2 rounded-lg" value={formData.name} onChange={e=>setFormData({...formData, name: e.target.value})}/></div><div><label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Category</label><select className="w-full border p-2 rounded-lg" value={formData.category} onChange={e=>setFormData({...formData, category: e.target.value})}>{categories.map(c=><option key={c.id} value={c.id}>{c.label}</option>)}</select></div></div>
+          
           <div className="grid grid-cols-2 gap-6">
              <div><label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Launch Year</label><input type="number" min="1900" max="2099" step="1" className="w-full border p-2 rounded-lg" value={formData.launchDate} onChange={e=>setFormData({...formData, launchDate: e.target.value})}/></div>
              <div><label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Designer</label><input className="w-full border p-2 rounded-lg" value={formData.designer} onChange={e=>setFormData({...formData, designer: e.target.value})}/></div>
           </div>
+          
           <div><label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Specs</label><textarea required rows={2} className="w-full border p-2 rounded-lg" value={formData.specs} onChange={e=>setFormData({...formData, specs: e.target.value})}/></div>
           <div className="grid grid-cols-2 gap-6"><div><label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Options (comma)</label><input className="w-full border p-2 rounded-lg" value={formData.optionsString} onChange={e=>setFormData({...formData, optionsString: e.target.value})}/></div><div><label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Features (comma)</label><input className="w-full border p-2 rounded-lg" value={formData.featuresString} onChange={e=>setFormData({...formData, featuresString: e.target.value})}/></div></div>
           <div className="grid grid-cols-2 gap-6"><div><label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Materials (comma)</label><input className="w-full border p-2 rounded-lg" value={formData.materialsString} onChange={e=>setFormData({...formData, materialsString: e.target.value})}/></div><div><label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Awards (comma)</label><input className="w-full border p-2 rounded-lg" value={formData.awardsString} onChange={e=>setFormData({...formData, awardsString: e.target.value})}/></div></div>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-zinc-50 p-4 rounded-xl border border-zinc-100">
-             <SwatchSelector label="Body Colors" selected={formData.bodyColors} swatches={swatches} onChange={(newColors) => setFormData({...formData, bodyColors: newColors})}/>
-             <SwatchSelector label="Upholstery Colors" selected={formData.upholsteryColors} swatches={swatches} onChange={(newColors) => setFormData({...formData, upholsteryColors: newColors})}/>
+             <SwatchSelector 
+                label="Body Colors" 
+                selected={formData.bodyColors} 
+                swatches={swatches}
+                onChange={(newColors) => setFormData({...formData, bodyColors: newColors})}
+             />
+             <SwatchSelector 
+                label="Upholstery Colors" 
+                selected={formData.upholsteryColors} 
+                swatches={swatches}
+                onChange={(newColors) => setFormData({...formData, upholsteryColors: newColors})}
+             />
           </div>
+
+          {/* Related Products Selection */}
           <div className="border-t border-zinc-100 pt-6">
-              <label className="block text-xs font-bold text-zinc-500 uppercase mb-2">Related Products</label>
+              <label className="block text-xs font-bold text-zinc-500 uppercase mb-2">Related Products (Tagging)</label>
               <div className="border border-zinc-200 rounded-xl p-4 bg-zinc-50 max-h-60 overflow-y-auto">
                  <input className="w-full mb-3 p-2 border border-zinc-300 rounded text-xs" placeholder="Filter products..." value={relatedFilter} onChange={e => setRelatedFilter(e.target.value)} />
-                 <div className="grid grid-cols-2 gap-2">{allProducts.filter(p => p.id !== formData.id && p.name.toLowerCase().includes(relatedFilter.toLowerCase())).map(p => { const isSelected = formData.relatedProductIds.includes(p.id); return (<div key={p.id} onClick={() => toggleRelatedProduct(p.id)} className={`flex items-center p-2 rounded cursor-pointer text-xs ${isSelected ? 'bg-indigo-100 border border-indigo-300 text-indigo-800' : 'bg-white border border-zinc-200 hover:bg-zinc-100'}`}><div className={`w-3 h-3 border rounded mr-2 flex items-center justify-center ${isSelected ? 'bg-indigo-500 border-indigo-500' : 'border-zinc-300'}`}>{isSelected && <Check className="w-2 h-2 text-white"/>}</div><span className="truncate">{p.name}</span></div>); })}</div>
+                 <div className="grid grid-cols-2 gap-2">
+                     {allProducts.filter(p => p.id !== formData.id && p.name.toLowerCase().includes(relatedFilter.toLowerCase())).map(p => {
+                         const isSelected = formData.relatedProductIds.includes(p.id);
+                         return (
+                             <div key={p.id} onClick={() => toggleRelatedProduct(p.id)} className={`flex items-center p-2 rounded cursor-pointer text-xs ${isSelected ? 'bg-indigo-100 border border-indigo-300 text-indigo-800' : 'bg-white border border-zinc-200 hover:bg-zinc-100'}`}>
+                                 <div className={`w-3 h-3 border rounded mr-2 flex items-center justify-center ${isSelected ? 'bg-indigo-500 border-indigo-500' : 'border-zinc-300'}`}>{isSelected && <Check className="w-2 h-2 text-white"/>}</div>
+                                 <span className="truncate">{p.name}</span>
+                             </div>
+                         );
+                     })}
+                 </div>
               </div>
           </div>
+          
           <div className="space-y-4"><div><label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Link</label><input className="w-full border p-2 rounded-lg" placeholder="https://..." value={formData.productLink} onChange={e=>setFormData({...formData, productLink: e.target.value})}/></div><div className="flex justify-between"><label className="block text-xs font-bold text-zinc-500 uppercase">Attachments</label><div className="space-x-2"><button type="button" onClick={()=>document.getElementById('doc-upload').click()} className="text-xs border px-2 py-1 rounded bg-white">File</button><button type="button" onClick={handleAddLinkAttachment} className="text-xs border px-2 py-1 rounded bg-white">Link</button></div><input id="doc-upload" type="file" multiple className="hidden" onChange={handleAttachmentUpload}/></div><div className="space-y-1">{formData.attachments.map((f, i)=><div key={i} className="flex justify-between text-xs bg-zinc-50 p-2 rounded"><span>{f.name}</span><button type="button" onClick={()=>removeAttachment(i)} className="text-red-500"><X className="w-3 h-3"/></button></div>)}</div></div>
           <div className="flex items-center space-x-2"><input type="checkbox" checked={formData.isNew} onChange={e=>setFormData({...formData, isNew: e.target.checked})}/><label className="text-sm font-bold">Mark as New Arrival</label></div>
         </form>
@@ -2335,58 +2327,98 @@ function ProductFormModal({ categories, swatches = [], allProducts = [], existin
   );
 }
 
-function SpaceInfoEditModal({ spaceId, currentData = {}, defaultTags, onClose, onSave }) {
-  const [data, setData] = useState({ description: '', trend: '', tagsString: '' });
-  useEffect(() => { 
-     const tags = currentData.tags || defaultTags || [];
-     setData({ description: currentData.description || '', trend: currentData.trend || '', tagsString: tags.join(', ') }); 
-  }, [currentData, defaultTags]);
-  const handleSave = () => { const tags = data.tagsString.split(',').map(t => t.trim()).filter(Boolean); onSave({ ...data, tags }); };
-  return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[80] flex items-center justify-center p-4">
-      <div className="bg-white w-full max-w-lg rounded-2xl overflow-hidden shadow-2xl">
-        <div className="px-6 py-4 border-b border-zinc-100 flex justify-between items-center"><h3 className="text-lg font-bold text-zinc-900">Edit Space Info</h3><button onClick={onClose}><X className="w-5 h-5 text-zinc-400" /></button></div>
-        <div className="p-6 space-y-4">
-           <div><label className="block text-xs font-bold text-zinc-500 uppercase mb-2">Description</label><textarea className="w-full border border-zinc-300 rounded-xl p-3 text-sm focus:ring-2 focus:ring-zinc-900 outline-none" rows={4} value={data.description} onChange={(e) => setData({...data, description: e.target.value})} /></div>
-           <div><label className="block text-xs font-bold text-zinc-500 uppercase mb-2">Design Trend Keywords</label><input type="text" className="w-full border border-zinc-300 rounded-xl p-3 text-sm focus:ring-2 focus:ring-zinc-900 outline-none" value={data.trend} onChange={(e) => setData({...data, trend: e.target.value})} placeholder="e.g. Minimalist, Eco-friendly, Open Plan" /></div>
-           <div><label className="block text-xs font-bold text-zinc-500 uppercase mb-2">Space Tags (comma separated)</label><input type="text" className="w-full border border-zinc-300 rounded-xl p-3 text-sm focus:ring-2 focus:ring-zinc-900 outline-none" value={data.tagsString} onChange={(e) => setData({...data, tagsString: e.target.value})} placeholder="Task, Executive, Meeting..." /></div>
-        </div>
-        <div className="px-6 py-4 border-t border-zinc-100 bg-zinc-50 flex justify-end"><button onClick={handleSave} className="px-6 py-2 bg-zinc-900 text-white rounded-xl text-sm font-bold hover:bg-black shadow-lg">Save Changes</button></div>
-      </div>
-    </div>
-  );
-}
-
 function SwatchSelector({ label, selected, swatches, onChange }) {
   const [isOpen, setIsOpen] = useState(false);
   const [filter, setFilter] = useState('');
   const [activeTab, setActiveTab] = useState('ALL');
 
   const handleSelect = (swatch) => {
-     const snapshot = { id: swatch.id, name: swatch.name, hex: swatch.hex, image: swatch.image, category: swatch.category, textureType: swatch.textureType, materialCode: swatch.materialCode };
-     if(!selected.find(s => (typeof s === 'object' ? s.id === swatch.id : false))) { onChange([...selected, snapshot]); }
+     // Snapshot essential data
+     const snapshot = { 
+         id: swatch.id, name: swatch.name, hex: swatch.hex, image: swatch.image, 
+         category: swatch.category, textureType: swatch.textureType, materialCode: swatch.materialCode 
+     };
+     // Check if ID already exists in selected
+     if(!selected.find(s => (typeof s === 'object' ? s.id === swatch.id : false))) {
+        onChange([...selected, snapshot]);
+     }
      setIsOpen(false);
   };
-  const handleRemove = (index) => { const newSelected = [...selected]; newSelected.splice(index, 1); onChange(newSelected); };
-  const handleMove = (index, direction) => { const newSelected = [...selected]; const targetIndex = index + direction; if (targetIndex >= 0 && targetIndex < newSelected.length) { const temp = newSelected[index]; newSelected[index] = newSelected[targetIndex]; newSelected[targetIndex] = temp; onChange(newSelected); } };
-  const handleManualAdd = () => { const hex = prompt("Enter Hex Color (e.g. #000000) or Name:"); if(hex) onChange([...selected, hex]); };
-  const filteredSwatches = swatches.filter(s => { if(activeTab !== 'ALL' && s.category !== activeTab) return false; return s.name.toLowerCase().includes(filter.toLowerCase()); });
+
+  const handleRemove = (index) => {
+     const newSelected = [...selected];
+     newSelected.splice(index, 1);
+     onChange(newSelected);
+  };
+  
+  const handleMove = (index, direction) => {
+     const newSelected = [...selected];
+     const targetIndex = index + direction;
+     if (targetIndex >= 0 && targetIndex < newSelected.length) {
+        const temp = newSelected[index];
+        newSelected[index] = newSelected[targetIndex];
+        newSelected[targetIndex] = temp;
+        onChange(newSelected);
+     }
+  };
+
+  const handleManualAdd = () => {
+     const hex = prompt("Enter Hex Color (e.g. #000000) or Name:");
+     if(hex) onChange([...selected, hex]);
+  };
+
+  const filteredSwatches = swatches.filter(s => {
+     if(activeTab !== 'ALL' && s.category !== activeTab) return false;
+     return s.name.toLowerCase().includes(filter.toLowerCase());
+  });
 
   return (
     <div className="relative">
-       <div className="flex justify-between items-center mb-1"><label className="block text-xs font-bold text-zinc-500 uppercase">{label}</label><button type="button" onClick={handleManualAdd} className="text-[10px] text-blue-600 font-bold hover:underline">Manual Input</button></div>
+       <div className="flex justify-between items-center mb-1">
+          <label className="block text-xs font-bold text-zinc-500 uppercase">{label}</label>
+          <button type="button" onClick={handleManualAdd} className="text-[10px] text-blue-600 font-bold hover:underline">Manual Input</button>
+       </div>
        <div className="flex flex-wrap gap-2 min-h-[40px] p-2 bg-white border rounded-lg items-center">
           {selected.map((item, idx) => (
-             <div key={idx} className="relative group"><SwatchDisplay color={item} size="small" /><div className="absolute -top-3 left-1/2 -translate-x-1/2 flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity bg-white shadow-md rounded-full border border-zinc-200 overflow-hidden z-20 scale-75"><button type="button" onClick={()=>handleMove(idx, -1)} className="p-1 hover:bg-zinc-100"><ChevronLeft size={10}/></button><button type="button" onClick={()=>handleRemove(idx)} className="p-1 hover:bg-zinc-100 text-red-500"><X size={10}/></button><button type="button" onClick={()=>handleMove(idx, 1)} className="p-1 hover:bg-zinc-100"><ChevronRight size={10}/></button></div></div>
+             <div key={idx} className="relative group">
+                <SwatchDisplay color={item} size="small" />
+                <div className="absolute -top-3 left-1/2 -translate-x-1/2 flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity bg-white shadow-md rounded-full border border-zinc-200 overflow-hidden z-20 scale-75">
+                  <button type="button" onClick={()=>handleMove(idx, -1)} className="p-1 hover:bg-zinc-100"><ChevronLeft size={10}/></button>
+                  <button type="button" onClick={()=>handleRemove(idx)} className="p-1 hover:bg-zinc-100 text-red-500"><X size={10}/></button>
+                  <button type="button" onClick={()=>handleMove(idx, 1)} className="p-1 hover:bg-zinc-100"><ChevronRight size={10}/></button>
+                </div>
+             </div>
           ))}
           <button type="button" onClick={() => setIsOpen(true)} className="w-6 h-6 rounded-full border border-dashed border-zinc-400 flex items-center justify-center text-zinc-400 hover:border-zinc-900 hover:text-zinc-900"><Plus className="w-3 h-3"/></button>
        </div>
+
        {isOpen && (
           <div className="absolute top-full left-0 z-50 mt-2 w-full md:w-[400px] bg-white rounded-xl shadow-xl border border-zinc-200 p-4">
-             <div className="flex justify-between items-center mb-3"><h4 className="font-bold text-sm">Select Material</h4><button onClick={() => setIsOpen(false)}><X className="w-4 h-4 text-zinc-400 hover:text-black"/></button></div>
-             <div className="flex gap-1 overflow-x-auto pb-2 mb-2 custom-scrollbar"><button type="button" onClick={()=>setActiveTab('ALL')} className={`px-2 py-1 rounded text-[10px] font-bold whitespace-nowrap ${activeTab==='ALL'?'bg-black text-white':'bg-zinc-100'}`}>ALL</button>{SWATCH_CATEGORIES.map(c => (<button key={c.id} type="button" onClick={()=>setActiveTab(c.id)} className={`px-2 py-1 rounded text-[10px] font-bold whitespace-nowrap ${activeTab===c.id?'bg-black text-white':'bg-zinc-100'}`}>{c.label}</button>))}</div>
+             <div className="flex justify-between items-center mb-3">
+                <h4 className="font-bold text-sm">Select Material</h4>
+                <button onClick={() => setIsOpen(false)}><X className="w-4 h-4 text-zinc-400 hover:text-black"/></button>
+             </div>
+             
+             <div className="flex gap-1 overflow-x-auto pb-2 mb-2 custom-scrollbar">
+                <button type="button" onClick={()=>setActiveTab('ALL')} className={`px-2 py-1 rounded text-[10px] font-bold whitespace-nowrap ${activeTab==='ALL'?'bg-black text-white':'bg-zinc-100'}`}>ALL</button>
+                {SWATCH_CATEGORIES.map(c => (
+                   <button key={c.id} type="button" onClick={()=>setActiveTab(c.id)} className={`px-2 py-1 rounded text-[10px] font-bold whitespace-nowrap ${activeTab===c.id?'bg-black text-white':'bg-zinc-100'}`}>{c.label}</button>
+                ))}
+             </div>
+
              <input placeholder="Search materials..." value={filter} onChange={e=>setFilter(e.target.value)} className="w-full text-xs p-2 bg-zinc-50 rounded border mb-3 outline-none" />
-             <div className="grid grid-cols-5 gap-2 max-h-48 overflow-y-auto custom-scrollbar">{filteredSwatches.map(s => (<button key={s.id} type="button" onClick={() => handleSelect(s)} className="flex flex-col items-center group"><div className="w-8 h-8 rounded-full border overflow-hidden relative">{s.image ? <img src={s.image} className="w-full h-full object-cover"/> : <div className="w-full h-full" style={{backgroundColor:s.hex}}></div>}<div className="absolute inset-0 bg-black/20 hidden group-hover:flex items-center justify-center"><Plus className="w-4 h-4 text-white"/></div></div><span className="text-[9px] text-zinc-500 truncate w-full text-center mt-1">{s.name}</span></button>))}</div>
+             
+             <div className="grid grid-cols-5 gap-2 max-h-48 overflow-y-auto custom-scrollbar">
+                {filteredSwatches.map(s => (
+                   <button key={s.id} type="button" onClick={() => handleSelect(s)} className="flex flex-col items-center group">
+                      <div className="w-8 h-8 rounded-full border overflow-hidden relative">
+                         {s.image ? <img src={s.image} className="w-full h-full object-cover"/> : <div className="w-full h-full" style={{backgroundColor:s.hex}}></div>}
+                         <div className="absolute inset-0 bg-black/20 hidden group-hover:flex items-center justify-center"><Plus className="w-4 h-4 text-white"/></div>
+                      </div>
+                      <span className="text-[9px] text-zinc-500 truncate w-full text-center mt-1">{s.name}</span>
+                   </button>
+                ))}
+             </div>
           </div>
        )}
     </div>
@@ -2411,36 +2443,112 @@ function SceneEditModal({ initialData, allProducts, spaceTags = [], spaceOptions
   const [filter, setFilter] = useState('');
   const mainInputRef = useRef(null);
   const galleryInputRef = useRef(null);
+  
   const normalizeImages = (imgs) => imgs.map(img => typeof img === 'string' ? { url: img, caption: '' } : img);
 
   useEffect(() => {
     if(initialData) {
-      setData({ id: initialData.id || null, title: initialData.title || '', description: initialData.description || '', image: initialData.image || null, images: normalizeImages(initialData.images || []), productIds: initialData.productIds || [], tags: initialData.tags || [], spaceId: initialData.spaceId });
+      setData({ 
+        id: initialData.id || null, 
+        title: initialData.title || '', 
+        description: initialData.description || '', 
+        image: initialData.image || null, 
+        images: normalizeImages(initialData.images || []), 
+        productIds: initialData.productIds || [], 
+        tags: initialData.tags || [],
+        spaceId: initialData.spaceId 
+      });
     }
   }, [initialData]);
 
   const processImage = (file) => { return new Promise((resolve) => { const reader = new FileReader(); reader.onload = (e) => { const img = new Image(); img.onload = () => { const canvas = document.createElement('canvas'); const MAX_WIDTH = 1200; let width = img.width; let height = img.height; if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; } canvas.width = width; canvas.height = height; const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0, width, height); resolve(canvas.toDataURL('image/jpeg', 0.8)); }; img.src = e.target.result; }; reader.readAsDataURL(file); }); };
+  
   const handleMainImage = async (e) => { const file = e.target.files[0]; if (file) { const imageUrl = await processImage(file); setData(prev => ({ ...prev, image: imageUrl })); } };
-  const handleGalleryUpload = async (e) => { const files = Array.from(e.target.files); if(files.length > 0) { const newUrls = []; for(const file of files) { try { newUrls.push({ url: await processImage(file), caption: '' }); } catch(e) {} } setData(prev => ({ ...prev, images: [...prev.images, ...newUrls] })); } };
-  const handleCaptionChange = (index, val) => { setData(prev => { const newImgs = [...prev.images]; newImgs[index] = { ...newImgs[index], caption: val }; return { ...prev, images: newImgs }; }); };
+  const handleGalleryUpload = async (e) => { 
+      const files = Array.from(e.target.files); 
+      if(files.length > 0) { 
+          const newUrls = []; 
+          for(const file of files) { try { newUrls.push({ url: await processImage(file), caption: '' }); } catch(e) {} } 
+          setData(prev => ({ ...prev, images: [...prev.images, ...newUrls] })); 
+      } 
+  };
+  
+  const handleCaptionChange = (index, val) => {
+      setData(prev => {
+          const newImgs = [...prev.images];
+          newImgs[index] = { ...newImgs[index], caption: val };
+          return { ...prev, images: newImgs };
+      });
+  };
+
   const toggleProduct = (pid) => { setData(prev => { const ids = prev.productIds || []; return ids.includes(pid) ? { ...prev, productIds: ids.filter(id => id !== pid) } : { ...prev, productIds: [...ids, pid] }; }); };
   const toggleTag = (tag) => { setData(prev => { const tags = prev.tags || []; if (tags.includes(tag)) return { ...prev, tags: tags.filter(t => t !== tag) }; else return { ...prev, tags: [...tags, tag] }; }); };
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[80] flex items-center justify-center p-4">
       <div className="bg-white w-full max-w-2xl rounded-2xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
-         <div className="px-6 py-4 border-b border-zinc-100 flex justify-between items-center bg-white z-10"><h3 className="text-lg font-bold text-zinc-900">{!initialData.id ? 'New Scene' : 'Edit Scene'}</h3><div className="flex gap-2">{!(!initialData.id) && <button onClick={()=>onDelete(data.id)} className="text-red-500 p-2 hover:bg-red-50 rounded-full"><Trash2 className="w-5 h-5"/></button>}<button onClick={onClose} className="p-2 bg-white/50 hover:bg-zinc-100 rounded-full backdrop-blur shadow-sm"><X className="w-5 h-5 text-zinc-400 hover:text-black"/></button></div></div>
+         <div className="px-6 py-4 border-b border-zinc-100 flex justify-between items-center bg-white z-10">
+            <h3 className="text-lg font-bold text-zinc-900">{!initialData.id ? 'New Scene' : 'Edit Scene'}</h3>
+            <div className="flex gap-2">
+                {!(!initialData.id) && <button onClick={()=>onDelete(data.id)} className="text-red-500 p-2 hover:bg-red-50 rounded-full"><Trash2 className="w-5 h-5"/></button>}
+                <button onClick={onClose} className="p-2 bg-white/50 hover:bg-zinc-100 rounded-full backdrop-blur shadow-sm"><X className="w-5 h-5 text-zinc-400 hover:text-black"/></button>
+            </div>
+         </div>
          <div className="flex-1 overflow-y-auto p-6 space-y-8 bg-zinc-50">
             <div className="space-y-4">
               <div><label className="block text-xs font-bold text-zinc-500 uppercase mb-2">Main Image</label><div onClick={() => mainInputRef.current.click()} className="w-full h-48 bg-white rounded-xl flex items-center justify-center cursor-pointer border border-dashed border-zinc-300 overflow-hidden relative hover:border-zinc-400 transition-colors shadow-sm">{data.image ? <img src={data.image} className="w-full h-full object-cover" /> : <div className="flex flex-col items-center text-zinc-400"><ImagePlus className="w-8 h-8 mb-2"/><span className="text-xs">Upload Main</span></div>}</div><input type="file" ref={mainInputRef} className="hidden" accept="image/*" onChange={handleMainImage} /></div>
-              {spaceOptions.length > 0 && (<div><label className="block text-xs font-bold text-zinc-500 uppercase mb-2">Belongs To Space</label><select className="w-full border border-zinc-300 rounded-lg p-2.5 text-sm bg-white" value={data.spaceId} onChange={e => setData({...data, spaceId: e.target.value})}>{spaceOptions.map(s => (<option key={s.id} value={s.id}>{s.label}</option>))}</select></div>)}
-              {spaceTags.length > 0 && (<div><label className="block text-xs font-bold text-zinc-500 uppercase mb-2">Space Tags (Filter)</label><div className="flex flex-wrap gap-2">{spaceTags.map(tag => (<button key={tag} onClick={() => toggleTag(tag)} className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-colors ${data.tags?.includes(tag) ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-500 border-zinc-200'}`}>{tag}</button>))}</div></div>)}
-              <div><div className="flex justify-between items-center mb-2"><label className="block text-xs font-bold text-zinc-500 uppercase">Additional Images</label><button type="button" onClick={() => galleryInputRef.current.click()} className="text-[10px] bg-white border px-2 py-1 rounded hover:bg-zinc-100">+ Add</button><input type="file" ref={galleryInputRef} multiple className="hidden" accept="image/*" onChange={handleGalleryUpload} /></div>{data.images.length > 0 && <div className="grid grid-cols-5 gap-2">{data.images.map((img, i) => (<div key={i} className="relative aspect-square rounded-lg overflow-hidden group border border-zinc-200"><img src={img.url || img} className="w-full h-full object-cover" /><input className="absolute bottom-0 w-full text-[8px] bg-white/90 p-1 opacity-0 group-hover:opacity-100" value={img.caption || ''} onChange={e => handleCaptionChange(i, e.target.value)} placeholder="Caption"/><button onClick={() => setData(prev => ({...prev, images: prev.images.filter((_, idx) => idx !== i)}))} className="absolute top-0.5 right-0.5 bg-red-500 text-white p-0.5 rounded-full opacity-0 group-hover:opacity-100"><X className="w-3 h-3"/></button></div>))}</div>}</div>
-              <div className="grid grid-cols-1 gap-4"><div><label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Title</label><input className="w-full border border-zinc-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-zinc-900 outline-none" value={data.title} onChange={e=>setData({...data, title: e.target.value})} placeholder="e.g. Modern Office Lounge" /></div><div><label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Description</label><textarea className="w-full border border-zinc-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-zinc-900 outline-none" rows={2} value={data.description} onChange={e=>setData({...data, description: e.target.value})} placeholder="Short description..." /></div></div>
+              
+              {spaceOptions.length > 0 && (
+                  <div>
+                      <label className="block text-xs font-bold text-zinc-500 uppercase mb-2">Belongs To Space</label>
+                      <select className="w-full border border-zinc-300 rounded-lg p-2.5 text-sm bg-white" value={data.spaceId} onChange={e => setData({...data, spaceId: e.target.value})}>
+                          {spaceOptions.map(s => (
+                              <option key={s.id} value={s.id}>{s.label}</option>
+                          ))}
+                      </select>
+                  </div>
+              )}
+
+              {spaceTags.length > 0 && (
+                 <div>
+                    <label className="block text-xs font-bold text-zinc-500 uppercase mb-2">Space Tags (Filter)</label>
+                    <div className="flex flex-wrap gap-2">
+                       {spaceTags.map(tag => (
+                          <button key={tag} onClick={() => toggleTag(tag)} className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-colors ${data.tags?.includes(tag) ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-500 border-zinc-200'}`}>
+                             {tag}
+                          </button>
+                       ))}
+                    </div>
+                 </div>
+              )}
+
+              <div>
+                 <div className="flex justify-between items-center mb-2"><label className="block text-xs font-bold text-zinc-500 uppercase">Additional Images</label><button type="button" onClick={() => galleryInputRef.current.click()} className="text-[10px] bg-white border px-2 py-1 rounded hover:bg-zinc-100">+ Add</button><input type="file" ref={galleryInputRef} multiple className="hidden" accept="image/*" onChange={handleGalleryUpload} /></div>
+                 {data.images.length > 0 && <div className="grid grid-cols-5 gap-2">{data.images.map((img, i) => (
+                     <div key={i} className="relative aspect-square rounded-lg overflow-hidden group border border-zinc-200">
+                         <img src={img.url || img} className="w-full h-full object-cover" />
+                         <input className="absolute bottom-0 w-full text-[8px] bg-white/90 p-1 opacity-0 group-hover:opacity-100" value={img.caption || ''} onChange={e => handleCaptionChange(i, e.target.value)} placeholder="Caption"/>
+                         <button onClick={() => setData(prev => ({...prev, images: prev.images.filter((_, idx) => idx !== i)}))} className="absolute top-0.5 right-0.5 bg-red-500 text-white p-0.5 rounded-full opacity-0 group-hover:opacity-100"><X className="w-3 h-3"/></button>
+                     </div>
+                 ))}</div>}
+              </div>
+              <div className="grid grid-cols-1 gap-4">
+                <div><label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Title</label><input className="w-full border border-zinc-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-zinc-900 outline-none" value={data.title} onChange={e=>setData({...data, title: e.target.value})} placeholder="e.g. Modern Office Lounge" /></div>
+                <div><label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Description</label><textarea className="w-full border border-zinc-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-zinc-900 outline-none" rows={2} value={data.description} onChange={e=>setData({...data, description: e.target.value})} placeholder="Short description..." /></div>
+              </div>
             </div>
-            <div className="pt-6 border-t border-zinc-200"><div className="flex justify-between items-end mb-3"><div><h4 className="text-sm font-bold text-zinc-900">Related Products</h4><p className="text-[10px] text-zinc-500">Select products visible in this scene</p></div><span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded-full">{data.productIds.length} selected</span></div><div className="bg-white rounded-xl border border-zinc-200 overflow-hidden shadow-sm"><div className="p-2 border-b border-zinc-100 bg-zinc-50/50"><div className="flex items-center bg-white border border-zinc-200 rounded-lg px-2"><Search className="w-4 h-4 text-zinc-400 mr-2"/><input className="w-full py-2 text-xs outline-none bg-transparent" placeholder="Search product name..." value={filter} onChange={e => setFilter(e.target.value)} /></div></div><div className="h-48 overflow-y-auto p-2 space-y-1 custom-scrollbar">{allProducts.filter(p => p.name.toLowerCase().includes(filter.toLowerCase())).map(p => { const isSelected = data.productIds.includes(p.id); return (<div key={p.id} onClick={() => toggleProduct(p.id)} className={`flex items-center p-2 rounded-lg cursor-pointer transition-colors ${isSelected ? 'bg-indigo-50 border border-indigo-100' : 'hover:bg-zinc-50 border border-transparent'}`}><div className={`w-4 h-4 rounded border flex items-center justify-center mr-3 flex-shrink-0 ${isSelected ? 'bg-indigo-500 border-indigo-500' : 'bg-white border-zinc-300'}`}>{isSelected && <Check className="w-3 h-3 text-white"/>}</div>{p.images?.[0] && <img src={p.images[0]} className="w-8 h-8 rounded object-cover mr-3 bg-zinc-100" />}<div className="min-w-0"><div className={`text-xs font-bold truncate ${isSelected ? 'text-indigo-900' : 'text-zinc-700'}`}>{p.name}</div><div className="text-[10px] text-zinc-400 truncate">{p.category}</div></div></div>) })}</div></div></div>
+            <div className="pt-6 border-t border-zinc-200">
+               <div className="flex justify-between items-end mb-3"><div><h4 className="text-sm font-bold text-zinc-900">Related Products</h4><p className="text-[10px] text-zinc-500">Select products visible in this scene</p></div><span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded-full">{data.productIds.length} selected</span></div>
+               <div className="bg-white rounded-xl border border-zinc-200 overflow-hidden shadow-sm">
+                  <div className="p-2 border-b border-zinc-100 bg-zinc-50/50"><div className="flex items-center bg-white border border-zinc-200 rounded-lg px-2"><Search className="w-4 h-4 text-zinc-400 mr-2"/><input className="w-full py-2 text-xs outline-none bg-transparent" placeholder="Search product name..." value={filter} onChange={e => setFilter(e.target.value)} /></div></div>
+                  <div className="h-48 overflow-y-auto p-2 space-y-1 custom-scrollbar">{allProducts.filter(p => p.name.toLowerCase().includes(filter.toLowerCase())).map(p => { const isSelected = data.productIds.includes(p.id); return (<div key={p.id} onClick={() => toggleProduct(p.id)} className={`flex items-center p-2 rounded-lg cursor-pointer transition-colors ${isSelected ? 'bg-indigo-50 border border-indigo-100' : 'hover:bg-zinc-50 border border-transparent'}`}><div className={`w-4 h-4 rounded border flex items-center justify-center mr-3 flex-shrink-0 ${isSelected ? 'bg-indigo-500 border-indigo-500' : 'bg-white border-zinc-300'}`}>{isSelected && <Check className="w-3 h-3 text-white"/>}</div>{p.images?.[0] && <img src={p.images[0]} className="w-8 h-8 rounded object-cover mr-3 bg-zinc-100" />}<div className="min-w-0"><div className={`text-xs font-bold truncate ${isSelected ? 'text-indigo-900' : 'text-zinc-700'}`}>{p.name}</div><div className="text-[10px] text-zinc-400 truncate">{p.category}</div></div></div>) })}</div>
+               </div>
+            </div>
          </div>
-         <div className="px-6 py-4 border-t border-zinc-100 bg-white flex justify-end items-center z-10 gap-3"><button onClick={onClose} className="px-4 py-2 border border-zinc-300 text-zinc-600 rounded-lg text-sm font-bold hover:bg-zinc-50">Cancel</button><button onClick={()=>onSave(data)} className="px-6 py-2 bg-zinc-900 text-white rounded-lg text-sm font-bold hover:bg-black shadow-md">Save Scene</button></div>
+         <div className="px-6 py-4 border-t border-zinc-100 bg-white flex justify-end items-center z-10 gap-3">
+            <button onClick={onClose} className="px-4 py-2 border border-zinc-300 text-zinc-600 rounded-lg text-sm font-bold hover:bg-zinc-50">Cancel</button>
+            <button onClick={()=>onSave(data)} className="px-6 py-2 bg-zinc-900 text-white rounded-lg text-sm font-bold hover:bg-black shadow-md">Save Scene</button>
+         </div>
       </div>
     </div>
   );
@@ -2452,14 +2560,28 @@ function SpaceSceneModal({ scene, products, allProducts, isAdmin, onClose, onEdi
   const [isProductManagerOpen, setProductManagerOpen] = useState(false);
   const [productFilter, setProductFilter] = useState('');
   const [isZoomed, setIsZoomed] = useState(false);
+
+  // Swipe Logic
+  const handleNext = () => { if(currentImageIndex < images.length - 1) setCurrentImageIndex(currentImageIndex + 1); };
+  const handlePrev = () => { if(currentImageIndex > 0) setCurrentImageIndex(currentImageIndex - 1); };
+
+  const touchStart = useRef(null);
+  const handleTouchStart = (e) => { touchStart.current = e.targetTouches[0].clientX; };
+  const handleTouchEnd = (e) => {
+      if(!touchStart.current) return;
+      const diff = touchStart.current - e.changedTouches[0].clientX;
+      if(Math.abs(diff) > 50) { if(diff > 0) handleNext(); else handlePrev(); }
+      touchStart.current = null;
+  };
+
   const currentImgObj = images[currentImageIndex];
   const currentImgUrl = typeof currentImgObj === 'object' ? currentImgObj.url : currentImgObj;
   const currentImgCaption = typeof currentImgObj === 'object' ? currentImgObj.caption : '';
-  const handleShareImage = async () => { /* Placeholder */ };
 
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center p-0 md:p-6 animate-in zoom-in-95 duration-200 print:hidden pointer-events-auto">
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[60] flex items-center justify-center p-0 md:p-6 animate-in zoom-in-95 duration-200 print:hidden" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
       {isZoomed && currentImgUrl && (<div className="fixed inset-0 z-[120] bg-black/95 flex items-center justify-center p-8 cursor-zoom-out print:hidden" onClick={() => setIsZoomed(false)}><img src={currentImgUrl} className="max-w-full max-h-full object-contain" alt="Zoomed" /><button className="absolute top-6 right-6 text-white/50 hover:text-white"><X className="w-10 h-10" /></button></div>)}
+      
       <div className="bg-white w-full h-full md:h-[90vh] md:max-w-6xl md:rounded-3xl overflow-hidden shadow-2xl flex flex-col md:flex-row relative">
          <div className="absolute top-4 right-4 z-[100] flex gap-2">
             {isAdmin && <button onClick={onEdit} className="p-2 bg-white/50 hover:bg-zinc-100 rounded-full backdrop-blur shadow-sm"><Edit3 className="w-6 h-6 text-zinc-900" /></button>}
@@ -2479,7 +2601,7 @@ function SpaceSceneModal({ scene, products, allProducts, isAdmin, onClose, onEdi
                    <p className="text-zinc-500 text-sm leading-relaxed">{scene.description}</p>
                </div>
             </div>
-            <div className="flex-1 overflow-y-auto p-6 md:p-8 custom-scrollbar bg-zinc-50/50 pb-safe">
+            <div className="flex-1 overflow-y-auto p-6 md:p-8 custom-scrollbar bg-zinc-50/50">
                <div className="flex justify-between items-center mb-4"><h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Tagged Products</h3>{isAdmin && <button onClick={() => setProductManagerOpen(!isProductManagerOpen)} className="text-xs font-bold text-indigo-600 hover:text-indigo-800">+ Add Tag</button>}</div>
                {isAdmin && isProductManagerOpen && (
                  <div className="mb-4 bg-white p-3 rounded-xl border border-indigo-100 shadow-sm animate-in slide-in-from-top-2">
@@ -2487,11 +2609,7 @@ function SpaceSceneModal({ scene, products, allProducts, isAdmin, onClose, onEdi
                     <div className="max-h-32 overflow-y-auto space-y-1 custom-scrollbar">{allProducts.filter(p => p.name.toLowerCase().includes(productFilter.toLowerCase())).map(p => { const isTagged = scene.productIds?.includes(p.id); return (<div key={p.id} onClick={() => onProductToggle(p.id, !isTagged)} className={`flex items-center p-1.5 rounded cursor-pointer ${isTagged ? 'bg-indigo-50 text-indigo-700' : 'hover:bg-zinc-50'}`}><div className={`w-3 h-3 border rounded mr-2 flex items-center justify-center ${isTagged ? 'bg-indigo-500 border-indigo-500' : 'border-zinc-300'}`}>{isTagged && <Check className="w-2 h-2 text-white"/>}</div><span className="text-xs truncate">{p.name}</span></div>) })}</div>
                  </div>
                )}
-               <div className="space-y-3 mb-8">{products.length > 0 ? products.map(product => (<div key={product.id} onClick={() => onNavigateProduct(product)} className="flex items-center p-3 bg-white rounded-xl border border-zinc-100 shadow-sm hover:border-zinc-300 transition-all cursor-pointer group"><div className="w-12 h-12 bg-zinc-50 rounded-lg flex-shrink-0 flex items-center justify-center mr-3 overflow-hidden">{product.images?.[0] ? <img src={typeof product.images[0] === 'object' ? product.images[0].url : product.images[0]} className="w-full h-full object-cover" /> : <ImageIcon className="w-5 h-5 text-zinc-300"/>}</div><div className="flex-1 min-w-0"><h4 className="text-sm font-bold text-zinc-900 truncate group-hover:text-blue-600">{product.name}</h4><p className="text-xs text-zinc-500">{product.category}</p></div><ChevronRight className="w-4 h-4 text-zinc-300 group-hover:text-zinc-600"/></div>)) : (<div className="text-center py-8 text-zinc-400 text-xs">연관된 제품이 없습니다.</div>)}</div>
-               <div className="pt-6 border-t border-zinc-100 flex gap-3 print:hidden">
-                    <button onClick={handleShareImage} className="flex-1 py-3 bg-white border border-zinc-200 text-zinc-600 rounded-xl text-xs font-bold hover:bg-zinc-50 flex items-center justify-center"><ImgIcon className="w-4 h-4 mr-2"/> Share</button>
-                    <button onClick={() => window.print()} className="flex-1 py-3 bg-white border border-zinc-200 text-zinc-600 rounded-xl text-xs font-bold hover:bg-zinc-50 flex items-center justify-center"><Printer className="w-4 h-4 mr-2"/> PDF</button>
-               </div>
+               <div className="space-y-3">{products.length > 0 ? products.map(product => (<div key={product.id} onClick={() => onNavigateProduct(product)} className="flex items-center p-3 bg-white rounded-xl border border-zinc-100 shadow-sm hover:border-zinc-300 transition-all cursor-pointer group"><div className="w-12 h-12 bg-zinc-50 rounded-lg flex-shrink-0 flex items-center justify-center mr-3 overflow-hidden">{product.images?.[0] ? <img src={typeof product.images[0] === 'object' ? product.images[0].url : product.images[0]} className="w-full h-full object-cover" /> : <ImageIcon className="w-5 h-5 text-zinc-300"/>}</div><div className="flex-1 min-w-0"><h4 className="text-sm font-bold text-zinc-900 truncate group-hover:text-blue-600">{product.name}</h4><p className="text-xs text-zinc-500">{product.category}</p></div><ChevronRight className="w-4 h-4 text-zinc-300 group-hover:text-zinc-600"/></div>)) : (<div className="text-center py-8 text-zinc-400 text-xs">연관된 제품이 없습니다.</div>)}</div>
             </div>
          </div>
       </div>
