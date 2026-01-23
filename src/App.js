@@ -11,7 +11,7 @@ import {
   ChevronsUp, Camera, ImagePlus, Sofa, Briefcase, Users, Home as HomeIcon, MapPin,
   Edit3, Grid, MoreVertical, MousePointer2, CheckSquare, XCircle, Printer, List, Eye,
   PlayCircle, BarChart3, CornerUpLeft, Grid3X3, Droplet, Coffee, GraduationCap, ShoppingBag, FileDown, FileUp,
-  ArrowLeftRight, SlidersHorizontal, Move, Monitor, Maximize, EyeOff, Type
+  ArrowLeftRight, SlidersHorizontal, Move, Monitor, Maximize, EyeOff, Type, ExternalLink
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { 
@@ -594,7 +594,7 @@ export default function App() {
      setProducts(_products); dragItem.current = null; dragOverItem.current = null;
   };
 
-  // --- Navigation (Swipe Removed for Mobile) ---
+  // --- Navigation (Swipe logic REMOVED for v0.7.4) ---
   const handleNavigateNext = () => { if(!selectedProduct) return; const currentIndex = processedProducts.findIndex(p => p.id === selectedProduct.id); if(currentIndex >= 0 && currentIndex < processedProducts.length - 1) { setSelectedProduct(processedProducts[currentIndex + 1]); } };
   const handleNavigatePrev = () => { if(!selectedProduct) return; const currentIndex = processedProducts.findIndex(p => p.id === selectedProduct.id); if(currentIndex > 0) { setSelectedProduct(processedProducts[currentIndex - 1]); } };
 
@@ -612,6 +612,8 @@ export default function App() {
         .slide-in-animation {
           animation: slideIn 0.3s ease-out forwards;
         }
+        .pb-safe { padding-bottom: env(safe-area-inset-bottom, 20px); }
+        .mb-safe { margin-bottom: env(safe-area-inset-bottom, 20px); }
       `}</style>
       {isMobileMenuOpen && <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 md:hidden animate-in fade-in" onClick={() => setIsMobileMenuOpen(false)} />}
       
@@ -715,12 +717,12 @@ export default function App() {
                         </div>
                       )}
                       {activeCategory === 'MY_PICK' && myPickViewMode === 'list' ? (
-                        <div className="space-y-4 print:space-y-6 pb-20">
+                        <div className="space-y-4 print:space-y-6 pb-32">
                             <div className="hidden print:block mb-8"><h1 className="text-4xl font-bold mb-2">MY PICK SELECTION</h1><p className="text-zinc-500">{new Date().toLocaleDateString()} · Patra Design Lab</p></div>
                             {processedProducts.map((product) => (<div key={product.id} className="flex flex-col md:flex-row gap-6 p-6 bg-white rounded-2xl border border-zinc-200 print:border-zinc-300 print:break-inside-avoid"><div className="w-full md:w-48 h-48 bg-zinc-50 rounded-xl overflow-hidden flex-shrink-0 border border-zinc-100 flex items-center justify-center">{product.images?.[0] ? <img src={typeof product.images[0] === 'object' ? product.images[0].url : product.images[0]} className="w-full h-full object-contain mix-blend-multiply" alt={product.name} /> : <ImageIcon className="w-8 h-8 text-zinc-300"/>}</div><div className="flex-1"><div className="flex justify-between items-start"><div><span className="inline-block px-2 py-0.5 bg-zinc-100 text-zinc-600 text-xs font-bold rounded mb-2">{product.category}</span><h3 className="text-2xl font-bold text-zinc-900 mb-1">{product.name}</h3><p className="text-zinc-500 font-medium text-sm mb-4">Designed by {product.designer || 'Patra Design Lab'}</p></div><button onClick={(e) => toggleFavorite(e, product.id)} className="print:hidden text-yellow-400 hover:scale-110 transition-transform"><Star className="w-6 h-6 fill-current"/></button></div><div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm"><div className="bg-zinc-50 p-3 rounded-lg"><span className="font-bold block text-xs text-zinc-400 uppercase mb-1">Specs</span>{product.specs}</div><div className="space-y-2"><div><span className="font-bold text-xs text-zinc-400 uppercase">Options</span> <span className="text-zinc-700">{product.options?.join(', ')}</span></div><div><span className="font-bold text-xs text-zinc-400 uppercase block mb-1">Colors</span> <div className="flex gap-2 mb-1"><span className="text-xs text-zinc-400 w-16">Body:</span><div className="flex gap-1">{product.bodyColors?.map((c, i) => <SwatchDisplay key={i} color={c} size="small" />)}</div></div><div className="flex gap-2"><span className="text-xs text-zinc-400 w-16">Upholstery:</span><div className="flex gap-1">{product.upholsteryColors?.map((c, i) => <SwatchDisplay key={i} color={c} size="small" />)}</div></div></div></div></div></div></div>))}
                         </div>
                       ) : (
-                        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-6 pb-20 print:grid-cols-3 print:gap-4">
+                        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-6 pb-32 print:grid-cols-3 print:gap-4">
                             {processedProducts.map((product, idx) => (
                                <div key={product.id} draggable={isAdmin && sortOption === 'manual'} onDragStart={(e) => handleDragStart(e, idx)} onDragEnter={(e) => handleDragEnter(e, idx)} onDragEnd={handleDragEnd} className={isAdmin && sortOption === 'manual' ? 'cursor-move active:opacity-50 transition-all' : ''}>
                                   <ProductCard product={product} onClick={() => setSelectedProduct(product)} isAdmin={isAdmin} isFavorite={favorites.includes(product.id)} onToggleFavorite={(e) => toggleFavorite(e, product.id)} onCompareToggle={(e) => toggleCompare(e, product)} onDuplicate={(e) => { e.stopPropagation(); handleDuplicateProduct(product); }} isCompared={!!compareList.find(p=>p.id===product.id)} />
@@ -895,11 +897,11 @@ export default function App() {
 // Helper Components
 // ----------------------------------------------------------------------
 
-function CompareView({ products, hiddenIds, onToggleVisibility, onRemove, onEdit, isAdmin, onProductClick }) {
+function CompareView({ products, hiddenIds, onToggleVisibility, onRemove, onEdit, onProductClick, isAdmin }) {
     const visibleProducts = products.filter(p => !hiddenIds.includes(p.id));
 
     return (
-        <div className="animate-in fade-in h-full flex flex-col pb-20">
+        <div className="animate-in fade-in h-full flex flex-col">
             <div className="bg-white border-b border-zinc-200 p-4 sticky top-0 z-20 shadow-sm flex items-center gap-4 overflow-x-auto custom-scrollbar">
                 <span className="text-sm font-bold text-zinc-500 uppercase flex-shrink-0 mr-2">Visibility</span>
                 {products.map(p => (
@@ -915,7 +917,7 @@ function CompareView({ products, hiddenIds, onToggleVisibility, onRemove, onEdit
                 ))}
             </div>
 
-            <div className="flex-1 overflow-auto bg-white relative">
+            <div className="flex-1 overflow-auto bg-white relative pb-32">
                 <table className="w-full table-fixed border-collapse">
                     <thead>
                         <tr>
@@ -923,13 +925,13 @@ function CompareView({ products, hiddenIds, onToggleVisibility, onRemove, onEdit
                             <th className="w-20 md:w-32 bg-zinc-50 border-b border-r border-zinc-100 p-2 md:p-4 text-left text-[10px] md:text-xs font-bold text-zinc-400 uppercase sticky top-0 left-0 z-30 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">Feature</th>
                             {visibleProducts.map(p => (
                                 <th key={p.id} className="w-36 md:w-72 bg-white border-b border-r border-zinc-100 p-2 md:p-4 align-top sticky top-0 z-10">
-                                    <div className="relative group cursor-pointer" onClick={() => onProductClick(p)}>
-                                        <div className="aspect-[4/3] bg-zinc-50 rounded-xl mb-2 md:mb-4 flex items-center justify-center overflow-hidden border border-zinc-100 relative max-h-24 md:max-h-full">
-                                            {p.images?.[0] ? <img src={typeof p.images[0] === 'object' ? p.images[0].url : p.images[0]} className="w-full h-full object-cover mix-blend-multiply" /> : <ImageIcon className="text-zinc-300"/>}
+                                    <div className="relative group">
+                                        <div onClick={() => onProductClick(p)} className="aspect-[4/3] bg-zinc-50 rounded-xl mb-2 md:mb-4 flex items-center justify-center overflow-hidden border border-zinc-100 relative max-h-24 md:max-h-full cursor-pointer">
+                                            {p.images?.[0] ? <img src={typeof p.images[0] === 'object' ? p.images[0].url : p.images[0]} className="w-full h-full object-contain mix-blend-multiply" /> : <ImageIcon className="text-zinc-300"/>}
                                             <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors"></div>
                                         </div>
                                         <h4 className="font-bold text-xs md:text-lg text-zinc-900 mb-1 truncate">{p.name}</h4>
-                                        <button onClick={(e) => {e.stopPropagation(); onRemove(p.id);}} className="absolute top-0 right-0 bg-white rounded-full p-1 shadow-sm hover:text-red-500 border border-zinc-100"><X className="w-3 h-3 md:w-4 md:h-4"/></button>
+                                        <button onClick={() => onRemove(p.id)} className="absolute top-0 right-0 bg-white rounded-full p-1 shadow-sm hover:text-red-500 border border-zinc-100"><X className="w-3 h-3 md:w-4 md:h-4"/></button>
                                     </div>
                                 </th>
                             ))}
@@ -1014,9 +1016,19 @@ function SwatchDisplay({ color, size = 'medium', className = '', onClick }) {
   const textureType = isObject ? (color.textureType || 'SOLID') : 'SOLID';
   const gradient = isObject ? color.gradient : null;
   const pattern = isObject ? (color.pattern || 'NONE') : 'NONE';
-  const patternColor = isObject ? (color.patternColor || '#000000') : '#000000';
+  const patternColor = isObject ? (color.patternColor || '#00000033') : '#00000033';
 
-  const sizeClass = size === 'large' ? 'w-10 h-10' : size === 'small' ? 'w-4 h-4' : 'w-6 h-6';
+  // Size Logic: If external className is provided (like w-full h-full), we use that instead of fixed size classes
+  // But we still need a default if className is empty or doesn't specify dimension.
+  // The trick: use sizeClass only if className is empty or for specific use cases.
+  // Better approach: If className contains 'w-' or 'h-', assume it handles sizing.
+  const hasSize = className.includes('w-') || className.includes('h-');
+  const sizeClass = hasSize ? '' : (size === 'large' ? 'w-10 h-10' : size === 'small' ? 'w-4 h-4' : 'w-6 h-6');
+
+  // Check if we need to force square (e.g. for tiles) or round (for swatch dots)
+  // Usually passed in className like 'rounded-none' or 'rounded-full'
+  // Default to rounded-full if not specified
+  const roundedClass = className.includes('rounded') ? '' : 'rounded-full';
 
   const isLight = hex && (
      hex.toLowerCase() === '#ffffff' || 
@@ -1027,16 +1039,15 @@ function SwatchDisplay({ color, size = 'medium', className = '', onClick }) {
 
   // CSS Pattern Generation
   const getPatternStyle = (type, pColor) => {
-      // Convert Hex to RGBA for pattern transparency if needed, or use simple hex
-      const c = pColor; 
+      // pColor comes in as rgba or hex. If hex, might need transparency logic, but for now assume inputs are valid
       switch(type) {
-          case 'DOT': return { backgroundImage: `radial-gradient(${c}33 1px, transparent 1px)`, backgroundSize: '4px 4px' };
-          case 'DIAGONAL': return { backgroundImage: `repeating-linear-gradient(45deg, ${c}1a 0, ${c}1a 1px, transparent 0, transparent 50%)`, backgroundSize: '6px 6px' };
-          case 'GRID': return { backgroundImage: `linear-gradient(${c}1a 1px, transparent 1px), linear-gradient(90deg, ${c}1a 1px, transparent 1px)`, backgroundSize: '6px 6px' };
-          case 'KNIT': return { backgroundImage: `repeating-linear-gradient(45deg, transparent, transparent 2px, ${c}1a 2px, ${c}1a 4px), repeating-linear-gradient(-45deg, transparent, transparent 2px, ${c}1a 2px, ${c}1a 4px)` };
-          case 'WEAVE': return { backgroundImage: `linear-gradient(45deg, ${c}1a 25%, transparent 25%, transparent 75%, ${c}1a 75%, ${c}1a), linear-gradient(45deg, ${c}1a 25%, transparent 25%, transparent 75%, ${c}1a 75%, ${c}1a)`, backgroundPosition: '0 0, 4px 4px', backgroundSize: '8px 8px' };
-          case 'FUR': return { backgroundImage: `repeating-radial-gradient(circle at 50% 50%, ${c}0d 0, transparent 2px)`, backgroundSize: '3px 3px' }; 
-          case 'LEATHER': return { backgroundImage: `radial-gradient(${c}22 1px, transparent 0)`, backgroundSize: '3px 3px' }; 
+          case 'DOT': return { backgroundImage: `radial-gradient(${pColor} 1px, transparent 1px)`, backgroundSize: '4px 4px' };
+          case 'DIAGONAL': return { backgroundImage: `repeating-linear-gradient(45deg, ${pColor} 0, ${pColor} 1px, transparent 0, transparent 50%)`, backgroundSize: '6px 6px' };
+          case 'GRID': return { backgroundImage: `linear-gradient(${pColor} 1px, transparent 1px), linear-gradient(90deg, ${pColor} 1px, transparent 1px)`, backgroundSize: '6px 6px' };
+          case 'KNIT': return { backgroundImage: `repeating-linear-gradient(45deg, transparent, transparent 2px, ${pColor} 2px, ${pColor} 4px), repeating-linear-gradient(-45deg, transparent, transparent 2px, ${pColor} 2px, ${pColor} 4px)` };
+          case 'WEAVE': return { backgroundImage: `linear-gradient(45deg, ${pColor} 25%, transparent 25%, transparent 75%, ${pColor} 75%, ${pColor}), linear-gradient(45deg, ${pColor} 25%, transparent 25%, transparent 75%, ${pColor} 75%, ${pColor})`, backgroundPosition: '0 0, 4px 4px', backgroundSize: '8px 8px' };
+          case 'FUR': return { backgroundImage: `repeating-radial-gradient(circle at 50% 50%, ${pColor} 0, transparent 2px)`, backgroundSize: '3px 3px' }; 
+          case 'LEATHER': return { backgroundImage: `radial-gradient(${pColor} 1px, transparent 0)`, backgroundSize: '3px 3px' }; 
           default: return {};
       }
   };
@@ -1056,20 +1067,17 @@ function SwatchDisplay({ color, size = 'medium', className = '', onClick }) {
   };
   
   return (
-    <div className={`group relative inline-block ${className} ${onClick ? 'cursor-pointer' : ''}`} title={name} onClick={onClick}>
-       <div className={`${sizeClass} rounded-full overflow-hidden flex items-center justify-center bg-zinc-50 box-border relative`} style={{boxShadow: isLight ? 'inset 0 0 0 1px rgba(0,0,0,0.15)' : 'inset 0 0 0 1px rgba(0,0,0,0.05)'}}>
-         
-         {/* Layer 1: Base Color/Gradient/Image (Full Size Fix) */}
+    <div className={`group relative inline-block ${sizeClass} ${roundedClass} ${className} ${onClick ? 'cursor-pointer' : ''} overflow-hidden box-border`} title={name} onClick={onClick} style={{boxShadow: isLight ? 'inset 0 0 0 1px rgba(0,0,0,0.15)' : 'inset 0 0 0 1px rgba(0,0,0,0.05)'}}>
+         {/* Layer 1: Base Color/Gradient/Image */}
          <div className="absolute inset-0 w-full h-full" style={baseStyle}></div>
 
          {/* Layer 2: Pattern Overlay */}
          {!image && pattern !== 'NONE' && (
-             <div className="absolute inset-0 w-full h-full opacity-60" style={getPatternStyle(pattern, patternColor)}></div>
+             <div className="absolute inset-0 w-full h-full" style={getPatternStyle(pattern, patternColor)}></div>
          )}
 
          {/* Layer 3: Texture/Finish Overlay */}
          <div className="absolute inset-0 w-full h-full pointer-events-none" style={getTextureOverlay(textureType)}></div>
-       </div>
     </div>
   );
 }
@@ -1087,21 +1095,18 @@ function SwatchManager({ category, swatches, isAdmin, onSave, onDelete, onSelect
   const filteredSwatches = activeTag === 'ALL' ? swatches : swatches.filter(s => s.tags && s.tags.includes(activeTag));
 
   return (
-    <div className="p-1 animate-in fade-in pb-20">
-       <div className="flex flex-col md:flex-row justify-between items-end mb-8 border-b border-zinc-100 pb-4 gap-4">
-          <div>
-            <h2 className="text-xl md:text-3xl font-extrabold text-zinc-900 tracking-tight flex items-center">
-              {category.label}
-            </h2>
-            <p className="text-zinc-500 text-sm mt-1">{filteredSwatches.length} finishes available</p>
-          </div>
-          <div className="flex items-center gap-2">
-             {isAdmin && (
-                <button onClick={() => { setEditingSwatch(null); setIsModalOpen(true); }} className="px-4 py-2 bg-zinc-900 text-white text-sm font-bold rounded-xl hover:bg-black transition-all flex items-center shadow-lg whitespace-nowrap">
-                   <Plus className="w-4 h-4 mr-2" /> Add Material
-                </button>
-             )}
-          </div>
+    <div className="p-1 animate-in fade-in pb-32">
+       {/* Adjusted Header Style to match Scenes/Collections */}
+       <div className="flex items-center justify-between mb-6">
+         <h3 className="text-2xl font-extrabold text-zinc-900 flex items-center tracking-tight">
+             <div className="w-3 h-6 mr-3 rounded-full" style={{backgroundColor: category.color}}></div>
+             {category.label}
+         </h3>
+         {isAdmin && (
+             <button onClick={() => { setEditingSwatch(null); setIsModalOpen(true); }} className="px-4 py-2 bg-zinc-900 text-white text-sm font-bold rounded-xl hover:bg-black transition-all flex items-center shadow-lg whitespace-nowrap">
+                <Plus className="w-4 h-4 mr-2" /> Add Material
+             </button>
+          )}
        </div>
 
        {allTags.length > 0 && (
@@ -1115,11 +1120,12 @@ function SwatchManager({ category, swatches, isAdmin, onSave, onDelete, onSelect
 
        <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-4">
           {filteredSwatches.map(swatch => (
-             <div key={swatch.id} onClick={() => handleCardClick(swatch)} className="bg-white rounded-xl border border-zinc-200 overflow-hidden group hover:shadow-lg transition-all relative cursor-pointer text-left">
+             <div key={swatch.id} onClick={() => handleCardClick(swatch)} className="bg-white rounded-xl border border-zinc-200 overflow-hidden group hover:shadow-lg transition-all relative cursor-pointer">
                 <div className="aspect-square relative bg-zinc-100 flex items-center justify-center">
-                   <SwatchDisplay color={swatch} size="large" className="w-full h-full scale-100 rounded-none"/>
+                   {/* Fix: removed size prop, passed explicit w-full h-full rounded-none to ensure fill */}
+                   <SwatchDisplay color={swatch} className="w-full h-full rounded-none scale-100"/>
                    {isAdmin && (
-                     <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                     <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
                         <button onClick={(e) => {e.stopPropagation(); onDuplicate(swatch);}} className="p-1.5 bg-white rounded-full shadow hover:text-green-600"><Layers className="w-3 h-3"/></button>
                         <button onClick={(e) => handleEditClick(e, swatch)} className="p-1.5 bg-white rounded-full shadow hover:text-blue-600"><Edit2 className="w-3 h-3"/></button>
                         <button onClick={(e) => { e.stopPropagation(); onDelete(swatch.id); }} className="p-1.5 bg-white rounded-full shadow hover:text-red-600"><Trash2 className="w-3 h-3"/></button>
@@ -1162,10 +1168,10 @@ function SwatchDetailModal({ swatch, allProducts, swatches, onClose, onNavigateP
         return inBody || inUph;
     });
 
-    const handleShareImage = async () => { /* Image generation logic placeholder */ };
+    const handleShareImage = async () => { /* Placeholder */ };
 
     return (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[150] flex items-center justify-center md:p-4 animate-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[150] flex items-center justify-center p-0 md:p-4 animate-in zoom-in-95 duration-200">
             <div className="bg-white w-full h-full md:h-auto md:max-w-4xl rounded-none md:rounded-3xl overflow-hidden shadow-2xl flex flex-col md:flex-row md:max-h-[90vh] relative">
                 <div className="absolute top-4 right-4 z-[100] flex gap-2">
                    {isAdmin && <button onClick={onEdit} className="p-2 bg-white/50 hover:bg-zinc-100 rounded-full backdrop-blur shadow-sm"><Edit3 className="w-6 h-6 text-zinc-900"/></button>}
@@ -1173,12 +1179,12 @@ function SwatchDetailModal({ swatch, allProducts, swatches, onClose, onNavigateP
                 </div>
                 
                 <div className="w-full md:w-5/12 bg-zinc-50 flex items-center justify-center p-8 relative min-h-[40vh]">
-                    <div className="w-48 h-48 md:w-64 md:h-64 rounded-full shadow-2xl overflow-hidden border-4 border-white ring-1 ring-black/5 flex items-center justify-center bg-white relative">
+                    <div className="w-48 h-48 md:w-64 md:h-64 rounded-full shadow-2xl overflow-hidden border-4 border-white ring-1 ring-black/5 flex items-center justify-center bg-white">
                         <SwatchDisplay color={swatch} size="large" className="w-full h-full scale-100 rounded-full"/>
                     </div>
                 </div>
 
-                <div className="w-full md:w-7/12 bg-white p-8 md:p-10 flex flex-col overflow-y-auto pb-24 md:pb-10">
+                <div className="w-full md:w-7/12 bg-white p-8 md:p-10 flex flex-col overflow-y-auto pb-safe">
                     <div className="mb-6">
                         <div className="flex gap-2 mb-2">
                             <span className="inline-block px-2.5 py-0.5 bg-zinc-900 text-white text-[10px] font-bold rounded uppercase tracking-widest">{swatch.category}</span>
@@ -1231,14 +1237,10 @@ function SwatchDetailModal({ swatch, allProducts, swatches, onClose, onNavigateP
                              </div>
                         </div>
 
-                        {/* Share / Export Buttons */}
-                        <div className="pt-6 border-t border-zinc-100 flex gap-3">
-                             <button onClick={handleShareImage} className="flex-1 flex items-center justify-center px-4 py-2 bg-zinc-100 text-zinc-600 rounded-lg text-xs font-bold hover:bg-zinc-200 transition-colors">
-                                <ImgIcon className="w-3.5 h-3.5 mr-2" /> Save Image
-                             </button>
-                             <button onClick={() => window.print()} className="flex-1 flex items-center justify-center px-4 py-2 bg-zinc-100 text-zinc-600 rounded-lg text-xs font-bold hover:bg-zinc-200 transition-colors">
-                                <Printer className="w-3.5 h-3.5 mr-2" /> PDF Export
-                             </button>
+                        {/* Share & Print for Mobile Consistency */}
+                        <div className="pt-6 border-t border-zinc-100 flex gap-3 print:hidden mb-safe">
+                             <button onClick={handleShareImage} className="flex-1 py-3 bg-zinc-100 text-zinc-600 rounded-xl text-xs font-bold hover:bg-zinc-200 flex items-center justify-center"><ImgIcon className="w-4 h-4 mr-2"/> Share</button>
+                             <button onClick={() => window.print()} className="flex-1 py-3 bg-zinc-100 text-zinc-600 rounded-xl text-xs font-bold hover:bg-zinc-200 flex items-center justify-center"><Printer className="w-4 h-4 mr-2"/> PDF</button>
                         </div>
                     </div>
                 </div>
@@ -1251,13 +1253,14 @@ function SwatchFormModal({ category, existingData, onClose, onSave }) {
   const [data, setData] = useState({ 
      id: null, name: '', category: category.id, hex: '#000000', image: null, 
      description: '', materialCode: '', tags: '', textureType: 'SOLID',
-     visualType: 'SOLID', gradient: '', pattern: 'NONE', patternColor: '#000000'
+     visualType: 'SOLID', gradient: 'linear-gradient(to right, #000, #fff)', 
+     pattern: 'NONE', patternColor: '#00000033'
   });
-  const fileRef = useRef(null);
   
-  // Gradation Picker States
-  const [gradColor1, setGradColor1] = useState('#ffffff');
-  const [gradColor2, setGradColor2] = useState('#000000');
+  // For gradient UI helpers
+  const [gradientColors, setGradientColors] = useState(['#000000', '#ffffff']);
+
+  const fileRef = useRef(null);
 
   useEffect(() => {
      if(existingData) {
@@ -1268,25 +1271,24 @@ function SwatchFormModal({ category, existingData, onClose, onSave }) {
             tags: existingData.tags ? existingData.tags.join(', ') : '',
             textureType: existingData.textureType || 'SOLID',
             visualType: existingData.visualType || 'SOLID',
-            gradient: existingData.gradient || '',
+            gradient: existingData.gradient || 'linear-gradient(to right, #000, #fff)',
             pattern: existingData.pattern || 'NONE',
-            patternColor: existingData.patternColor || '#000000'
+            patternColor: existingData.patternColor || '#00000033'
          });
-         // Try to parse gradient if exists
-         if(existingData.gradient && existingData.visualType === 'GRADATION') {
-             // Simple regex to extract colors (very basic)
-             const match = existingData.gradient.match(/linear-gradient\(to right,\s*(.+),\s*(.+)\)/);
-             if(match) { setGradColor1(match[1]); setGradColor2(match[2]); }
+         // Try to parse gradient colors if possible (simple parse)
+         if(existingData.visualType === 'GRADATION' && existingData.gradient) {
+             // very basic extraction for UI sync
+             const matches = existingData.gradient.match(/#[0-9a-fA-F]{3,6}/g);
+             if(matches && matches.length >= 2) setGradientColors([matches[0], matches[1]]);
          }
      }
   }, [existingData]);
 
-  // Update Gradient String when pickers change
   useEffect(() => {
       if(data.visualType === 'GRADATION') {
-          setData(prev => ({ ...prev, gradient: `linear-gradient(to right, ${gradColor1}, ${gradColor2})` }));
+          setData(prev => ({...prev, gradient: `linear-gradient(to right, ${gradientColors[0]}, ${gradientColors[1]})`}));
       }
-  }, [gradColor1, gradColor2, data.visualType]);
+  }, [gradientColors]);
 
   const processImage = (file) => {
     return new Promise((resolve) => {
@@ -1316,11 +1318,8 @@ function SwatchFormModal({ category, existingData, onClose, onSave }) {
         try { const url = await processImage(file); setData(p => ({...p, image: url})); } catch(e){}
      }
   };
-
-  const handleRemoveImage = () => {
-      setData(p => ({...p, image: null}));
-      if(fileRef.current) fileRef.current.value = '';
-  };
+  
+  const handleDeleteImage = () => setData(p => ({...p, image: null}));
 
   const handleSubmit = () => {
       onSave({
@@ -1335,24 +1334,24 @@ function SwatchFormModal({ category, existingData, onClose, onSave }) {
           <div className="px-5 py-4 border-b border-zinc-100 font-bold text-lg flex-shrink-0">
              {existingData ? 'Edit Material' : 'Add Material'}
           </div>
-          <div className="p-6 space-y-6 overflow-y-auto custom-scrollbar">
-             
-             {/* Preview & Image Upload Group */}
-             <div className="flex flex-col items-center">
-                <div onClick={() => fileRef.current.click()} className="w-24 h-24 rounded-full shadow-md border-4 border-white cursor-pointer overflow-hidden relative group bg-zinc-100 flex items-center justify-center mb-2">
+          <div className="p-6 space-y-4 overflow-y-auto custom-scrollbar">
+             {/* Preview */}
+             <div className="flex justify-center mb-4">
+                <div onClick={() => fileRef.current.click()} className="w-24 h-24 rounded-full shadow-md border-4 border-white cursor-pointer overflow-hidden relative group bg-zinc-100 flex items-center justify-center">
                     <SwatchDisplay color={data} size="large" className="w-full h-full scale-100 rounded-none"/>
-                    <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"><Camera className="w-6 h-6 text-white"/></div>
+                   <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"><Camera className="w-6 h-6 text-white"/></div>
                 </div>
                 <input type="file" ref={fileRef} className="hidden" accept="image/*" onChange={handleUpload} />
-                {data.image && <button onClick={handleRemoveImage} className="text-xs text-red-500 hover:text-red-700 underline">Remove Image</button>}
              </div>
              
+             {data.image && (
+                 <button onClick={handleDeleteImage} className="w-full py-1 text-xs text-red-500 font-bold border border-red-100 rounded bg-red-50 hover:bg-red-100 mb-2">Delete Image</button>
+             )}
+             
              {/* Visual Settings Group */}
-             <div className="border border-zinc-200 rounded-xl p-4 bg-zinc-50 space-y-4">
-                 <h4 className="text-xs font-bold text-zinc-900 uppercase tracking-widest border-b border-zinc-200 pb-2 mb-2">Visual Settings</h4>
-                 
+             <div className="bg-zinc-50 p-3 rounded-xl border border-zinc-100 space-y-3">
+                 <h4 className="text-[10px] font-bold text-zinc-400 uppercase">Visual Settings</h4>
                  <div>
-                    <label className="text-xs font-bold text-zinc-500 uppercase block mb-1">Visual Type</label>
                     <div className="flex gap-2">
                         <button onClick={()=>setData({...data, visualType: 'SOLID'})} className={`flex-1 py-2 text-xs font-bold rounded border ${data.visualType==='SOLID' ? 'bg-zinc-900 text-white' : 'bg-white'}`}>Solid</button>
                         <button onClick={()=>setData({...data, visualType: 'GRADATION'})} className={`flex-1 py-2 text-xs font-bold rounded border ${data.visualType==='GRADATION' ? 'bg-zinc-900 text-white' : 'bg-white'}`}>Gradation</button>
@@ -1369,15 +1368,16 @@ function SwatchFormModal({ category, existingData, onClose, onSave }) {
                      </div>
                  ) : (
                      <div>
-                        <label className="text-xs font-bold text-zinc-500 uppercase block mb-1">Gradient Colors (Start - End)</label>
-                        <div className="flex gap-2">
-                           <input type="color" value={gradColor1} onChange={e=>setGradColor1(e.target.value)} className="h-9 flex-1 p-0 border rounded overflow-hidden cursor-pointer" title="Start Color"/>
-                           <input type="color" value={gradColor2} onChange={e=>setGradColor2(e.target.value)} className="h-9 flex-1 p-0 border rounded overflow-hidden cursor-pointer" title="End Color"/>
+                        <label className="text-xs font-bold text-zinc-500 uppercase block mb-1">Gradient Colors</label>
+                        <div className="flex gap-2 mb-2">
+                           <input type="color" value={gradientColors[0]} onChange={e=>setGradientColors([e.target.value, gradientColors[1]])} className="h-8 w-full rounded border" />
+                           <input type="color" value={gradientColors[1]} onChange={e=>setGradientColors([gradientColors[0], e.target.value])} className="h-8 w-full rounded border" />
                         </div>
+                        <input value={data.gradient} onChange={e=>setData({...data, gradient: e.target.value})} className="w-full border rounded-lg p-2 text-xs outline-none bg-white text-zinc-400" readOnly/>
                      </div>
                  )}
 
-                 <div className="grid grid-cols-2 gap-4">
+                 <div className="grid grid-cols-2 gap-3">
                      <div>
                         <label className="text-xs font-bold text-zinc-500 uppercase block mb-1">Pattern</label>
                         <select value={data.pattern} onChange={e=>setData({...data, pattern: e.target.value})} className="w-full border rounded-lg p-2 text-sm outline-none bg-white">
@@ -1386,8 +1386,9 @@ function SwatchFormModal({ category, existingData, onClose, onSave }) {
                      </div>
                      <div>
                         <label className="text-xs font-bold text-zinc-500 uppercase block mb-1">Pattern Color</label>
-                        <div className="flex gap-1 items-center">
-                            <input type="color" value={data.patternColor} onChange={e=>setData({...data, patternColor: e.target.value})} className="h-9 w-10 p-0 border rounded" />
+                        <div className="flex items-center gap-2">
+                            <input type="color" value={data.patternColor?.substring(0,7) || '#000000'} onChange={e=>setData({...data, patternColor: e.target.value})} className="h-8 w-8 rounded border p-0 overflow-hidden"/>
+                            <span className="text-xs text-zinc-400">{data.patternColor}</span>
                         </div>
                      </div>
                  </div>
@@ -1400,29 +1401,26 @@ function SwatchFormModal({ category, existingData, onClose, onSave }) {
                  </div>
              </div>
 
-             {/* Basic Info Group */}
-             <div className="space-y-4">
-                 <div>
-                    <label className="text-xs font-bold text-zinc-500 uppercase block mb-1">Material Code</label>
-                    <input value={data.materialCode} onChange={e=>setData({...data, materialCode: e.target.value})} className="w-full border rounded-lg p-2 text-sm outline-none font-mono font-bold" />
-                 </div>
+             <div>
+                <label className="text-xs font-bold text-zinc-500 uppercase block mb-1">Material Code</label>
+                <input value={data.materialCode} onChange={e=>setData({...data, materialCode: e.target.value})} className="w-full border rounded-lg p-2 text-sm outline-none font-mono font-bold" />
+             </div>
 
-                 <div>
-                    <label className="text-xs font-bold text-zinc-500 uppercase block mb-1">Name</label>
-                    <input value={data.name} onChange={e=>setData({...data, name: e.target.value})} className="w-full border rounded-lg p-2 text-sm outline-none" />
-                 </div>
-                 
-                 <div>
-                    <label className="text-xs font-bold text-zinc-500 uppercase block mb-1">Tags</label>
-                    <input value={data.tags} onChange={e=>setData({...data, tags: e.target.value})} className="w-full border rounded-lg p-2 text-sm outline-none" />
-                 </div>
+             <div>
+                <label className="text-xs font-bold text-zinc-500 uppercase block mb-1">Name</label>
+                <input value={data.name} onChange={e=>setData({...data, name: e.target.value})} className="w-full border rounded-lg p-2 text-sm outline-none" />
+             </div>
+             
+             <div>
+                <label className="text-xs font-bold text-zinc-500 uppercase block mb-1">Tags</label>
+                <input value={data.tags} onChange={e=>setData({...data, tags: e.target.value})} className="w-full border rounded-lg p-2 text-sm outline-none" />
+             </div>
 
-                 <div>
-                    <label className="text-xs font-bold text-zinc-500 uppercase block mb-1">Category</label>
-                    <select value={data.category} onChange={e=>setData({...data, category: e.target.value})} className="w-full border rounded-lg p-2 text-sm outline-none bg-white">
-                       {SWATCH_CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
-                    </select>
-                 </div>
+             <div>
+                <label className="text-xs font-bold text-zinc-500 uppercase block mb-1">Category</label>
+                <select value={data.category} onChange={e=>setData({...data, category: e.target.value})} className="w-full border rounded-lg p-2 text-sm outline-none bg-white">
+                   {SWATCH_CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+                </select>
              </div>
           </div>
           <div className="px-5 py-4 border-t border-zinc-100 bg-zinc-50 flex justify-end space-x-2 flex-shrink-0">
@@ -1528,14 +1526,21 @@ function PieChartComponent({ data, total, selectedIndex, onSelect }) {
   );
 }
 
-function ExpandedInfoModal({ title, content, onClose }) {
+function ExpandedListModal({ title, items, onClose, onSelect }) {
     return (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[150] flex items-center justify-center p-4 animate-in zoom-in-95">
-            <div className="bg-white w-full max-w-md rounded-2xl p-6 shadow-2xl relative">
-                <button onClick={onClose} className="absolute top-4 right-4 text-zinc-400 hover:text-black"><X className="w-5 h-5"/></button>
-                <h3 className="text-lg font-bold text-zinc-900 mb-4">{title}</h3>
-                <div className="max-h-[60vh] overflow-y-auto custom-scrollbar text-sm text-zinc-600 leading-relaxed whitespace-pre-wrap">
-                    {content}
+        <div className="fixed inset-0 z-[200] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl w-full max-w-sm max-h-[80vh] flex flex-col shadow-2xl animate-in zoom-in-95">
+                <div className="p-4 border-b border-zinc-100 flex justify-between items-center">
+                    <h3 className="font-bold text-lg">{title}</h3>
+                    <button onClick={onClose}><X className="w-5 h-5"/></button>
+                </div>
+                <div className="overflow-y-auto p-2 custom-scrollbar">
+                    {items.map((item, idx) => (
+                        <div key={idx} onClick={() => { onSelect(item); onClose(); }} className="p-3 hover:bg-zinc-50 rounded-xl cursor-pointer border-b border-zinc-50 last:border-0">
+                             <div className="font-bold text-sm text-zinc-800">{item.name || item}</div>
+                             {item.category && <div className="text-xs text-zinc-400">{item.category}</div>}
+                        </div>
+                    ))}
                 </div>
             </div>
         </div>
@@ -1555,7 +1560,7 @@ function DashboardView({ products, favorites, setActiveCategory, setSelectedProd
   const logoInputRef = useRef(null);
 
   const [selectedSlice, setSelectedSlice] = useState(null);
-  const [expandedInfo, setExpandedInfo] = useState(null); // { title: string, content: string/jsx }
+  const [expandedList, setExpandedList] = useState(null); // { title: string, items: [] }
 
   // Helper for Selected Slice Data
   const getSelectedSliceDetails = () => {
@@ -1577,8 +1582,8 @@ function DashboardView({ products, favorites, setActiveCategory, setSelectedProd
   const sliceDetails = getSelectedSliceDetails();
 
   return (
-    <div className="max-w-7xl mx-auto space-y-6 md:space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20 print:hidden" onClick={() => setSelectedSlice(null)}>
-      {expandedInfo && <ExpandedInfoModal title={expandedInfo.title} content={expandedInfo.content} onClose={() => setExpandedInfo(null)} />}
+    <div className="max-w-7xl mx-auto space-y-6 md:space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-32 print:hidden" onClick={() => setSelectedSlice(null)}>
+      {expandedList && <ExpandedListModal title={expandedList.title} items={expandedList.items} onClose={()=>setExpandedList(null)} onSelect={expandedList.onSelect} />}
 
       <div className="relative w-full h-48 md:h-80 rounded-3xl overflow-hidden shadow-lg border border-zinc-200 group bg-zinc-900">
          <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/40 to-transparent z-10"></div>
@@ -1653,53 +1658,61 @@ function DashboardView({ products, favorites, setActiveCategory, setSelectedProd
               <div className="relative w-72 h-72 md:w-96 md:h-96 flex-shrink-0">
                  <PieChartComponent data={chartData} total={totalStandardProducts} selectedIndex={selectedSlice} onSelect={setSelectedSlice} />
               </div>
-              <div className="flex-1 w-full overflow-hidden">
+              <div className="flex-1 w-full" onClick={(e) => e.stopPropagation()}>
                  {selectedSlice !== null ? (
-                    <div className="animate-in fade-in slide-in-from-left-4 h-full flex flex-col justify-center max-h-[400px]">
+                    <div className="animate-in fade-in slide-in-from-left-4 h-full flex flex-col justify-center">
                         <div className="flex items-center gap-3 mb-4 pb-2 border-b border-zinc-100">
                              <div className="w-4 h-4 rounded-full" style={{backgroundColor: chartData[selectedSlice].color}}></div>
                              <h4 className="text-2xl font-black text-zinc-900">{chartData[selectedSlice].label}</h4>
                              <button onClick={() => setActiveCategory(chartData[selectedSlice].id)} className="ml-auto text-xs font-bold text-blue-600 hover:underline flex items-center">Explore <ArrowRight className="w-3 h-3 ml-1"/></button>
                         </div>
                         
-                        <div className="overflow-y-auto pr-2 custom-scrollbar flex-1">
-                            <div className="grid grid-cols-2 gap-4 mb-6">
-                            <div className="bg-zinc-50 p-3 rounded-xl border border-zinc-100">
-                                <span className="text-[10px] text-zinc-400 uppercase font-bold block mb-1">Products</span>
-                                <span className="text-xl font-black text-zinc-900">{chartData[selectedSlice].count}</span>
-                            </div>
-                            <div className="bg-zinc-50 p-3 rounded-xl border border-zinc-100">
-                                <span className="text-[10px] text-zinc-400 uppercase font-bold block mb-1">New Arrivals</span>
-                                <span className="text-xl font-black text-zinc-900">{sliceDetails.products.filter(p=>p.isNew).length}</span>
-                            </div>
-                            <div className="bg-zinc-50 p-3 rounded-xl border border-zinc-100">
-                                <span className="text-[10px] text-zinc-400 uppercase font-bold block mb-1">Total Awards</span>
-                                <span className="text-xl font-black text-zinc-900">{sliceDetails.awardCount}</span>
-                            </div>
-                            <div className="bg-zinc-50 p-3 rounded-xl border border-zinc-100 cursor-pointer hover:bg-zinc-100" onClick={(e) => { e.stopPropagation(); setExpandedInfo({ title: 'Launch History', content: sliceDetails.years }); }}>
-                                <span className="text-[10px] text-zinc-400 uppercase font-bold block mb-1">Launching</span>
-                                <span className="text-xs font-bold text-zinc-900 truncate" title={sliceDetails.years}>{sliceDetails.years.substring(0,12)}... (View All)</span>
-                            </div>
-                            </div>
+                        <div className="grid grid-cols-2 gap-4 mb-6">
+                           <div className="bg-zinc-50 p-3 rounded-xl border border-zinc-100">
+                              <span className="text-[10px] text-zinc-400 uppercase font-bold block mb-1">Products</span>
+                              <span className="text-xl font-black text-zinc-900">{chartData[selectedSlice].count}</span>
+                           </div>
+                           <div className="bg-zinc-50 p-3 rounded-xl border border-zinc-100">
+                              <span className="text-[10px] text-zinc-400 uppercase font-bold block mb-1">New Arrivals</span>
+                              <span className="text-xl font-black text-zinc-900">{sliceDetails.products.filter(p=>p.isNew).length}</span>
+                           </div>
+                           <div className="bg-zinc-50 p-3 rounded-xl border border-zinc-100">
+                              <span className="text-[10px] text-zinc-400 uppercase font-bold block mb-1">Total Awards</span>
+                              <span className="text-xl font-black text-zinc-900">{sliceDetails.awardCount}</span>
+                           </div>
+                           
+                           {/* Click to expand if years are too many */}
+                           <div className="bg-zinc-50 p-3 rounded-xl border border-zinc-100 cursor-pointer hover:bg-zinc-100"
+                                onClick={() => setExpandedList({ 
+                                    title: "Launch Years", 
+                                    items: sliceDetails.years.split(', ').map(y => ({ name: y })),
+                                    onSelect: () => {}
+                                })}
+                           >
+                              <span className="text-[10px] text-zinc-400 uppercase font-bold block mb-1">Launching</span>
+                              <span className="text-xs font-bold text-zinc-900 truncate block" title={sliceDetails.years}>{sliceDetails.years.substring(0,12)}...</span>
+                           </div>
+                        </div>
 
-                            <div className="mb-4">
-                                <span className="text-xs text-zinc-400 uppercase font-bold block mb-2">Palette Preview</span>
-                                <div className="flex flex-wrap gap-1">
-                                    {sliceDetails.uniqueColors.slice(0, 10).map((c, i) => (
-                                        <div key={i}><SwatchDisplay color={c} size="small"/></div>
-                                    ))}
-                                    {sliceDetails.uniqueColors.length > 10 && <span className="text-[9px] text-zinc-400">+{sliceDetails.uniqueColors.length - 10}</span>}
-                                </div>
+                        <div className="mb-4">
+                            <span className="text-xs text-zinc-400 uppercase font-bold block mb-2">Palette Preview</span>
+                            <div className="flex flex-wrap gap-1">
+                                {sliceDetails.uniqueColors.slice(0, 10).map((c, i) => (
+                                    <div key={i}><SwatchDisplay color={c} size="small"/></div>
+                                ))}
+                                {sliceDetails.uniqueColors.length > 10 && <span className="text-[9px] text-zinc-400">+{sliceDetails.uniqueColors.length - 10}</span>}
                             </div>
+                        </div>
 
-                            <div className="bg-zinc-50 p-3 rounded-xl border border-zinc-100 cursor-pointer hover:bg-zinc-100 transition-colors" onClick={(e) => { e.stopPropagation(); setExpandedInfo({ title: 'Product List', content: sliceDetails.products.map(p=>p.name).join('\n') }); }}>
-                                <span className="text-[10px] text-zinc-400 uppercase font-bold block mb-2">Product List (Click to Expand)</span>
-                                <div className="grid grid-cols-2 gap-2 pointer-events-none">
-                                    {sliceDetails.products.slice(0,6).map(p => (
-                                        <div key={p.id} className="text-xs truncate text-zinc-600">• {p.name}</div>
-                                    ))}
-                                    {sliceDetails.products.length > 6 && <div className="text-xs text-zinc-400">... and {sliceDetails.products.length - 6} more</div>}
-                                </div>
+                        <div className="flex-1 max-h-60 custom-scrollbar bg-zinc-50 p-3 rounded-xl border border-zinc-100">
+                            <div className="flex justify-between items-center mb-2 sticky top-0 bg-zinc-50 pb-1 border-b border-zinc-100">
+                                <span className="text-[10px] text-zinc-400 uppercase font-bold">Product List</span>
+                                {sliceDetails.products.length > 8 && <button onClick={() => setExpandedList({ title: "Product List", items: sliceDetails.products, onSelect: setSelectedProduct })} className="text-[10px] text-blue-600 font-bold">View All</button>}
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                                {sliceDetails.products.slice(0, 8).map(p => (
+                                    <div key={p.id} className="text-xs truncate text-zinc-600 hover:text-black cursor-pointer p-1 hover:bg-zinc-100 rounded" onClick={() => setSelectedProduct(p)}>• {p.name}</div>
+                                ))}
                             </div>
                         </div>
                     </div>
@@ -1770,7 +1783,7 @@ function SpaceDetailView({ space, spaceContent, activeTag, setActiveTag, isAdmin
   const copySpaceLink = () => { navigator.clipboard.writeText(`${window.location.origin}${window.location.pathname}?space=${space.id}`); window.alert("공간 공유 링크가 복사되었습니다."); };
 
   return (
-    <div className="mb-12 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20">
+    <div className="mb-12 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className="relative rounded-3xl overflow-hidden h-72 md:h-96 shadow-lg group mb-8 bg-zinc-900 print:hidden">
         <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent z-10"></div>
         {banner ? <img src={banner} className="w-full h-full object-cover transition-transform duration-1000" alt="Space Banner" /> : <div className="w-full h-full flex items-center justify-center opacity-30"><span className="text-white text-4xl font-bold uppercase">{space.label}</span></div>}
@@ -1999,7 +2012,7 @@ function ProductDetailModal({ product, allProducts, swatches, spaceContents, onC
            </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto custom-scrollbar flex flex-col md:flex-row h-full pb-24 md:pb-0 print:overflow-visible print:h-auto">
+        <div className="flex-1 overflow-y-auto custom-scrollbar flex flex-col md:flex-row h-full pb-safe print:overflow-visible print:h-auto">
           <div className="w-full md:w-1/2 bg-zinc-50 p-6 md:p-8 flex flex-col border-b md:border-b-0 md:border-r border-zinc-100 md:sticky md:top-0 print:static print:bg-white print:border-none">
             <div className="flex-1 w-full bg-white rounded-2xl flex items-center justify-center shadow-sm border border-zinc-100 overflow-hidden p-8 mb-4 relative group min-h-[300px] print:shadow-none print:border-zinc-200">
                {currentImageUrl ? (
@@ -2113,7 +2126,7 @@ function ProductDetailModal({ product, allProducts, swatches, spaceContents, onC
                   </div>
               ))}</div></div>)}
 
-              <div className="md:hidden mt-8 pt-8 border-t border-zinc-100 pb-10 print:hidden">
+              <div className="md:hidden mt-8 pt-8 border-t border-zinc-100 pb-10 print:hidden mb-safe">
                  <div className="flex justify-center gap-4 mb-4">
                     <button onClick={handleShareImage} className="flex flex-col items-center justify-center w-14 h-14 bg-zinc-50 rounded-2xl text-zinc-600 active:scale-95 transition-transform border border-zinc-100">
                         <ImgIcon className="w-5 h-5 mb-1"/>
@@ -2539,7 +2552,7 @@ function SceneEditModal({ initialData, allProducts, spaceTags = [], spaceOptions
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[80] flex items-center justify-center p-4">
-      <div className="bg-white w-full max-w-2xl rounded-2xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh] pb-20 md:pb-0">
+      <div className="bg-white w-full max-w-2xl rounded-2xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
          <div className="px-6 py-4 border-b border-zinc-100 flex justify-between items-center bg-white z-10">
             <h3 className="text-lg font-bold text-zinc-900">{!initialData.id ? 'New Scene' : 'Edit Scene'}</h3>
             <div className="flex gap-2">
@@ -2614,6 +2627,11 @@ function SpaceSceneModal({ scene, products, allProducts, isAdmin, onClose, onEdi
   const [productFilter, setProductFilter] = useState('');
   const [isZoomed, setIsZoomed] = useState(false);
 
+  // Swipe Logic REMOVED for v0.7.4
+  // Click Navigation
+  const handleNext = () => { if(currentImageIndex < images.length - 1) setCurrentImageIndex(currentImageIndex + 1); };
+  const handlePrev = () => { if(currentImageIndex > 0) setCurrentImageIndex(currentImageIndex - 1); };
+
   const currentImgObj = images[currentImageIndex];
   const currentImgUrl = typeof currentImgObj === 'object' ? currentImgObj.url : currentImgObj;
   const currentImgCaption = typeof currentImgObj === 'object' ? currentImgObj.caption : '';
@@ -2636,14 +2654,14 @@ function SpaceSceneModal({ scene, products, allProducts, isAdmin, onClose, onEdi
             </div>
             {images.length > 1 && (<div className="absolute bottom-4 left-0 right-0 flex justify-center space-x-2 px-4">{images.map((_, idx) => (<button key={idx} onClick={() => setCurrentImageIndex(idx)} className={`w-2 h-2 rounded-full transition-all ${currentImageIndex === idx ? 'bg-white w-6' : 'bg-white/40 hover:bg-white/80'}`} />))}</div>)}
          </div>
-         <div className="w-full md:w-1/3 bg-white flex flex-col border-l border-zinc-100 h-[60vh] md:h-full relative pb-24 md:pb-0">
+         <div className="w-full md:w-1/3 bg-white flex flex-col border-l border-zinc-100 h-[60vh] md:h-full relative">
             <div className="p-6 md:p-8 border-b border-zinc-50 pt-16 md:pt-16">
                <div className="mb-4">
                    <h2 className="text-2xl md:text-3xl font-black text-zinc-900 mb-2">{scene.title}</h2>
                    <p className="text-zinc-500 text-sm leading-relaxed">{scene.description}</p>
                </div>
             </div>
-            <div className="flex-1 overflow-y-auto p-6 md:p-8 custom-scrollbar bg-zinc-50/50">
+            <div className="flex-1 overflow-y-auto p-6 md:p-8 custom-scrollbar bg-zinc-50/50 pb-safe">
                <div className="flex justify-between items-center mb-4"><h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Tagged Products</h3>{isAdmin && <button onClick={() => setProductManagerOpen(!isProductManagerOpen)} className="text-xs font-bold text-indigo-600 hover:text-indigo-800">+ Add Tag</button>}</div>
                {isAdmin && isProductManagerOpen && (
                  <div className="mb-4 bg-white p-3 rounded-xl border border-indigo-100 shadow-sm animate-in slide-in-from-top-2">
@@ -2651,17 +2669,13 @@ function SpaceSceneModal({ scene, products, allProducts, isAdmin, onClose, onEdi
                     <div className="max-h-32 overflow-y-auto space-y-1 custom-scrollbar">{allProducts.filter(p => p.name.toLowerCase().includes(productFilter.toLowerCase())).map(p => { const isTagged = scene.productIds?.includes(p.id); return (<div key={p.id} onClick={() => onProductToggle(p.id, !isTagged)} className={`flex items-center p-1.5 rounded cursor-pointer ${isTagged ? 'bg-indigo-50 text-indigo-700' : 'hover:bg-zinc-50'}`}><div className={`w-3 h-3 border rounded mr-2 flex items-center justify-center ${isTagged ? 'bg-indigo-500 border-indigo-500' : 'border-zinc-300'}`}>{isTagged && <Check className="w-2 h-2 text-white"/>}</div><span className="text-xs truncate">{p.name}</span></div>) })}</div>
                  </div>
                )}
-               <div className="space-y-3">{products.length > 0 ? products.map(product => (<div key={product.id} onClick={() => onNavigateProduct(product)} className="flex items-center p-3 bg-white rounded-xl border border-zinc-100 shadow-sm hover:border-zinc-300 transition-all cursor-pointer group"><div className="w-12 h-12 bg-zinc-50 rounded-lg flex-shrink-0 flex items-center justify-center mr-3 overflow-hidden">{product.images?.[0] ? <img src={typeof product.images[0] === 'object' ? product.images[0].url : product.images[0]} className="w-full h-full object-cover" /> : <ImageIcon className="w-5 h-5 text-zinc-300"/>}</div><div className="flex-1 min-w-0"><h4 className="text-sm font-bold text-zinc-900 truncate group-hover:text-blue-600">{product.name}</h4><p className="text-xs text-zinc-500">{product.category}</p></div><ChevronRight className="w-4 h-4 text-zinc-300 group-hover:text-zinc-600"/></div>)) : (<div className="text-center py-8 text-zinc-400 text-xs">연관된 제품이 없습니다.</div>)}</div>
-            </div>
+               <div className="space-y-3 mb-8">{products.length > 0 ? products.map(product => (<div key={product.id} onClick={() => onNavigateProduct(product)} className="flex items-center p-3 bg-white rounded-xl border border-zinc-100 shadow-sm hover:border-zinc-300 transition-all cursor-pointer group"><div className="w-12 h-12 bg-zinc-50 rounded-lg flex-shrink-0 flex items-center justify-center mr-3 overflow-hidden">{product.images?.[0] ? <img src={typeof product.images[0] === 'object' ? product.images[0].url : product.images[0]} className="w-full h-full object-cover" /> : <ImageIcon className="w-5 h-5 text-zinc-300"/>}</div><div className="flex-1 min-w-0"><h4 className="text-sm font-bold text-zinc-900 truncate group-hover:text-blue-600">{product.name}</h4><p className="text-xs text-zinc-500">{product.category}</p></div><ChevronRight className="w-4 h-4 text-zinc-300 group-hover:text-zinc-600"/></div>)) : (<div className="text-center py-8 text-zinc-400 text-xs">연관된 제품이 없습니다.</div>)}</div>
             
-            {/* Share Buttons */}
-            <div className="p-4 border-t border-zinc-100 flex gap-3 bg-white absolute bottom-0 w-full md:relative">
-                 <button onClick={handleShareImage} className="flex-1 flex items-center justify-center px-4 py-2 bg-zinc-100 text-zinc-600 rounded-lg text-xs font-bold hover:bg-zinc-200 transition-colors">
-                    <ImgIcon className="w-3.5 h-3.5 mr-2" /> Image
-                 </button>
-                 <button onClick={() => window.print()} className="flex-1 flex items-center justify-center px-4 py-2 bg-zinc-100 text-zinc-600 rounded-lg text-xs font-bold hover:bg-zinc-200 transition-colors">
-                    <Printer className="w-3.5 h-3.5 mr-2" /> PDF
-                 </button>
+               {/* Share & Print for Mobile Consistency */}
+               <div className="pt-6 border-t border-zinc-100 flex gap-3 print:hidden">
+                    <button onClick={handleShareImage} className="flex-1 py-3 bg-white border border-zinc-200 text-zinc-600 rounded-xl text-xs font-bold hover:bg-zinc-50 flex items-center justify-center"><ImgIcon className="w-4 h-4 mr-2"/> Share</button>
+                    <button onClick={() => window.print()} className="flex-1 py-3 bg-white border border-zinc-200 text-zinc-600 rounded-xl text-xs font-bold hover:bg-zinc-50 flex items-center justify-center"><Printer className="w-4 h-4 mr-2"/> PDF</button>
+               </div>
             </div>
          </div>
       </div>
