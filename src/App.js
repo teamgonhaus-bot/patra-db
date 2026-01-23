@@ -67,7 +67,7 @@ try {
   console.warn("Firebase Init Failed. Falling back to Local Storage.", e);
 }
 
-// 카테고리 정의 (NEW 제거됨)
+// 카테고리 정의
 const CATEGORIES = [
   { id: 'ALL', label: 'Grand Overview', isSpecial: true, color: '#18181b' },
   { id: 'EXECUTIVE', label: 'Executive', color: '#2563eb' },
@@ -1405,8 +1405,6 @@ function PieChartComponent({ data, total, selectedIndex, onSelect }) {
     </div>
   );
 }
-
-// ... CompareView, SwatchDisplay, SwatchManager, SwatchDetailModal, SpaceDetailView, ProductCard, ProductDetailModal, SpaceInfoEditModal, ProductFormModal, SpaceProductManager, SceneEditModal, SpaceSceneModal codes remain the same ...
 
 function CompareView({ products, hiddenIds, onToggleVisibility, onRemove, onEdit, onProductClick, isAdmin }) {
     const visibleProducts = products.filter(p => !hiddenIds.includes(p.id));
