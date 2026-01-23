@@ -37,7 +37,7 @@ const YOUR_FIREBASE_CONFIG = {
 // ----------------------------------------------------------------------
 // 상수 및 설정
 // ----------------------------------------------------------------------
-const APP_VERSION = "v0.7.6"; 
+const APP_VERSION = "v0.7.7"; 
 const BUILD_DATE = "2026.01.24";
 const ADMIN_PASSWORD = "adminlcg1"; 
 
@@ -148,7 +148,7 @@ export default function App() {
   const [filters, setFilters] = useState({ year: '', color: '', isNew: false });
   const [isFilterOpen, setIsFilterOpen] = useState(false);
 
-  // Modal Stack (Stacking Modals)
+  // Modal Stack
   const [modalStack, setModalStack] = useState([]); 
   
   // Selection & Compare
@@ -200,7 +200,6 @@ export default function App() {
   
   // --- Effects ---
   useEffect(() => {
-    // Scroll Lock when modals are open
     if (modalStack.length > 0 || isFormOpen || editingScene || managingSpaceProductsId || showAdminDashboard) {
         document.body.style.overflow = 'hidden';
     } else {
@@ -441,7 +440,6 @@ export default function App() {
           const newData = { ...appSettings, [key]: val };
           if(isFirebaseAvailable && db) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'app'), newData, {merge: true});
           else { localStorage.setItem('patra_app_settings', JSON.stringify(newData)); setAppSettings(newData); }
-          // showToast("변경사항이 저장되었습니다.");
       }
   };
 
@@ -2187,7 +2185,7 @@ function ProductDetailModal({ product, allProducts, swatches, spaceContents, onC
                             <button key={scene.id} onClick={() => onNavigateScene(scene)} className="w-full flex items-center p-2 bg-white border border-zinc-200 hover:border-zinc-400 rounded-xl transition-all text-left shadow-sm group">
                                <div className="w-10 h-10 bg-zinc-100 rounded-lg overflow-hidden mr-3 flex-shrink-0">
                                   <img src={scene.image} className="w-full h-full object-cover group-hover:scale-110 transition-transform" alt="Scene"/>
-                               </div>
+                                </div>
                                <div className="min-w-0">
                                   <div className="text-xs font-bold text-zinc-900 truncate">{scene.title}</div>
                                   <div className="text-[10px] text-zinc-500 truncate flex items-center"><ImageIcon className="w-3 h-3 mr-1"/> View Scene</div>
