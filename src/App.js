@@ -37,7 +37,7 @@ const YOUR_FIREBASE_CONFIG = {
 // ----------------------------------------------------------------------
 // 상수 및 설정
 // ----------------------------------------------------------------------
-const APP_VERSION = "v0.7.4"; 
+const APP_VERSION = "v0.7.5"; 
 const BUILD_DATE = "2026.01.23";
 const ADMIN_PASSWORD = "adminlcg1"; 
 
@@ -70,7 +70,7 @@ try {
 // 카테고리 정의
 const CATEGORIES = [
   { id: 'ALL', label: 'Total View', isSpecial: true, color: '#18181b' },
-  { id: 'NEW', label: 'New Arrivals', isSpecial: true, color: '#ef4444' },
+  // New Arrivals Removed in v0.7.5
   { id: 'EXECUTIVE', label: 'Executive', color: '#2563eb' },
   { id: 'TASK', label: 'Task', color: '#0891b2' },
   { id: 'CONFERENCE', label: 'Conference', color: '#7c3aed' },
@@ -133,6 +133,17 @@ const TEXTURE_TYPES = [
     { id: 'MATTE', label: 'Matte' }
 ];
 
+// Hook for scroll locking
+function useScrollLock() {
+  useEffect(() => {
+    const originalStyle = window.getComputedStyle(document.body).overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = originalStyle;
+    };
+  }, []);
+}
+
 export default function App() {
   const [user, setUser] = useState(null);
   const [products, setProducts] = useState([]);
@@ -140,17 +151,20 @@ export default function App() {
   const [activeCategory, setActiveCategory] = useState('DASHBOARD');
   const [previousCategory, setPreviousCategory] = useState('DASHBOARD'); 
   const [activeSpaceTag, setActiveSpaceTag] = useState('ALL'); 
-  const [searchTerm, setSearchTerm] = useState('');
   
+  // Search with Tags
+  const [searchTerm, setSearchTerm] = useState('');
+  const [searchTags, setSearchTags] = useState([]);
+
   // Sorting & Filtering
   const [sortOption, setSortOption] = useState('manual'); 
   const [sortDirection, setSortDirection] = useState('desc'); 
   const [filters, setFilters] = useState({ year: '', color: '', isNew: false });
   const [isFilterOpen, setIsFilterOpen] = useState(false);
 
-  // Selection & Compare
+  // Selection & Compare (Stacked Modals)
   const [selectedProduct, setSelectedProduct] = useState(null);
-  const [selectedSwatch, setSelectedSwatch] = useState(null);
+  const [selectedSwatch, setSelectedSwatch] = useState(null); // Now can exist WITH selectedProduct
   const [compareList, setCompareList] = useState([]);
   const [hiddenCompareIds, setHiddenCompareIds] = useState([]); 
   const [isCompareModalOpen, setIsCompareModalOpen] = useState(false);
@@ -193,6 +207,7 @@ export default function App() {
   useEffect(() => {
     const handleEsc = (e) => {
         if (e.key === 'Escape') {
+            // Stacked closing logic
             if (editingSwatchFromModal) setEditingSwatchFromModal(null);
             else if (selectedSwatch) setSelectedSwatch(null);
             else if (selectedProduct) setSelectedProduct(null);
@@ -224,12 +239,13 @@ export default function App() {
 
   useEffect(() => {
     const handlePopState = (event) => {
-      if (selectedSwatch && selectedProduct) {
-          setSelectedSwatch(null); 
-          window.history.pushState({ modal: 'product' }, '', window.location.pathname + '?id=' + selectedProduct.id);
+      // Handle browser back button for modals
+      if (selectedSwatch) {
+          setSelectedSwatch(null);
       } else if (selectedProduct) {
-        setSelectedProduct(null);
-        window.history.replaceState(null, '', window.location.pathname);
+          setSelectedProduct(null);
+          // Clean URL
+          window.history.replaceState(null, '', window.location.pathname);
       } else if (activeCategory === 'COMPARE_PAGE') {
         setActiveCategory(previousCategory || 'DASHBOARD');
         window.history.replaceState(null, '', window.location.pathname);
@@ -259,6 +275,9 @@ export default function App() {
     const sharedId = params.get('id');
     const sharedSpace = params.get('space');
     
+    // Fix: Only open modal if we are NOT on dashboard initial load (unless sharedId exists)
+    // The bug was: refreshing dashboard opens modal. 
+    // Logic: If sharedId exists, find and open. If not, do nothing.
     if (sharedId && products.length > 0) {
       const found = products.find(p => String(p.id) === sharedId);
       if (found) setSelectedProduct(found);
@@ -328,10 +347,22 @@ export default function App() {
 
   // --- Handlers ---
   const handleHomeClick = () => {
+    // Reset everything
     setActiveCategory('DASHBOARD');
+    setSearchTerm('');
+    setSearchTags([]);
+    setFilters({ year: '', color: '', isNew: false });
     setIsMobileMenuOpen(false);
     window.history.pushState({}, '', window.location.pathname);
   };
+  
+  const handleCategoryClick = (catId) => {
+      setActiveCategory(catId);
+      setSearchTerm(''); // Clear search on category change
+      setSearchTags([]);
+      setIsMobileMenuOpen(false);
+  };
+
   const loadFromLocalStorage = () => {
     const saved = localStorage.getItem('patra_products');
     setProducts(saved ? JSON.parse(saved) : []);
@@ -432,6 +463,15 @@ export default function App() {
       const newTitle = prompt("새로운 타이틀을 입력하세요:", appSettings.title);
       if(newTitle !== null) {
           const newData = { ...appSettings, title: newTitle };
+          if(isFirebaseAvailable && db) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'app'), newData, {merge: true});
+          else { localStorage.setItem('patra_app_settings', JSON.stringify(newData)); setAppSettings(newData); }
+      }
+  };
+  const handleSidebarSubtitleChange = async () => {
+      if(!isAdmin) return;
+      const newSubtitle = prompt("새로운 서브 타이틀을 입력하세요:", appSettings.subtitle);
+      if(newSubtitle !== null) {
+          const newData = { ...appSettings, subtitle: newSubtitle };
           if(isFirebaseAvailable && db) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'app'), newData, {merge: true});
           else { localStorage.setItem('patra_app_settings', JSON.stringify(newData)); setAppSettings(newData); }
       }
@@ -544,23 +584,43 @@ export default function App() {
      showToast("스와치가 복제되었습니다.");
   };
 
+  // --- Search Tag Logic ---
+  const handleSearchKeyDown = (e) => {
+      if (e.key === ',' || e.key === 'Enter') {
+          e.preventDefault();
+          const val = searchTerm.trim().replace(',', '');
+          if (val) {
+              setSearchTags([...searchTags, val]);
+              setSearchTerm('');
+          }
+      }
+  };
+  const removeSearchTag = (idx) => {
+      setSearchTags(searchTags.filter((_, i) => i !== idx));
+  };
+
   // --- Data & Filters ---
   const getProcessedProducts = () => {
     let filtered = products.filter(product => {
       let matchesCategory = true;
       if (activeCategory === 'DASHBOARD' || activeCategory === 'COMPARE_PAGE') matchesCategory = false; 
       else if (activeCategory === 'MY_PICK') matchesCategory = favorites.includes(product.id);
-      else if (activeCategory === 'NEW') matchesCategory = product.isNew;
       else if (activeCategory === 'ALL') matchesCategory = true;
+      else if (activeCategory === 'SPACES_ROOT' || activeCategory === 'COLLECTIONS_ROOT' || activeCategory === 'MATERIALS_ROOT') matchesCategory = false; // Handled in view
       else if (SPACES.find(s => s.id === activeCategory)) {
          matchesCategory = product.spaces && product.spaces.includes(activeCategory);
          if (matchesCategory && activeSpaceTag !== 'ALL') { matchesCategory = product.spaceTags && product.spaceTags.includes(activeSpaceTag); }
       }
       else if (SWATCH_CATEGORIES.find(s => s.id === activeCategory)) matchesCategory = false; 
       else matchesCategory = product.category === activeCategory;
-      const searchLower = searchTerm.toLowerCase();
+      
+      // Search Logic (Tags + Text)
       const searchFields = [ product.name, product.specs, product.designer, ...(product.features || []), ...(product.options || []), ...(product.awards || []), ...(product.materials || []), ...(product.bodyColors || []).map(c => typeof c === 'object' ? c.name : c), ...(product.upholsteryColors || []).map(c => typeof c === 'object' ? c.name : c) ];
-      const matchesSearch = !searchTerm || searchFields.join(' ').toLowerCase().includes(searchLower);
+      const fullText = searchFields.join(' ').toLowerCase();
+      
+      const matchesSearchText = !searchTerm || fullText.includes(searchTerm.toLowerCase());
+      const matchesTags = searchTags.every(tag => fullText.includes(tag.toLowerCase()));
+      
       let matchesFilter = true;
       if(filters.isNew && !product.isNew) matchesFilter = false;
       if(filters.year && !product.launchDate?.startsWith(filters.year)) matchesFilter = false;
@@ -568,7 +628,7 @@ export default function App() {
          const colorMatch = [...(product.bodyColors||[]), ...(product.upholsteryColors||[])].some(c => { const name = typeof c === 'object' ? c.name : c; return name.toLowerCase().includes(filters.color.toLowerCase()); });
          if(!colorMatch) matchesFilter = false;
       }
-      return matchesCategory && matchesSearch && matchesFilter;
+      return matchesCategory && matchesSearchText && matchesTags && matchesFilter;
     });
     filtered.sort((a, b) => {
       let comparison = 0;
@@ -594,7 +654,7 @@ export default function App() {
      setProducts(_products); dragItem.current = null; dragOverItem.current = null;
   };
 
-  // --- Navigation (Swipe logic REMOVED for v0.7.4) ---
+  // --- Navigation ---
   const handleNavigateNext = () => { if(!selectedProduct) return; const currentIndex = processedProducts.findIndex(p => p.id === selectedProduct.id); if(currentIndex >= 0 && currentIndex < processedProducts.length - 1) { setSelectedProduct(processedProducts[currentIndex + 1]); } };
   const handleNavigatePrev = () => { if(!selectedProduct) return; const currentIndex = processedProducts.findIndex(p => p.id === selectedProduct.id); if(currentIndex > 0) { setSelectedProduct(processedProducts[currentIndex - 1]); } };
 
@@ -635,16 +695,52 @@ export default function App() {
                      </div>
                  )}
              </div>
-             <span className="text-[10px] font-medium text-zinc-500 tracking-[0.2em] uppercase mt-0.5">Design Lab DB</span>
+             <div className="relative group/subtitle">
+                <span className="text-[10px] font-medium text-zinc-500 tracking-[0.2em] uppercase mt-0.5 block">{appSettings.subtitle}</span>
+                {isAdmin && (
+                    <button onClick={(e)=>{e.stopPropagation(); handleSidebarSubtitleChange()}} className="absolute -right-4 top-0 p-0.5 opacity-0 group-hover/subtitle:opacity-100 text-zinc-400 hover:text-black"><Edit2 className="w-3 h-3"/></button>
+                )}
+             </div>
           </div>
           <button onClick={(e) => { e.stopPropagation(); setIsMobileMenuOpen(false); }} className="md:hidden text-zinc-400 hover:text-zinc-600"><X className="w-6 h-6" /></button>
         </div>
         <nav className="flex-1 overflow-y-auto py-6 px-4 space-y-4 custom-scrollbar">
-          <div className="space-y-1">{CATEGORIES.filter(c => c.isSpecial).map((cat) => (<button key={cat.id} onClick={() => { setActiveCategory(cat.id); setIsMobileMenuOpen(false); }} className={`w-full text-left px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 flex items-center justify-between group border ${activeCategory === cat.id ? 'bg-zinc-900 text-white shadow-lg border-zinc-900' : 'bg-white text-zinc-600 border-zinc-100 hover:bg-zinc-50 hover:border-zinc-300'}`}><div className="flex items-center">{cat.id === 'ALL' && <LayoutGrid className="w-4 h-4 mr-3 opacity-70" />}{cat.id === 'NEW' && <Zap className="w-4 h-4 mr-3 opacity-70" />}<span className="font-bold tracking-tight">{cat.label}</span></div>{cat.id === 'NEW' && <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse ml-auto"></span>}</button>))}</div>
-          <div className="py-2"><button onClick={() => setSidebarState(p => ({...p, spaces: !p.spaces}))} className={`w-full text-left px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 flex items-center justify-between group border bg-white text-zinc-600 border-zinc-100 hover:bg-zinc-50 hover:border-zinc-300 mb-1 shadow-sm`}><span className="font-bold tracking-tight">SPACES</span>{sidebarState.spaces ? <ChevronUp className="w-4 h-4 text-zinc-400" /> : <ChevronDown className="w-4 h-4 text-zinc-400" />}</button>{sidebarState.spaces && (<div className="space-y-1 mt-2 pl-2 animate-in slide-in-from-top-2 duration-200">{SPACES.map((space) => (<button key={space.id} onClick={() => { setActiveCategory(space.id); setIsMobileMenuOpen(false); }} className={`w-full text-left px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 flex items-center justify-between group ${activeCategory === space.id ? 'bg-zinc-800 text-white font-bold' : 'text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900'}`}><div className="flex items-center"><space.icon className={`w-3.5 h-3.5 mr-3 ${activeCategory === space.id ? 'text-white' : 'text-zinc-400'}`} />{space.label}</div>{activeCategory === space.id && <div className="w-1.5 h-1.5 rounded-full bg-green-500"></div>}</button>))}</div>)}</div>
-          <div className="py-2"><button onClick={() => setSidebarState(p => ({...p, collections: !p.collections}))} className={`w-full text-left px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 flex items-center justify-between group border bg-white text-zinc-600 border-zinc-100 hover:bg-zinc-50 hover:border-zinc-300 mb-1 shadow-sm`}><div className="flex items-center"><span className="font-bold tracking-tight">COLLECTIONS</span>{isFirebaseAvailable ? <Cloud className="w-3 h-3 ml-2 text-green-500" /> : <CloudOff className="w-3 h-3 ml-2 text-zinc-300" />}</div>{sidebarState.collections ? <ChevronUp className="w-4 h-4 text-zinc-400" /> : <ChevronDown className="w-4 h-4 text-zinc-400" />}</button>{sidebarState.collections && (<div className="space-y-0.5 mt-2 pl-2 animate-in slide-in-from-top-2 duration-200">{CATEGORIES.filter(c => !c.isSpecial).map((cat) => (<button key={cat.id} onClick={() => { setActiveCategory(cat.id); setIsMobileMenuOpen(false); }} className={`w-full text-left px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center justify-between group ${activeCategory === cat.id ? 'bg-zinc-100 text-zinc-900 font-bold' : 'text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900'}`}>{cat.label}</button>))}</div>)}</div>
-          <div className="py-2"><button onClick={() => setSidebarState(p => ({...p, materials: !p.materials}))} className={`w-full text-left px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 flex items-center justify-between group border bg-white text-zinc-600 border-zinc-100 hover:bg-zinc-50 hover:border-zinc-300 mb-1 shadow-sm`}><div className="flex items-center"><span className="font-bold tracking-tight">MATERIALS</span></div>{sidebarState.materials ? <ChevronUp className="w-4 h-4 text-zinc-400" /> : <ChevronDown className="w-4 h-4 text-zinc-400" />}</button>{sidebarState.materials && (<div className="space-y-0.5 mt-2 pl-2 animate-in slide-in-from-top-2 duration-200">{SWATCH_CATEGORIES.map((cat) => (<button key={cat.id} onClick={() => { setActiveCategory(cat.id); setIsMobileMenuOpen(false); }} className={`w-full text-left px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center justify-between group ${activeCategory === cat.id ? 'bg-zinc-100 text-zinc-900 font-bold' : 'text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900'}`}>{cat.label}</button>))}</div>)}</div>
-          <div className="pt-2"><button onClick={() => { setActiveCategory('MY_PICK'); setIsMobileMenuOpen(false); }} className={`w-full text-left px-4 py-3 rounded-xl text-sm font-bold transition-all duration-200 flex items-center space-x-3 group border ${activeCategory === 'MY_PICK' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' : 'text-zinc-400 border-transparent hover:bg-zinc-50 hover:text-zinc-600'}`}><Heart className={`w-4 h-4 ${activeCategory === 'MY_PICK' ? 'fill-yellow-500 text-yellow-500' : ''}`} /><span>My Pick ({favorites.length})</span></button></div>
+          <div className="space-y-1">{CATEGORIES.filter(c => c.isSpecial).map((cat) => (<button key={cat.id} onClick={() => handleCategoryClick(cat.id)} className={`w-full text-left px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 flex items-center justify-between group border ${activeCategory === cat.id ? 'bg-zinc-900 text-white shadow-lg border-zinc-900' : 'bg-white text-zinc-600 border-zinc-100 hover:bg-zinc-50 hover:border-zinc-300'}`}><div className="flex items-center">{cat.id === 'ALL' && <LayoutGrid className="w-4 h-4 mr-3 opacity-70" />}<span className="font-bold tracking-tight">{cat.label}</span></div></button>))}</div>
+          
+          {/* Spaces Group */}
+          <div className="py-2">
+             <div className={`w-full flex items-center rounded-xl border mb-1 shadow-sm transition-all ${activeCategory === 'SPACES_ROOT' ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-600 border-zinc-100 hover:border-zinc-300'}`}>
+                <button onClick={() => handleCategoryClick('SPACES_ROOT')} className="flex-1 text-left px-4 py-3 text-sm font-bold tracking-tight">SPACES</button>
+                <button onClick={(e) => { e.stopPropagation(); setSidebarState(p => ({...p, spaces: !p.spaces})); }} className="px-3 py-3 border-l border-inherit opacity-70 hover:opacity-100">
+                    {sidebarState.spaces ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                </button>
+             </div>
+             {sidebarState.spaces && (<div className="space-y-1 mt-2 pl-2 animate-in slide-in-from-top-2 duration-200">{SPACES.map((space) => (<button key={space.id} onClick={() => handleCategoryClick(space.id)} className={`w-full text-left px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 flex items-center justify-between group ${activeCategory === space.id ? 'bg-zinc-800 text-white font-bold' : 'text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900'}`}><div className="flex items-center"><space.icon className={`w-3.5 h-3.5 mr-3 ${activeCategory === space.id ? 'text-white' : 'text-zinc-400'}`} />{space.label}</div>{activeCategory === space.id && <div className="w-1.5 h-1.5 rounded-full bg-green-500"></div>}</button>))}</div>)}
+          </div>
+
+          {/* Collections Group */}
+          <div className="py-2">
+             <div className={`w-full flex items-center rounded-xl border mb-1 shadow-sm transition-all ${activeCategory === 'COLLECTIONS_ROOT' ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-600 border-zinc-100 hover:border-zinc-300'}`}>
+                <button onClick={() => handleCategoryClick('COLLECTIONS_ROOT')} className="flex-1 text-left px-4 py-3 text-sm font-bold tracking-tight flex items-center">COLLECTIONS {isFirebaseAvailable ? <Cloud className="w-3 h-3 ml-2 text-green-500" /> : <CloudOff className="w-3 h-3 ml-2 text-zinc-300" />}</button>
+                <button onClick={(e) => { e.stopPropagation(); setSidebarState(p => ({...p, collections: !p.collections})); }} className="px-3 py-3 border-l border-inherit opacity-70 hover:opacity-100">
+                    {sidebarState.collections ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                </button>
+             </div>
+             {sidebarState.collections && (<div className="space-y-0.5 mt-2 pl-2 animate-in slide-in-from-top-2 duration-200">{CATEGORIES.filter(c => !c.isSpecial).map((cat) => (<button key={cat.id} onClick={() => handleCategoryClick(cat.id)} className={`w-full text-left px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center justify-between group ${activeCategory === cat.id ? 'bg-zinc-100 text-zinc-900 font-bold' : 'text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900'}`}>{cat.label}</button>))}</div>)}
+          </div>
+
+          {/* Materials Group */}
+          <div className="py-2">
+             <div className={`w-full flex items-center rounded-xl border mb-1 shadow-sm transition-all ${activeCategory === 'MATERIALS_ROOT' ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-600 border-zinc-100 hover:border-zinc-300'}`}>
+                <button onClick={() => handleCategoryClick('MATERIALS_ROOT')} className="flex-1 text-left px-4 py-3 text-sm font-bold tracking-tight">MATERIALS</button>
+                <button onClick={(e) => { e.stopPropagation(); setSidebarState(p => ({...p, materials: !p.materials})); }} className="px-3 py-3 border-l border-inherit opacity-70 hover:opacity-100">
+                    {sidebarState.materials ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                </button>
+             </div>
+             {sidebarState.materials && (<div className="space-y-0.5 mt-2 pl-2 animate-in slide-in-from-top-2 duration-200">{SWATCH_CATEGORIES.map((cat) => (<button key={cat.id} onClick={() => handleCategoryClick(cat.id)} className={`w-full text-left px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center justify-between group ${activeCategory === cat.id ? 'bg-zinc-100 text-zinc-900 font-bold' : 'text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900'}`}>{cat.label}</button>))}</div>)}
+          </div>
+
+          <div className="pt-2"><button onClick={() => handleCategoryClick('MY_PICK')} className={`w-full text-left px-4 py-3 rounded-xl text-sm font-bold transition-all duration-200 flex items-center space-x-3 group border ${activeCategory === 'MY_PICK' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' : 'text-zinc-400 border-transparent hover:bg-zinc-50 hover:text-zinc-600'}`}><Heart className={`w-4 h-4 ${activeCategory === 'MY_PICK' ? 'fill-yellow-500 text-yellow-500' : ''}`} /><span>My Pick ({favorites.length})</span></button></div>
         </nav>
         <div className="p-4 border-t border-zinc-100 bg-zinc-50/50 space-y-3">
            {isAdmin && (<button onClick={() => { fetchLogs(); setShowAdminDashboard(true); }} className="w-full text-[10px] text-blue-600 hover:text-blue-800 flex items-center justify-center font-bold py-1 mb-2 bg-blue-50 rounded border border-blue-100"><Settings className="w-3 h-3 mr-1" /> Dashboard</button>)}
@@ -657,7 +753,24 @@ export default function App() {
         <header className="h-14 md:h-16 bg-white/80 backdrop-blur-md border-b border-zinc-100 flex items-center justify-between px-4 md:px-8 z-30 flex-shrink-0 sticky top-0 transition-all print:hidden">
           <div className="flex items-center space-x-3 w-full md:w-auto flex-1 mr-4">
             <button onClick={() => setIsMobileMenuOpen(true)} className="md:hidden p-2 -ml-2 text-zinc-600 hover:bg-zinc-100 rounded-lg active:scale-95 transition-transform"><Menu className="w-6 h-6" /></button>
-            <div className="relative w-full max-w-md group"><Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-zinc-400 w-4 h-4 group-focus-within:text-zinc-800 transition-colors" /><input type="text" placeholder="Search..." value={searchTerm} onChange={(e) => { setSearchTerm(e.target.value); if (activeCategory === 'DASHBOARD' && e.target.value) setActiveCategory('ALL'); }} className="w-full pl-10 pr-4 py-2 bg-zinc-50/50 border border-transparent focus:bg-white focus:border-zinc-200 focus:ring-4 focus:ring-zinc-50 rounded-full text-sm transition-all outline-none" /></div>
+            <div className="relative w-full max-w-md group flex items-center gap-2">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-zinc-400 w-4 h-4 group-focus-within:text-zinc-800 transition-colors" />
+                <div className="w-full pl-10 pr-4 py-2 bg-zinc-50/50 border border-transparent focus-within:bg-white focus-within:border-zinc-200 focus-within:ring-4 focus-within:ring-zinc-50 rounded-full text-sm transition-all flex items-center flex-wrap gap-1">
+                    {searchTags.map((tag, idx) => (
+                        <span key={idx} className="bg-zinc-200 text-zinc-800 px-2 py-0.5 rounded-full text-xs font-bold flex items-center">
+                            {tag} <button onClick={() => removeSearchTag(idx)} className="ml-1 hover:text-red-500"><X className="w-3 h-3"/></button>
+                        </span>
+                    ))}
+                    <input 
+                        type="text" 
+                        placeholder={searchTags.length > 0 ? "" : "Search..."} 
+                        value={searchTerm} 
+                        onChange={(e) => { setSearchTerm(e.target.value); if (activeCategory === 'DASHBOARD' && e.target.value) setActiveCategory('ALL'); }} 
+                        onKeyDown={handleSearchKeyDown}
+                        className="bg-transparent outline-none flex-1 min-w-[60px]" 
+                    />
+                </div>
+            </div>
           </div>
           <div className="flex items-center space-x-2">
              {compareList.length > 0 && <button onClick={handleCompareButtonClick} className={`flex items-center px-3 py-1.5 rounded-full text-xs font-bold animate-in fade-in transition-all mr-2 shadow-lg ${activeCategory === 'COMPARE_PAGE' ? 'bg-black text-white ring-2 ring-zinc-200' : 'bg-zinc-900 text-white hover:bg-black'}`}><ArrowLeftRight className="w-3 h-3 mr-1.5"/> Compare ({compareList.length})</button>}
@@ -681,7 +794,7 @@ export default function App() {
         )}
 
         <div ref={mainContentRef} className="flex-1 overflow-y-auto p-4 md:p-8 custom-scrollbar relative print:overflow-visible print:p-0">
-          {activeCategory === 'DASHBOARD' && !searchTerm ? (
+          {activeCategory === 'DASHBOARD' && !searchTerm && searchTags.length === 0 && !filters.year && !filters.color ? (
             <DashboardView products={products} favorites={favorites} setActiveCategory={setActiveCategory} setSelectedProduct={setSelectedProduct} isAdmin={isAdmin} bannerData={bannerData} onBannerUpload={handleBannerUpload} onLogoUpload={handleLogoUpload} onBannerTextChange={handleBannerTextChange} onSaveBannerText={saveBannerText} />
           ) : activeCategory === 'COMPARE_PAGE' ? (
             <CompareView 
@@ -693,13 +806,21 @@ export default function App() {
                 onProductClick={(product) => setSelectedProduct(product)}
                 isAdmin={isAdmin}
             />
+          ) : activeCategory.endsWith('_ROOT') ? (
+             <CategoryRootView 
+                type={activeCategory} 
+                spaces={SPACES} 
+                collections={CATEGORIES.filter(c => !c.isSpecial)} 
+                materials={SWATCH_CATEGORIES}
+                onNavigate={handleCategoryClick}
+             />
           ) : (
             <>
               {SPACES.find(s => s.id === activeCategory) && (
-                 <SpaceDetailView space={SPACES.find(s => s.id === activeCategory)} spaceContent={spaceContents[activeCategory] || {}} isAdmin={isAdmin} activeTag={activeSpaceTag} setActiveTag={setActiveSpaceTag} onBannerUpload={(e) => handleSpaceBannerUpload(e, activeCategory)} onEditInfo={() => setEditingSpaceInfoId(activeCategory)} onManageProducts={() => setManagingSpaceProductsId(activeCategory)} onAddScene={() => setEditingScene({ isNew: true, spaceId: activeCategory })} onViewScene={(scene) => setSelectedScene({ ...scene, spaceId: activeCategory })} productCount={processedProducts.length} />
+                 <SpaceDetailView space={SPACES.find(s => s.id === activeCategory)} spaceContent={spaceContents[activeCategory] || {}} isAdmin={isAdmin} activeTag={activeSpaceTag} setActiveTag={setActiveSpaceTag} onBannerUpload={(e) => handleSpaceBannerUpload(e, activeCategory)} onEditInfo={() => setEditingSpaceInfoId(activeCategory)} onManageProducts={() => setManagingSpaceProductsId(activeCategory)} onAddScene={() => setEditingScene({ isNew: true, spaceId: activeCategory })} onViewScene={(scene) => setSelectedScene({ ...scene, spaceId: activeCategory })} productCount={processedProducts.length} searchTerm={searchTerm} searchTags={searchTags} />
               )}
               {SWATCH_CATEGORIES.find(s => s.id === activeCategory) && (
-                <SwatchManager category={SWATCH_CATEGORIES.find(s => s.id === activeCategory)} swatches={swatches.filter(s => s.category === activeCategory)} isAdmin={isAdmin} onSave={handleSaveSwatch} onDelete={handleDeleteSwatch} onSelect={(swatch) => setSelectedSwatch(swatch)} onDuplicate={handleDuplicateSwatch} />
+                <SwatchManager category={SWATCH_CATEGORIES.find(s => s.id === activeCategory)} swatches={swatches.filter(s => s.category === activeCategory)} isAdmin={isAdmin} onSave={handleSaveSwatch} onDelete={handleDeleteSwatch} onSelect={(swatch) => setSelectedSwatch(swatch)} onDuplicate={handleDuplicateSwatch} searchTerm={searchTerm} searchTags={searchTags} />
               )}
               {!SWATCH_CATEGORIES.find(s => s.id === activeCategory) && (
                 <>
@@ -728,7 +849,7 @@ export default function App() {
                                   <ProductCard product={product} onClick={() => setSelectedProduct(product)} isAdmin={isAdmin} isFavorite={favorites.includes(product.id)} onToggleFavorite={(e) => toggleFavorite(e, product.id)} onCompareToggle={(e) => toggleCompare(e, product)} onDuplicate={(e) => { e.stopPropagation(); handleDuplicateProduct(product); }} isCompared={!!compareList.find(p=>p.id===product.id)} />
                                </div>
                             ))}
-                            {isAdmin && activeCategory !== 'MY_PICK' && activeCategory !== 'NEW' && !SPACES.find(s => s.id === activeCategory) && (<button onClick={() => { setEditingProduct(null); setIsFormOpen(true); }} className="border-2 border-dashed border-zinc-200 rounded-2xl flex flex-col items-center justify-center min-h-[250px] md:min-h-[300px] text-zinc-400 hover:border-zinc-400 hover:text-zinc-600 hover:bg-zinc-50 transition-all group print:hidden"><div className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-zinc-100 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform"><Plus className="w-6 h-6" /></div><span className="text-xs md:text-sm font-bold">Add Product</span></button>)}
+                            {isAdmin && activeCategory !== 'MY_PICK' && !SPACES.find(s => s.id === activeCategory) && (<button onClick={() => { setEditingProduct(null); setIsFormOpen(true); }} className="border-2 border-dashed border-zinc-200 rounded-2xl flex flex-col items-center justify-center min-h-[250px] md:min-h-[300px] text-zinc-400 hover:border-zinc-400 hover:text-zinc-600 hover:bg-zinc-50 transition-all group print:hidden"><div className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-zinc-100 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform"><Plus className="w-6 h-6" /></div><span className="text-xs md:text-sm font-bold">Add Product</span></button>)}
                         </div>
                       )}
                       {processedProducts.length === 0 && (<div className="flex flex-col items-center justify-center py-32 text-zinc-300"><CloudOff className="w-16 h-16 mb-4 opacity-50" /><p className="text-sm font-medium">No products found for this space.</p>{isAdmin && SPACES.find(s => s.id === activeCategory) && (<button onClick={() => setManagingSpaceProductsId(activeCategory)} className="mt-4 px-4 py-2 bg-blue-50 text-blue-600 rounded-lg text-sm font-bold hover:bg-blue-100 transition-colors">+ Select Products</button>)}</div>)}
@@ -744,12 +865,7 @@ export default function App() {
 
       {toast && <div className="fixed bottom-8 right-8 bg-zinc-900 text-white px-5 py-3.5 rounded-xl shadow-2xl flex items-center space-x-3 animate-in slide-in-from-bottom-10 fade-in z-[90] print:hidden">{toast.type === 'success' ? <Check className="w-5 h-5 text-green-400" /> : <Info className="w-5 h-5 text-red-400" />}<span className="text-sm font-bold tracking-wide">{toast.message}</span></div>}
       
-      {isCompareModalOpen && (
-         <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[100] flex items-center justify-center p-4 animate-in zoom-in-95">
-            {/* Legacy modal - keep for safety, but compare view is now a page */}
-         </div>
-      )}
-
+      {/* Modals are now stacked using conditional rendering with z-index management */}
       {selectedProduct && (
         <ProductDetailModal 
           product={selectedProduct} 
@@ -767,7 +883,7 @@ export default function App() {
           onNavigateSpace={(spaceId) => { setSelectedProduct(null); setActiveCategory(spaceId); }} 
           onNavigateScene={(scene) => { setSelectedProduct(null); setActiveCategory(scene.spaceId || scene.id); setSelectedScene({...scene, spaceId: scene.spaceId || 'UNKNOWN'}); }}
           onNavigateProduct={(product) => setSelectedProduct(product)}
-          onNavigateSwatch={(swatch) => { setSelectedSwatch(swatch); /* Layer on top */ }}
+          onNavigateSwatch={(swatch) => { setSelectedSwatch(swatch); /* Stacks on top */ }}
         />
       )}
       
@@ -897,6 +1013,67 @@ export default function App() {
 // Helper Components
 // ----------------------------------------------------------------------
 
+function CategoryRootView({ type, spaces, collections, materials, onNavigate }) {
+    let title = "";
+    let items = [];
+    let icon = null;
+
+    if (type === 'SPACES_ROOT') {
+        title = "Spaces";
+        items = spaces;
+        icon = LayoutGrid;
+    } else if (type === 'COLLECTIONS_ROOT') {
+        title = "Collections";
+        items = collections;
+        icon = Cloud;
+    } else if (type === 'MATERIALS_ROOT') {
+        title = "Materials";
+        items = materials;
+        icon = Palette;
+    }
+
+    return (
+        <div className="animate-in fade-in slide-in-from-bottom-4 pb-32">
+            <div className="mb-8 flex items-center">
+                <div className="p-3 bg-zinc-900 text-white rounded-xl mr-4">
+                    {icon && React.createElement(icon, { className: "w-6 h-6" })}
+                </div>
+                <h2 className="text-4xl font-black text-zinc-900 tracking-tight">{title}</h2>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {items.map(item => (
+                    <button 
+                        key={item.id} 
+                        onClick={() => onNavigate(item.id)}
+                        className="group flex flex-col bg-white border border-zinc-200 rounded-2xl overflow-hidden hover:shadow-xl hover:border-zinc-300 transition-all text-left h-48 md:h-64 relative"
+                    >
+                        <div className="absolute inset-0 bg-zinc-50 group-hover:bg-zinc-100 transition-colors"></div>
+                        {/* Placeholder for category image if available in future */}
+                        <div className="absolute inset-0 flex items-center justify-center opacity-10 group-hover:opacity-20 transition-opacity">
+                            {item.icon ? React.createElement(item.icon, { className: "w-32 h-32" }) : <div className="w-32 h-32 rounded-full bg-current" style={{color: item.color}}></div>}
+                        </div>
+                        
+                        <div className="absolute bottom-0 left-0 right-0 p-6">
+                            <div className="flex items-center justify-between mb-2">
+                                <span className="text-2xl font-bold text-zinc-900 group-hover:translate-x-2 transition-transform">{item.label}</span>
+                                <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center shadow-sm group-hover:bg-black group-hover:text-white transition-colors">
+                                    <ArrowRight className="w-4 h-4"/>
+                                </div>
+                            </div>
+                            {item.defaultTags && (
+                                <div className="flex flex-wrap gap-1 opacity-60">
+                                    {item.defaultTags.slice(0,3).map(t => <span key={t} className="text-xs">{t}</span>)}
+                                </div>
+                            )}
+                        </div>
+                    </button>
+                ))}
+            </div>
+        </div>
+    );
+}
+
 function CompareView({ products, hiddenIds, onToggleVisibility, onRemove, onEdit, onProductClick, isAdmin }) {
     const visibleProducts = products.filter(p => !hiddenIds.includes(p.id));
 
@@ -1019,15 +1196,10 @@ function SwatchDisplay({ color, size = 'medium', className = '', onClick }) {
   const patternColor = isObject ? (color.patternColor || '#00000033') : '#00000033';
 
   // Size Logic: If external className is provided (like w-full h-full), we use that instead of fixed size classes
-  // But we still need a default if className is empty or doesn't specify dimension.
-  // The trick: use sizeClass only if className is empty or for specific use cases.
-  // Better approach: If className contains 'w-' or 'h-', assume it handles sizing.
   const hasSize = className.includes('w-') || className.includes('h-');
   const sizeClass = hasSize ? '' : (size === 'large' ? 'w-10 h-10' : size === 'small' ? 'w-4 h-4' : 'w-6 h-6');
 
   // Check if we need to force square (e.g. for tiles) or round (for swatch dots)
-  // Usually passed in className like 'rounded-none' or 'rounded-full'
-  // Default to rounded-full if not specified
   const roundedClass = className.includes('rounded') ? '' : 'rounded-full';
 
   const isLight = hex && (
@@ -1039,7 +1211,6 @@ function SwatchDisplay({ color, size = 'medium', className = '', onClick }) {
 
   // CSS Pattern Generation
   const getPatternStyle = (type, pColor) => {
-      // pColor comes in as rgba or hex. If hex, might need transparency logic, but for now assume inputs are valid
       switch(type) {
           case 'DOT': return { backgroundImage: `radial-gradient(${pColor} 1px, transparent 1px)`, backgroundSize: '4px 4px' };
           case 'DIAGONAL': return { backgroundImage: `repeating-linear-gradient(45deg, ${pColor} 0, ${pColor} 1px, transparent 0, transparent 50%)`, backgroundSize: '6px 6px' };
@@ -1082,7 +1253,7 @@ function SwatchDisplay({ color, size = 'medium', className = '', onClick }) {
   );
 }
 
-function SwatchManager({ category, swatches, isAdmin, onSave, onDelete, onSelect, onDuplicate }) {
+function SwatchManager({ category, swatches, isAdmin, onSave, onDelete, onSelect, onDuplicate, searchTerm, searchTags }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingSwatch, setEditingSwatch] = useState(null);
   const [activeTag, setActiveTag] = useState('ALL');
@@ -1092,7 +1263,16 @@ function SwatchManager({ category, swatches, isAdmin, onSave, onDelete, onSelect
   const handleCardClick = (swatch) => { onSelect(swatch); };
   const handleEditClick = (e, swatch) => { e.stopPropagation(); setEditingSwatch(swatch); setIsModalOpen(true); };
 
-  const filteredSwatches = activeTag === 'ALL' ? swatches : swatches.filter(s => s.tags && s.tags.includes(activeTag));
+  // Filter Logic including search
+  const filteredSwatches = swatches.filter(s => {
+      const matchesTag = activeTag === 'ALL' || (s.tags && s.tags.includes(activeTag));
+      
+      const fullText = [s.name, s.materialCode, ...(s.tags||[])].join(' ').toLowerCase();
+      const matchesSearch = !searchTerm || fullText.includes(searchTerm.toLowerCase());
+      const matchesSearchTags = searchTags.every(t => fullText.includes(t.toLowerCase()));
+
+      return matchesTag && matchesSearch && matchesSearchTags;
+  });
 
   return (
     <div className="p-1 animate-in fade-in pb-32">
@@ -1162,6 +1342,7 @@ function SwatchManager({ category, swatches, isAdmin, onSave, onDelete, onSelect
 }
 
 function SwatchDetailModal({ swatch, allProducts, swatches, onClose, onNavigateProduct, onNavigateSwatch, isAdmin, onEdit }) {
+    useScrollLock();
     const relatedProducts = allProducts.filter(p => {
         const inBody = p.bodyColors?.some(c => typeof c === 'object' && c.id === swatch.id);
         const inUph = p.upholsteryColors?.some(c => typeof c === 'object' && c.id === swatch.id);
@@ -1348,54 +1529,54 @@ function SwatchFormModal({ category, existingData, onClose, onSave }) {
                  <button onClick={handleDeleteImage} className="w-full py-1 text-xs text-red-500 font-bold border border-red-100 rounded bg-red-50 hover:bg-red-100 mb-2">Delete Image</button>
              )}
              
-             {/* Visual Settings Group */}
-             <div className="bg-zinc-50 p-3 rounded-xl border border-zinc-100 space-y-3">
-                 <h4 className="text-[10px] font-bold text-zinc-400 uppercase">Visual Settings</h4>
+             {/* Visual Settings Group - Tighter UI */}
+             <div className="bg-zinc-50 p-3 rounded-xl border border-zinc-100 space-y-2">
+                 <h4 className="text-[10px] font-bold text-zinc-400 uppercase mb-1">Visual Settings</h4>
                  <div>
-                    <div className="flex gap-2">
-                        <button onClick={()=>setData({...data, visualType: 'SOLID'})} className={`flex-1 py-2 text-xs font-bold rounded border ${data.visualType==='SOLID' ? 'bg-zinc-900 text-white' : 'bg-white'}`}>Solid</button>
-                        <button onClick={()=>setData({...data, visualType: 'GRADATION'})} className={`flex-1 py-2 text-xs font-bold rounded border ${data.visualType==='GRADATION' ? 'bg-zinc-900 text-white' : 'bg-white'}`}>Gradation</button>
+                    <div className="flex gap-1">
+                        <button onClick={()=>setData({...data, visualType: 'SOLID'})} className={`flex-1 py-1.5 text-[10px] font-bold rounded border ${data.visualType==='SOLID' ? 'bg-zinc-900 text-white' : 'bg-white'}`}>Solid</button>
+                        <button onClick={()=>setData({...data, visualType: 'GRADATION'})} className={`flex-1 py-1.5 text-[10px] font-bold rounded border ${data.visualType==='GRADATION' ? 'bg-zinc-900 text-white' : 'bg-white'}`}>Gradation</button>
                     </div>
                  </div>
 
                  {data.visualType === 'SOLID' ? (
                      <div>
-                        <label className="text-xs font-bold text-zinc-500 uppercase block mb-1">Color (Hex)</label>
+                        <label className="text-[10px] font-bold text-zinc-500 uppercase block mb-1">Color (Hex)</label>
                         <div className="flex gap-2">
-                           <input type="color" value={data.hex} onChange={e=>setData({...data, hex: e.target.value})} className="h-9 w-12 p-0 border rounded overflow-hidden" />
-                           <input value={data.hex} onChange={e=>setData({...data, hex: e.target.value})} className="flex-1 border rounded-lg p-2 text-sm outline-none" />
+                           <input type="color" value={data.hex} onChange={e=>setData({...data, hex: e.target.value})} className="h-7 w-10 p-0 border rounded overflow-hidden" />
+                           <input value={data.hex} onChange={e=>setData({...data, hex: e.target.value})} className="flex-1 border rounded p-1 text-xs outline-none" />
                         </div>
                      </div>
                  ) : (
                      <div>
-                        <label className="text-xs font-bold text-zinc-500 uppercase block mb-1">Gradient Colors</label>
-                        <div className="flex gap-2 mb-2">
-                           <input type="color" value={gradientColors[0]} onChange={e=>setGradientColors([e.target.value, gradientColors[1]])} className="h-8 w-full rounded border" />
-                           <input type="color" value={gradientColors[1]} onChange={e=>setGradientColors([gradientColors[0], e.target.value])} className="h-8 w-full rounded border" />
+                        <label className="text-[10px] font-bold text-zinc-500 uppercase block mb-1">Gradient Colors</label>
+                        <div className="flex gap-2 mb-1">
+                           <input type="color" value={gradientColors[0]} onChange={e=>setGradientColors([e.target.value, gradientColors[1]])} className="h-6 w-full rounded border" />
+                           <input type="color" value={gradientColors[1]} onChange={e=>setGradientColors([gradientColors[0], e.target.value])} className="h-6 w-full rounded border" />
                         </div>
-                        <input value={data.gradient} onChange={e=>setData({...data, gradient: e.target.value})} className="w-full border rounded-lg p-2 text-xs outline-none bg-white text-zinc-400" readOnly/>
+                        <input value={data.gradient} onChange={e=>setData({...data, gradient: e.target.value})} className="w-full border rounded p-1 text-[10px] outline-none bg-white text-zinc-400" readOnly/>
                      </div>
                  )}
 
-                 <div className="grid grid-cols-2 gap-3">
+                 <div className="grid grid-cols-2 gap-2">
                      <div>
-                        <label className="text-xs font-bold text-zinc-500 uppercase block mb-1">Pattern</label>
-                        <select value={data.pattern} onChange={e=>setData({...data, pattern: e.target.value})} className="w-full border rounded-lg p-2 text-sm outline-none bg-white">
+                        <label className="text-[10px] font-bold text-zinc-500 uppercase block mb-1">Pattern</label>
+                        <select value={data.pattern} onChange={e=>setData({...data, pattern: e.target.value})} className="w-full border rounded p-1 text-xs outline-none bg-white">
                             {PATTERN_TYPES.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
                         </select>
                      </div>
                      <div>
-                        <label className="text-xs font-bold text-zinc-500 uppercase block mb-1">Pattern Color</label>
+                        <label className="text-[10px] font-bold text-zinc-500 uppercase block mb-1">Pattern Color</label>
                         <div className="flex items-center gap-2">
-                            <input type="color" value={data.patternColor?.substring(0,7) || '#000000'} onChange={e=>setData({...data, patternColor: e.target.value})} className="h-8 w-8 rounded border p-0 overflow-hidden"/>
-                            <span className="text-xs text-zinc-400">{data.patternColor}</span>
+                            <input type="color" value={data.patternColor?.substring(0,7) || '#000000'} onChange={e=>setData({...data, patternColor: e.target.value})} className="h-6 w-6 rounded border p-0 overflow-hidden"/>
+                            <span className="text-[10px] text-zinc-400">{data.patternColor}</span>
                         </div>
                      </div>
                  </div>
                  
                  <div>
-                    <label className="text-xs font-bold text-zinc-500 uppercase block mb-1">Finish Type</label>
-                    <select value={data.textureType} onChange={e=>setData({...data, textureType: e.target.value})} className="w-full border rounded-lg p-2 text-sm outline-none bg-white">
+                    <label className="text-[10px] font-bold text-zinc-500 uppercase block mb-1">Finish Type</label>
+                    <select value={data.textureType} onChange={e=>setData({...data, textureType: e.target.value})} className="w-full border rounded p-1 text-xs outline-none bg-white">
                         {TEXTURE_TYPES.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
                     </select>
                  </div>
@@ -1481,7 +1662,7 @@ function PieChartComponent({ data, total, selectedIndex, onSelect }) {
         })}
       </svg>
       
-      {/* Labels Outside */}
+      {/* Labels Outside - Adjusted to avoid overlap with pulled out slice */}
       {data.map((item, idx) => {
           let prevPercent = 0;
           for(let i=0; i<idx; i++) prevPercent += data[i].count/total;
@@ -1489,7 +1670,10 @@ function PieChartComponent({ data, total, selectedIndex, onSelect }) {
           const midPercent = prevPercent + percent/2;
           const angleRad = (midPercent * 2 * Math.PI) - (Math.PI / 2); 
           
-          const labelRadius = 1.05; 
+          const isSelected = selectedIndex === idx;
+          // Push label further out if selected
+          const labelRadius = isSelected ? 1.25 : 1.05; 
+          
           const lx = Math.cos(angleRad) * labelRadius;
           const ly = Math.sin(angleRad) * labelRadius;
           
@@ -1498,7 +1682,7 @@ function PieChartComponent({ data, total, selectedIndex, onSelect }) {
           return (
              <div 
                 key={`label-${item.id}`} 
-                className="absolute text-[9px] font-bold text-zinc-500 pointer-events-none whitespace-nowrap"
+                className={`absolute text-[9px] font-bold pointer-events-none whitespace-nowrap transition-all duration-500 ${isSelected ? 'text-zinc-900 scale-110' : 'text-zinc-500'}`}
                 style={{ 
                     left: '50%', top: '50%', 
                     transform: `translate(calc(-50% + ${lx * 140}px), calc(-50% + ${ly * 140}px))` 
@@ -1526,27 +1710,6 @@ function PieChartComponent({ data, total, selectedIndex, onSelect }) {
   );
 }
 
-function ExpandedListModal({ title, items, onClose, onSelect }) {
-    return (
-        <div className="fixed inset-0 z-[200] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
-            <div className="bg-white rounded-2xl w-full max-w-sm max-h-[80vh] flex flex-col shadow-2xl animate-in zoom-in-95">
-                <div className="p-4 border-b border-zinc-100 flex justify-between items-center">
-                    <h3 className="font-bold text-lg">{title}</h3>
-                    <button onClick={onClose}><X className="w-5 h-5"/></button>
-                </div>
-                <div className="overflow-y-auto p-2 custom-scrollbar">
-                    {items.map((item, idx) => (
-                        <div key={idx} onClick={() => { onSelect(item); onClose(); }} className="p-3 hover:bg-zinc-50 rounded-xl cursor-pointer border-b border-zinc-50 last:border-0">
-                             <div className="font-bold text-sm text-zinc-800">{item.name || item}</div>
-                             {item.category && <div className="text-xs text-zinc-400">{item.category}</div>}
-                        </div>
-                    ))}
-                </div>
-            </div>
-        </div>
-    );
-}
-
 function DashboardView({ products, favorites, setActiveCategory, setSelectedProduct, isAdmin, bannerData, onBannerUpload, onLogoUpload, onBannerTextChange, onSaveBannerText }) {
   const totalCount = products.length; const newCount = products.filter(p => p.isNew).length; const pickCount = favorites.length;
   const categoryCounts = []; let totalStandardProducts = 0;
@@ -1560,7 +1723,7 @@ function DashboardView({ products, favorites, setActiveCategory, setSelectedProd
   const logoInputRef = useRef(null);
 
   const [selectedSlice, setSelectedSlice] = useState(null);
-  const [expandedList, setExpandedList] = useState(null); // { title: string, items: [] }
+  const [isListExpanded, setIsListExpanded] = useState(false); // For Dropdown
 
   // Helper for Selected Slice Data
   const getSelectedSliceDetails = () => {
@@ -1583,8 +1746,7 @@ function DashboardView({ products, favorites, setActiveCategory, setSelectedProd
 
   return (
     <div className="max-w-7xl mx-auto space-y-6 md:space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-32 print:hidden" onClick={() => setSelectedSlice(null)}>
-      {expandedList && <ExpandedListModal title={expandedList.title} items={expandedList.items} onClose={()=>setExpandedList(null)} onSelect={expandedList.onSelect} />}
-
+      
       <div className="relative w-full h-48 md:h-80 rounded-3xl overflow-hidden shadow-lg border border-zinc-200 group bg-zinc-900">
          <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/40 to-transparent z-10"></div>
          {bannerData.url ? <img src={bannerData.url} alt="Dashboard Banner" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" /> : <div className="w-full h-full flex items-center justify-center opacity-20"><img src="/api/placeholder/1200/400" className="w-full h-full object-cover grayscale" alt="Pattern" /></div>}
@@ -1615,23 +1777,13 @@ function DashboardView({ products, favorites, setActiveCategory, setSelectedProd
          {isAdmin && (<><button onClick={() => fileInputRef.current.click()} className="absolute top-4 right-4 z-30 p-2 bg-white/20 backdrop-blur rounded-full text-white hover:bg-white hover:text-black transition-all opacity-0 group-hover:opacity-100" title="Change Banner Image"><Camera className="w-5 h-5" /></button><input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={onBannerUpload} /></>)}
       </div>
 
-      <div className="grid grid-cols-3 gap-2 md:gap-4">
+      <div className="grid grid-cols-2 gap-2 md:gap-4">
         <div onClick={() => setActiveCategory('ALL')} className="bg-white p-3 md:p-5 rounded-xl md:rounded-2xl border border-zinc-100 shadow-sm hover:shadow-md cursor-pointer group flex flex-col md:flex-row items-center md:justify-between transition-all text-center md:text-left">
           <div className="flex flex-col md:flex-row items-center md:space-x-4 w-full justify-center md:justify-start">
              <div className="p-2 md:p-3 bg-zinc-100 rounded-xl group-hover:bg-zinc-900 group-hover:text-white transition-colors text-zinc-500 mb-1 md:mb-0"><LayoutGrid className="w-4 h-4 md:w-6 md:h-6" /></div>
              <div className="flex flex-col">
                 <span className="text-[10px] md:text-xs font-bold text-zinc-400 uppercase tracking-wide">Total</span>
                 <span className="text-base md:text-2xl font-black text-zinc-900 leading-tight">{totalCount}</span>
-             </div>
-          </div>
-          <ChevronRight className="w-5 h-5 text-zinc-300 group-hover:text-zinc-600 hidden md:block" />
-        </div>
-        <div onClick={() => setActiveCategory('NEW')} className="bg-white p-3 md:p-5 rounded-xl md:rounded-2xl border border-zinc-100 shadow-sm hover:shadow-md cursor-pointer group flex flex-col md:flex-row items-center md:justify-between transition-all text-center md:text-left">
-          <div className="flex flex-col md:flex-row items-center md:space-x-4 w-full justify-center md:justify-start">
-             <div className="p-2 md:p-3 bg-red-50 rounded-xl text-red-500 group-hover:bg-red-500 group-hover:text-white transition-colors mb-1 md:mb-0"><Zap className="w-4 h-4 md:w-6 md:h-6" /></div>
-             <div className="flex flex-col">
-                <span className="text-[10px] md:text-xs font-bold text-red-400 uppercase tracking-wide">New</span>
-                <span className="text-base md:text-2xl font-black text-zinc-900 leading-tight">{newCount}</span>
              </div>
           </div>
           <ChevronRight className="w-5 h-5 text-zinc-300 group-hover:text-zinc-600 hidden md:block" />
@@ -1681,16 +1833,13 @@ function DashboardView({ products, favorites, setActiveCategory, setSelectedProd
                               <span className="text-xl font-black text-zinc-900">{sliceDetails.awardCount}</span>
                            </div>
                            
-                           {/* Click to expand if years are too many */}
-                           <div className="bg-zinc-50 p-3 rounded-xl border border-zinc-100 cursor-pointer hover:bg-zinc-100"
-                                onClick={() => setExpandedList({ 
-                                    title: "Launch Years", 
-                                    items: sliceDetails.years.split(', ').map(y => ({ name: y })),
-                                    onSelect: () => {}
-                                })}
-                           >
+                           {/* Dropdown for Launch Years if many */}
+                           <div className="bg-zinc-50 p-3 rounded-xl border border-zinc-100 relative group">
                               <span className="text-[10px] text-zinc-400 uppercase font-bold block mb-1">Launching</span>
-                              <span className="text-xs font-bold text-zinc-900 truncate block" title={sliceDetails.years}>{sliceDetails.years.substring(0,12)}...</span>
+                              <span className="text-xs font-bold text-zinc-900 truncate block">{sliceDetails.years.substring(0,15)}...</span>
+                              <div className="absolute top-full left-0 w-full bg-white border border-zinc-200 shadow-lg rounded-lg p-2 z-10 hidden group-hover:block text-xs">
+                                  {sliceDetails.years}
+                              </div>
                            </div>
                         </div>
 
@@ -1704,14 +1853,15 @@ function DashboardView({ products, favorites, setActiveCategory, setSelectedProd
                             </div>
                         </div>
 
-                        <div className="flex-1 max-h-60 custom-scrollbar bg-zinc-50 p-3 rounded-xl border border-zinc-100">
-                            <div className="flex justify-between items-center mb-2 sticky top-0 bg-zinc-50 pb-1 border-b border-zinc-100">
-                                <span className="text-[10px] text-zinc-400 uppercase font-bold">Product List</span>
-                                {sliceDetails.products.length > 8 && <button onClick={() => setExpandedList({ title: "Product List", items: sliceDetails.products, onSelect: setSelectedProduct })} className="text-[10px] text-blue-600 font-bold">View All</button>}
+                        {/* Product List - Dropdown Style (Scrollable) */}
+                        <div className="flex-1 bg-zinc-50 p-3 rounded-xl border border-zinc-100 transition-all">
+                            <div className="flex justify-between items-center mb-2 sticky top-0 bg-zinc-50 pb-1 border-b border-zinc-100 cursor-pointer" onClick={() => setIsListExpanded(!isListExpanded)}>
+                                <span className="text-[10px] text-zinc-400 uppercase font-bold">Product List ({sliceDetails.products.length})</span>
+                                <ChevronDown className={`w-4 h-4 text-zinc-400 transition-transform ${isListExpanded ? 'rotate-180' : ''}`}/>
                             </div>
-                            <div className="grid grid-cols-2 gap-2">
-                                {sliceDetails.products.slice(0, 8).map(p => (
-                                    <div key={p.id} className="text-xs truncate text-zinc-600 hover:text-black cursor-pointer p-1 hover:bg-zinc-100 rounded" onClick={() => setSelectedProduct(p)}>• {p.name}</div>
+                            <div className={`grid grid-cols-2 gap-1 overflow-y-auto custom-scrollbar transition-all ${isListExpanded ? 'max-h-60' : 'max-h-24'}`}>
+                                {sliceDetails.products.map(p => (
+                                    <div key={p.id} className="text-[11px] truncate text-zinc-600 hover:text-black cursor-pointer p-1 hover:bg-zinc-100 rounded font-medium" onClick={() => setSelectedProduct(p)}>• {p.name}</div>
                                 ))}
                             </div>
                         </div>
@@ -1748,7 +1898,6 @@ function DashboardView({ products, favorites, setActiveCategory, setSelectedProd
       <div className="bg-white p-6 md:p-8 rounded-3xl border border-zinc-100 shadow-sm">
          <div className="flex items-center justify-between mb-6">
             <h3 className="text-xl font-bold text-zinc-900 flex items-center"><Clock className="w-6 h-6 mr-3 text-zinc-400" /> Recent Updates</h3>
-            <button className="text-xs font-bold text-blue-600 hover:text-blue-800 flex items-center" onClick={() => setActiveCategory('NEW')}>View All <ArrowRight className="w-3 h-3 ml-1"/></button>
          </div>
          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
             {recentUpdates.length > 0 ? recentUpdates.map(product => (
@@ -1771,14 +1920,21 @@ function DashboardView({ products, favorites, setActiveCategory, setSelectedProd
   );
 }
 
-function SpaceDetailView({ space, spaceContent, activeTag, setActiveTag, isAdmin, onBannerUpload, onEditInfo, onManageProducts, onAddScene, onViewScene, productCount }) {
+function SpaceDetailView({ space, spaceContent, activeTag, setActiveTag, isAdmin, onBannerUpload, onEditInfo, onManageProducts, onAddScene, onViewScene, productCount, searchTerm, searchTags }) {
   const banner = spaceContent.banner;
   const description = spaceContent.description || "이 공간에 대한 설명이 없습니다.";
   const trend = spaceContent.trend || "";
   const scenes = spaceContent.scenes || [];
   const tags = spaceContent.tags || space.defaultTags || []; 
 
-  const filteredScenes = activeTag === 'ALL' ? scenes : scenes.filter(s => s.tags && s.tags.includes(activeTag));
+  // Filter Scenes based on Tag AND Search
+  const filteredScenes = scenes.filter(s => {
+      const matchesTag = activeTag === 'ALL' || (s.tags && s.tags.includes(activeTag));
+      const fullText = [s.title, s.description].join(' ').toLowerCase();
+      const matchesSearch = !searchTerm || fullText.includes(searchTerm.toLowerCase());
+      const matchesTags = searchTags.every(t => fullText.includes(t.toLowerCase()));
+      return matchesTag && matchesSearch && matchesTags;
+  });
 
   const copySpaceLink = () => { navigator.clipboard.writeText(`${window.location.origin}${window.location.pathname}?space=${space.id}`); window.alert("공간 공유 링크가 복사되었습니다."); };
 
@@ -1845,7 +2001,14 @@ function ProductCard({ product, onClick, showMoveControls, onMove, isFavorite, o
         <div className="absolute inset-0 bg-zinc-100/30 mix-blend-multiply pointer-events-none z-10"></div>
 
         <div className="absolute top-2 left-2 flex flex-wrap gap-1.5 z-20 items-start max-w-[80%]">
-           {product.isNew && <span className="bg-black text-white text-[8px] font-extrabold px-1.5 py-0.5 rounded shadow-sm tracking-wide">NEW</span>}
+           {product.isNew && <span className="bg-black text-white text-[8px] font-extrabold 네, ProductCard 컴포넌트 내부에서 끊긴 부분부터 코드를 이어서 작성해 드리겠습니다.
+
+code
+JavaScript
+download
+content_copy
+expand_less
+px-1.5 py-0.5 rounded shadow-sm tracking-wide">NEW</span>}
         </div>
         
         {/* Top Right Controls */}
@@ -1887,7 +2050,7 @@ function ProductCard({ product, onClick, showMoveControls, onMove, isFavorite, o
 }
 
 function ProductDetailModal({ product, allProducts, swatches, spaceContents, onClose, onEdit, isAdmin, showToast, isFavorite, onToggleFavorite, onNavigateSpace, onNavigateScene, onNavigateNext, onNavigatePrev, onNavigateProduct, onNavigateSwatch }) {
-  // 1. Declare all Hooks at the top level unconditionally
+  useScrollLock();
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [isZoomed, setIsZoomed] = useState(false);
   const canvasRef = useRef(null);
@@ -1899,11 +2062,9 @@ function ProductDetailModal({ product, allProducts, swatches, spaceContents, onC
       return () => window.removeEventListener('click', closePopup);
   }, []);
 
-  // 2. Early return check
   if (!product) return null;
 
   const images = product.images || [];
-  // Handle Object vs String for Images
   const currentImageEntry = images.length > 0 ? images[currentImageIndex] : null;
   const currentImageUrl = currentImageEntry ? (typeof currentImageEntry === 'object' ? currentImageEntry.url : currentImageEntry) : null;
   const currentImageCaption = currentImageEntry && typeof currentImageEntry === 'object' ? currentImageEntry.caption : '';
@@ -1932,7 +2093,6 @@ function ProductDetailModal({ product, allProducts, swatches, spaceContents, onC
       e.stopPropagation();
       const rect = e.currentTarget.getBoundingClientRect();
       
-      // Resolve Material Code
       let code = 'NO CODE';
       let name = '';
       let swatchId = null;
@@ -1951,7 +2111,6 @@ function ProductDetailModal({ product, allProducts, swatches, spaceContents, onC
       
       const foundSwatch = swatches.find(s => s.id === swatchId) || (typeof color === 'object' ? color : null);
       
-      // Calculate Position: Center Horizontally above the circle
       const centerX = rect.left + rect.width / 2;
       const topY = rect.top;
 
@@ -1973,13 +2132,11 @@ function ProductDetailModal({ product, allProducts, swatches, spaceContents, onC
       }
   };
 
-  // Image Generation Logic (Simplified)
   const handleShareImage = async () => { /* ... */ };
 
   return (
     <div key={product.id} className="fixed inset-0 bg-black/60 backdrop-blur-md z-50 flex items-center justify-center p-0 md:p-4 animate-in fade-in duration-300 slide-in-animation print:fixed print:inset-0 print:z-[100] print:bg-white print:h-auto print:overflow-visible">
       <canvas ref={canvasRef} style={{ display: 'none' }} />
-      {/* Zoom view removed as per v0.7.0 requirement, leaving clean image */}
       
       {swatchPopup && (
           <div 
@@ -1999,7 +2156,6 @@ function ProductDetailModal({ product, allProducts, swatches, spaceContents, onC
 
       <div className="bg-white w-full h-full md:h-[90vh] md:w-full md:max-w-6xl md:rounded-3xl overflow-hidden shadow-2xl flex flex-col md:flex-row relative print:h-auto print:overflow-visible print:shadow-none print:rounded-none">
         
-        {/* Top Right Controls: Edit & Close */}
         <div className="absolute top-4 right-4 z-[100] flex gap-2">
             {isAdmin && <button onClick={onEdit} className="p-2 bg-white/50 hover:bg-zinc-100 rounded-full backdrop-blur shadow-sm"><Edit3 className="w-6 h-6 text-zinc-900" /></button>}
             <button onClick={onClose} className="p-2 bg-white/50 hover:bg-zinc-100 rounded-full backdrop-blur shadow-sm"><X className="w-6 h-6 text-zinc-900" /></button>
@@ -2018,7 +2174,6 @@ function ProductDetailModal({ product, allProducts, swatches, spaceContents, onC
                {currentImageUrl ? (
                    <div className="relative w-full h-full flex items-center justify-center">
                        <img src={currentImageUrl} alt="Main" className="w-full h-full object-contain mix-blend-multiply" />
-                       {/* Image Caption Overlay */}
                        {currentImageCaption && (
                            <div className="absolute bottom-4 left-4 right-4 bg-black/50 backdrop-blur-md text-white text-xs p-3 rounded-xl text-center">
                                {currentImageCaption}
@@ -2088,7 +2243,7 @@ function ProductDetailModal({ product, allProducts, swatches, spaceContents, onC
                             <button key={scene.id} onClick={() => onNavigateScene(scene)} className="w-full flex items-center p-2 bg-white border border-zinc-200 hover:border-zinc-400 rounded-xl transition-all text-left shadow-sm group">
                                <div className="w-10 h-10 bg-zinc-100 rounded-lg overflow-hidden mr-3 flex-shrink-0">
                                   <img src={scene.image} className="w-full h-full object-cover group-hover:scale-110 transition-transform" alt="Scene"/>
-                               </div>
+                                </div>
                                <div className="min-w-0">
                                   <div className="text-xs font-bold text-zinc-900 truncate">{scene.title}</div>
                                   <div className="text-[10px] text-zinc-500 truncate flex items-center"><ImageIcon className="w-3 h-3 mr-1"/> View Scene</div>
@@ -2201,7 +2356,6 @@ function ProductFormModal({ categories, swatches = [], allProducts = [], existin
   const [isProcessingImage, setIsProcessingImage] = useState(false);
   const [relatedFilter, setRelatedFilter] = useState('');
 
-  // Helper to normalize images to objects
   const normalizeImages = (imgs) => imgs.map(img => typeof img === 'string' ? { url: img, caption: '' } : img);
 
   useEffect(() => {
@@ -2399,12 +2553,10 @@ function SwatchSelector({ label, selected, swatches, onChange }) {
   const [activeTab, setActiveTab] = useState('ALL');
 
   const handleSelect = (swatch) => {
-     // Snapshot essential data
      const snapshot = { 
          id: swatch.id, name: swatch.name, hex: swatch.hex, image: swatch.image, 
          category: swatch.category, textureType: swatch.textureType, materialCode: swatch.materialCode 
      };
-     // Check if ID already exists in selected
      if(!selected.find(s => (typeof s === 'object' ? s.id === swatch.id : false))) {
         onChange([...selected, snapshot]);
      }
@@ -2621,16 +2773,12 @@ function SceneEditModal({ initialData, allProducts, spaceTags = [], spaceOptions
 }
 
 function SpaceSceneModal({ scene, products, allProducts, isAdmin, onClose, onEdit, onProductToggle, onNavigateProduct }) {
+  useScrollLock();
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const images = scene.images ? [scene.image, ...scene.images] : [scene.image];
   const [isProductManagerOpen, setProductManagerOpen] = useState(false);
   const [productFilter, setProductFilter] = useState('');
   const [isZoomed, setIsZoomed] = useState(false);
-
-  // Swipe Logic REMOVED for v0.7.4
-  // Click Navigation
-  const handleNext = () => { if(currentImageIndex < images.length - 1) setCurrentImageIndex(currentImageIndex + 1); };
-  const handlePrev = () => { if(currentImageIndex > 0) setCurrentImageIndex(currentImageIndex - 1); };
 
   const currentImgObj = images[currentImageIndex];
   const currentImgUrl = typeof currentImgObj === 'object' ? currentImgObj.url : currentImgObj;
