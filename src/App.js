@@ -303,6 +303,11 @@ export default function App() {
     setProducts(newProducts);
   };
 
+  const saveSwatchesToLocal = (newSwatches) => {
+      localStorage.setItem('patra_swatches', JSON.stringify(newSwatches));
+      setSwatches(newSwatches);
+  };
+
   const showToast = (message, type = 'success') => {
     setToast({ message, type });
     setTimeout(() => setToast(null), 3000);
@@ -349,7 +354,36 @@ export default function App() {
           popModal(); // Close form
           showToast("Product Saved Successfully.");
       }
-      // ... (Other actions like DELETE_PRODUCT, SAVE_SWATCH are handled similarly inside modals or passed as props)
+      else if (actionType === 'DELETE_PRODUCT') {
+          // FIX: window.confirm
+          if(!window.confirm("Delete this product?")) return;
+          if(isFirebaseAvailable && db) await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'products', String(payload)));
+          else { saveToLocalStorage(products.filter(p => p.id !== payload)); }
+          closeModalAll();
+          showToast("Product Deleted.");
+      }
+      else if (actionType === 'SAVE_SWATCH') {
+          const sData = payload;
+          const docId = sData.id ? String(sData.id) : String(Date.now());
+          const newPayload = { ...sData, id: docId, updatedAt: Date.now() };
+          if(isFirebaseAvailable && db) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'swatches', docId), newPayload, { merge: true });
+          else {
+              const idx = swatches.findIndex(s => s.id === docId);
+              let newS = [...swatches];
+              if(idx>=0) newS[idx] = newPayload; else newS = [newPayload, ...swatches];
+              saveSwatchesToLocal(newS);
+          }
+          popModal();
+          showToast("Material Saved.");
+      }
+      else if (actionType === 'DELETE_SWATCH') {
+          // FIX: window.confirm
+          if(!window.confirm("Delete this material?")) return;
+          if(isFirebaseAvailable && db) await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'swatches', String(payload)));
+          else { saveSwatchesToLocal(swatches.filter(s => s.id !== payload)); }
+          popModal();
+          showToast("Material Deleted.");
+      }
   };
 
   const handleSidebarLogoUpload = async (e) => {
@@ -383,6 +417,15 @@ export default function App() {
 
   const toggleSidebarSection = (section) => {
       setSidebarState(prev => ({ ...prev, [section]: !prev[section] }));
+  };
+
+  const toggleFavorite = (e, productId) => {
+    if(e) e.stopPropagation();
+    let newFavs;
+    if (favorites.includes(productId)) { newFavs = favorites.filter(id => id !== productId); showToast("Removed from My Pick", "info"); } 
+    else { newFavs = [...favorites, productId]; showToast("Added to My Pick"); }
+    setFavorites(newFavs);
+    localStorage.setItem('patra_favorites', JSON.stringify(newFavs));
   };
 
   // --- Rendering ---
@@ -511,12 +554,10 @@ export default function App() {
             ---------------------------------------------------------------------- */}
         <header className="h-14 md:h-16 bg-white/80 backdrop-blur-md border-b border-zinc-100 flex items-center justify-between px-4 md:px-8 z-30 flex-shrink-0 sticky top-0 transition-all print:hidden">
           <div className="flex items-center space-x-3 w-full md:w-auto flex-1 mr-4">
-            {/* Mobile Menu Button */}
             <button onClick={() => setIsMobileMenuOpen(true)} className="md:hidden p-2 -ml-2 text-zinc-600 hover:bg-zinc-100 rounded-lg active:scale-95 transition-transform">
                 <Menu className="w-6 h-6" />
             </button>
             
-            {/* Search Bar */}
             <div className="relative w-full max-w-md group">
                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-zinc-400 w-4 h-4 group-focus-within:text-zinc-800 transition-colors" />
                <input 
@@ -530,7 +571,6 @@ export default function App() {
           </div>
 
           <div className="flex items-center space-x-2">
-             {/* Filter Toggle */}
              <button 
                 onClick={() => setIsFilterOpen(!isFilterOpen)} 
                 className={`p-2 rounded-full transition-all ${isFilterOpen ? 'bg-zinc-200 text-black' : 'hover:bg-zinc-100 text-zinc-500'}`} 
@@ -539,7 +579,6 @@ export default function App() {
                 <SlidersHorizontal className="w-5 h-5" />
              </button>
 
-             {/* Sorting Controls */}
              <div className="flex items-center bg-zinc-100 rounded-lg p-1">
                 <select 
                     value={sortOption} 
@@ -560,7 +599,6 @@ export default function App() {
                 </button>
              </div>
 
-            {/* Admin: New Product Button */}
             {isAdmin && (
                 <button 
                     onClick={() => pushModal('form', null)} 
@@ -574,7 +612,7 @@ export default function App() {
         </header>
 
         {/* ----------------------------------------------------------------------
-            Filter Panel (Expandable)
+            Filter Panel
             ---------------------------------------------------------------------- */}
         {isFilterOpen && (
            <div className="bg-zinc-50 border-b border-zinc-200 p-4 flex gap-4 overflow-x-auto items-center animate-in slide-in-from-top-5">
@@ -599,10 +637,7 @@ export default function App() {
             ---------------------------------------------------------------------- */}
         <div ref={mainContentRef} className="flex-1 overflow-y-auto p-4 md:p-8 custom-scrollbar relative print:overflow-visible print:p-0">
           
-          {/* ROUTING LOGIC 
-              Based on 'activeCategory' state
-          */}
-
+          {/* ROUTING LOGIC */}
           {activeCategory === 'DASHBOARD' ? (
               <DashboardView 
                  products={products} 
@@ -634,7 +669,7 @@ export default function App() {
                  activeSpaceTag={activeSpaceTag}
                  setActiveSpaceTag={setActiveSpaceTag}
                  favorites={favorites}
-                 toggleFavorite={toggleFavorite}
+                 toggleFavorite={toggleFavorite} // Fix: Passing prop
                  handleAdminAction={handleAdminAction}
               />
           ) : activeCategory === 'SPACES_ROOT' ? (
@@ -658,9 +693,13 @@ export default function App() {
                  products={products}
                  onProductClick={(p) => pushModal('product', p)}
                  onNavClick={handleNavClick}
+                 favorites={favorites}
+                 toggleFavorite={toggleFavorite}
+                 isAdmin={isAdmin}
+                 handleAdminAction={handleAdminAction}
              />
           ) : (
-             /* Sub-Level Views (Specific Space, Swatch Category, or Filtered Product List) */
+             /* Sub-Level Views */
              <>
                {SPACES.find(s => s.id === activeCategory) && (
                  <SpaceDetailView 
@@ -690,10 +729,10 @@ export default function App() {
                  />
                )}
                
-               {/* Fallback: Standard Product Grid View (for standard Categories & My Pick) */}
+               {/* Fallback / Standard Product Grid */}
                {!SPACES.find(s => s.id === activeCategory) && !SWATCH_CATEGORIES.find(s => s.id === activeCategory) && (
                    <MasterView 
-                        products={products} // This prop should ideally be pre-filtered if not using MasterView's internal logic, but MasterView handles filtering too.
+                        products={products}
                         swatches={swatches}
                         spaceContents={spaceContents}
                         onProductClick={(p) => pushModal('product', p)}
@@ -709,14 +748,13 @@ export default function App() {
                         activeSpaceTag={activeSpaceTag}
                         setActiveSpaceTag={setActiveSpaceTag}
                         favorites={favorites}
-                        toggleFavorite={toggleFavorite}
+                        toggleFavorite={toggleFavorite} // Fix: Passing prop
                         handleAdminAction={handleAdminAction}
                    />
                )}
              </>
           )}
 
-          {/* Scroll to Top Button */}
           {showScrollTop && (
               <button 
                 onClick={() => mainContentRef.current?.scrollTo({ top: 0, behavior: 'smooth' })} 
@@ -729,38 +767,34 @@ export default function App() {
       </main>
 
       {/* ----------------------------------------------------------------------
-          Modal Stack Renderer (The Core of V0.7.5)
+          Modal Stack Renderer
           ---------------------------------------------------------------------- */}
       {modalStack.map((modal, index) => {
-         // Calculate z-index to stack correctly
          const zIndex = 100 + index * 10;
          
          return (
              <div key={modal.id} className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-0 md:p-4 animate-in fade-in duration-200" style={{ zIndex }}>
-                 {/* Click backdrop to close top modal only */}
                  <div className="absolute inset-0" onClick={() => index === modalStack.length - 1 && popModal()}></div>
                  
                  <div className="relative w-full h-full md:h-auto pointer-events-none flex items-center justify-center">
                     <div className="pointer-events-auto w-full flex justify-center">
-                       {/* Conditional Rendering based on Modal Type */}
-                       
+                       {/* Render specific modal based on type */}
                        {modal.type === 'product' && (
                            <ProductDetailModal 
                                product={modal.data} 
                                allProducts={products}
                                swatches={swatches}
                                spaceContents={spaceContents}
-                               onClose={popModal} // Closes just this modal
-                               onEdit={() => pushModal('form', modal.data)} // Pushes form on top
+                               onClose={popModal}
+                               onEdit={() => pushModal('form', modal.data)} 
                                isAdmin={isAdmin}
                                showToast={showToast}
                                isFavorite={favorites.includes(modal.data.id)}
                                onToggleFavorite={(e) => toggleFavorite(e, modal.data.id)}
-                               // Deep Navigation (Pushing new modals)
                                onNavigateProduct={(p) => pushModal('product', p)}
                                onNavigateSwatch={(s) => pushModal('swatch', s)}
                                onNavigateScene={(s) => pushModal('scene', s)}
-                               onNavigateSpace={(sid) => { closeModalAll(); setActiveCategory(sid); }} // Space navigation resets stack
+                               onNavigateSpace={(sid) => { closeModalAll(); setActiveCategory(sid); }}
                            />
                        )}
 
@@ -807,7 +841,6 @@ export default function App() {
                                onEdit={() => pushModal('sceneForm', modal.data)}
                                onNavigateProduct={(p) => pushModal('product', p)}
                                onProductToggle={async (pid, add) => {
-                                  // Live update logic for scene tagging
                                   const scene = modal.data;
                                   const newPids = add ? [...(scene.productIds||[]), pid] : (scene.productIds||[]).filter(id=>id!==pid);
                                   const updated = { ...scene, productIds: newPids };
@@ -838,7 +871,7 @@ export default function App() {
                                   showToast("Scene Saved");
                               }}
                               onDelete={async (id) => {
-                                  if(!confirm("Delete Scene?")) return;
+                                  if(!window.confirm("Delete Scene?")) return; // Fix: window.confirm
                                   const spaceId = modal.data.spaceId;
                                   const newScenes = (spaceContents[spaceId]?.scenes || []).filter(s => s.id !== id);
                                   if(isFirebaseAvailable && db) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'space_contents', spaceId), { scenes: newScenes }, { merge: true });
@@ -881,7 +914,6 @@ export default function App() {
          );
       })}
 
-      {/* Global Toast Notification */}
       {toast && (
           <div className="fixed bottom-8 right-8 bg-zinc-900 text-white px-5 py-3.5 rounded-xl shadow-2xl flex items-center space-x-3 animate-in slide-in-from-bottom-10 fade-in z-[200] print:hidden">
               {toast.type === 'success' ? <Check className="w-5 h-5 text-green-400" /> : <Info className="w-5 h-5 text-red-400" />}
@@ -889,7 +921,6 @@ export default function App() {
           </div>
       )}
       
-      {/* Global Admin Dashboard Modal */}
       {showAdminDashboard && (
           <AdminDashboardModal 
              isOpen={showAdminDashboard} 
@@ -904,7 +935,7 @@ export default function App() {
                  reader.onload = async (event) => {
                      try {
                         const imported = JSON.parse(event.target.result);
-                        if (confirm(`Import ${imported.products?.length || 0} items?`)) {
+                        if (window.confirm(`Import ${imported.products?.length || 0} items?`)) { // Fix: window.confirm
                             if (!isFirebaseAvailable) { 
                                 saveToLocalStorage(imported.products||[]); 
                                 localStorage.setItem('patra_swatches', JSON.stringify(imported.swatches||[]));
@@ -929,33 +960,27 @@ export default function App() {
 }
 
 // ----------------------------------------------------------------------
-// Part 2: Main Views Components (Master, Dashboard, Root Views)
+// Part 2: Main Views Components
 // ----------------------------------------------------------------------
 
 function MasterView({ products, swatches, spaceContents, activeCategory, onNavClick, onProductClick, onSwatchClick, onSceneClick, isAdmin, searchTerm, filters, sortOption, sortDirection, activeSpaceTag, setActiveSpaceTag, favorites, toggleFavorite, handleAdminAction }) {
-    
-    // 1. Data Processing for Filtered View (Search/Filter Active)
+    // 1. Data Processing for Filtered View
     const getProcessedProducts = () => {
       let filtered = products.filter(product => {
-          // Special Categories
           if (activeCategory === 'MY_PICK') return favorites.includes(product.id);
           if (activeCategory === 'TOTAL_VIEW' || activeCategory === 'DASHBOARD') return true; 
-
-          // Root Views logic usually handled by parent, but safe check here
           if (activeCategory === 'SPACES_ROOT') return product.spaces && product.spaces.length > 0;
           if (activeCategory === 'COLLECTIONS_ROOT') return !product.category.includes('ETC');
-
+          
           // Specific Space
           if (SPACES.find(s => s.id === activeCategory)) {
                let match = product.spaces && product.spaces.includes(activeCategory);
                if (match && activeSpaceTag !== 'ALL') match = product.spaceTags && product.spaceTags.includes(activeSpaceTag);
                return match;
           }
-          // Standard Category
           return product.category === activeCategory;
       });
 
-      // Filter Inputs
       const searchLower = searchTerm.toLowerCase();
       filtered = filtered.filter(product => {
          const searchFields = [ 
@@ -965,7 +990,6 @@ function MasterView({ products, swatches, spaceContents, activeCategory, onNavCl
              ...(product.upholsteryColors || []).map(c => typeof c === 'object' ? c.name : c) 
          ];
          const matchesSearch = !searchTerm || searchFields.join(' ').toLowerCase().includes(searchLower);
-         
          let matchesFilter = true;
          if(filters.isNew && !product.isNew) matchesFilter = false;
          if(filters.year && !product.launchDate?.startsWith(filters.year)) matchesFilter = false;
@@ -979,7 +1003,6 @@ function MasterView({ products, swatches, spaceContents, activeCategory, onNavCl
          return matchesSearch && matchesFilter;
       });
 
-      // Sorting
       filtered.sort((a, b) => {
           let comparison = 0;
           if (sortOption === 'name') comparison = a.name.localeCompare(b.name);
@@ -988,14 +1011,13 @@ function MasterView({ products, swatches, spaceContents, activeCategory, onNavCl
           else comparison = (a.createdAt || 0) - (b.createdAt || 0);
           return sortDirection === 'asc' ? comparison : -comparison;
       });
-
       return filtered;
     };
 
     const processedProducts = getProcessedProducts();
     const isSearching = searchTerm || filters.year || filters.color || filters.isNew || (activeCategory !== 'TOTAL_VIEW' && activeCategory !== 'DASHBOARD');
 
-    // 2. Render Logic: Search Results VS Master View Hub
+    // 2. Render Search Results
     if (isSearching) {
         return (
             <div className="pb-20 animate-in fade-in">
@@ -1026,20 +1048,17 @@ function MasterView({ products, swatches, spaceContents, activeCategory, onNavCl
         );
     }
 
-    // 3. Default Master View Hub (Summary of everything)
+    // 3. Render Master View Hub
     const recentProducts = [...products].sort((a,b) => (b.createdAt || 0) - (a.createdAt || 0)).slice(0, 8);
-    
-    const featuredScenes = [];
+    const displayScenes = [];
     Object.keys(spaceContents).forEach(spaceId => {
-        const scenes = spaceContents[spaceId].scenes || [];
-        scenes.forEach(s => featuredScenes.push({ ...s, spaceId }));
+        (spaceContents[spaceId].scenes || []).forEach(s => displayScenes.push({ ...s, spaceId }));
     });
-    const displayScenes = featuredScenes.slice(0, 3); 
+    const featuredScenes = displayScenes.slice(0, 3); 
     const featuredSwatches = swatches.slice(0, 12);
 
     return (
         <div className="pb-20 space-y-16 animate-in fade-in">
-            {/* Header Banner */}
             <div className="bg-zinc-900 text-white p-8 md:p-12 rounded-3xl relative overflow-hidden flex flex-col justify-end min-h-[300px]">
                 <div className="relative z-10 max-w-2xl">
                     <span className="text-zinc-400 font-bold tracking-widest text-xs uppercase mb-2 block">Archive V.0.7.5</span>
@@ -1054,7 +1073,6 @@ function MasterView({ products, swatches, spaceContents, activeCategory, onNavCl
                 </div>
             </div>
 
-            {/* Section: Spaces */}
             <section>
                 <div className="flex justify-between items-end mb-6 border-b border-zinc-100 pb-4">
                     <div>
@@ -1066,7 +1084,7 @@ function MasterView({ products, swatches, spaceContents, activeCategory, onNavCl
                     </button>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    {displayScenes.map(scene => (
+                    {featuredScenes.map(scene => (
                         <div key={scene.id} onClick={() => onSceneClick(scene, scene.spaceId)} className="group cursor-pointer">
                             <div className="aspect-video bg-zinc-100 rounded-2xl overflow-hidden mb-3 relative">
                                 <img src={scene.image} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" alt=""/>
@@ -1081,7 +1099,6 @@ function MasterView({ products, swatches, spaceContents, activeCategory, onNavCl
                 </div>
             </section>
 
-            {/* Section: Products */}
             <section>
                 <div className="flex justify-between items-end mb-6 border-b border-zinc-100 pb-4">
                     <div>
@@ -1107,7 +1124,6 @@ function MasterView({ products, swatches, spaceContents, activeCategory, onNavCl
                 </div>
             </section>
 
-            {/* Section: Materials */}
             <section>
                  <div className="flex justify-between items-end mb-6 border-b border-zinc-100 pb-4">
                     <div>
@@ -1132,13 +1148,11 @@ function MasterView({ products, swatches, spaceContents, activeCategory, onNavCl
 }
 
 function SpacesRootView({ spaceContents, allProducts, searchTerm, onSceneClick, onNavClick }) {
-    // Search within spaces logic
     const getFilteredScenes = () => {
         if (!searchTerm) return [];
         const results = [];
         Object.keys(spaceContents).forEach(spaceId => {
-            const scenes = spaceContents[spaceId].scenes || [];
-            scenes.forEach(s => {
+            (spaceContents[spaceId].scenes || []).forEach(s => {
                 if(s.title.toLowerCase().includes(searchTerm.toLowerCase()) || (s.tags||[]).join(' ').toLowerCase().includes(searchTerm.toLowerCase())) {
                     results.push({ ...s, spaceId });
                 }
@@ -1280,7 +1294,7 @@ function MaterialsRootView({ swatches, searchTerm, onSwatchClick, onNavClick }) 
     );
 }
 
-function CollectionsRootView({ categories, products, onProductClick, onNavClick }) {
+function CollectionsRootView({ categories, products, onProductClick, onNavClick, favorites, toggleFavorite, isAdmin, handleAdminAction }) {
     return (
         <div className="pb-20 space-y-16 animate-in fade-in">
              <div className="text-center py-10">
@@ -1299,7 +1313,15 @@ function CollectionsRootView({ categories, products, onProductClick, onNavClick 
                          </div>
                          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
                              {catProducts.map(p => (
-                                 <ProductCard key={p.id} product={p} onClick={() => onProductClick(p)} />
+                                 <ProductCard 
+                                    key={p.id} 
+                                    product={p} 
+                                    onClick={() => onProductClick(p)} 
+                                    isAdmin={isAdmin}
+                                    isFavorite={favorites.includes(p.id)}
+                                    onToggleFavorite={(e) => toggleFavorite(e, p.id)}
+                                    onDuplicate={(e) => {e.stopPropagation(); handleAdminAction('SAVE_PRODUCT', {...p, id: Date.now(), name: `${p.name} (Copy)`})}}
+                                 />
                              ))}
                          </div>
                     </section>
@@ -1314,7 +1336,6 @@ function DashboardView({ products, favorites, setActiveCategory, onProductClick,
   const newCount = products.filter(p => p.isNew).length; 
   const pickCount = favorites.length;
   
-  // Calculate Chart Data
   const categoryCounts = []; 
   let totalStandardProducts = 0;
   CATEGORIES.filter(c => !c.isSpecial).forEach(c => { 
@@ -1329,11 +1350,8 @@ function DashboardView({ products, favorites, setActiveCategory, onProductClick,
   const chartData = categoryCounts.map((item, idx) => ({ ...item, color: donutColors[idx % donutColors.length] }));
   
   const [selectedSlice, setSelectedSlice] = useState(null);
-  
-  // V0.7.5: Accordion state logic for dense information
   const [expandedSection, setExpandedSection] = useState(null); 
 
-  // Derived details for selected slice
   const getSelectedSliceDetails = () => {
       if(selectedSlice === null) return null;
       const catId = chartData[selectedSlice].id;
@@ -1346,7 +1364,6 @@ function DashboardView({ products, favorites, setActiveCategory, onProductClick,
 
   return (
     <div className="max-w-7xl mx-auto space-y-8 animate-in fade-in pb-20 print:hidden" onClick={() => setSelectedSlice(null)}>
-      {/* Banner */}
       <div className="relative w-full h-48 md:h-80 rounded-3xl overflow-hidden shadow-lg border border-zinc-200 group bg-zinc-900">
          <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/40 to-transparent z-10"></div>
          {bannerData.url ? <img src={bannerData.url} alt="Banner" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" /> : <div className="w-full h-full flex items-center justify-center opacity-20"><img src="/api/placeholder/1200/400" className="w-full h-full object-cover grayscale" /></div>}
@@ -1372,7 +1389,6 @@ function DashboardView({ products, favorites, setActiveCategory, onProductClick,
          </div>
       </div>
 
-      {/* KPI Cards */}
       <div className="grid grid-cols-3 gap-4">
           <div onClick={() => setActiveCategory('TOTAL_VIEW')} className="bg-white p-6 rounded-3xl border border-zinc-100 shadow-sm hover:shadow-md cursor-pointer group transition-all">
               <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider group-hover:text-black">Total Products</span>
@@ -1388,7 +1404,6 @@ function DashboardView({ products, favorites, setActiveCategory, onProductClick,
           </div>
       </div>
 
-      {/* Chart Section */}
       <div className="bg-white p-8 md:p-10 rounded-3xl border border-zinc-100 shadow-sm relative overflow-hidden">
           <h3 className="text-xl font-bold mb-8 flex items-center"><PieChart className="w-6 h-6 mr-2 text-zinc-400"/> Category Contribution</h3>
           
@@ -1426,7 +1441,6 @@ function DashboardView({ products, favorites, setActiveCategory, onProductClick,
                             </div>
                         </div>
 
-                        {/* Accordion: Launching History */}
                         <div className="border border-zinc-200 rounded-xl mb-3 overflow-hidden bg-white">
                             <button onClick={() => setExpandedSection(expandedSection === 'launch' ? null : 'launch')} className="w-full flex justify-between items-center p-4 bg-zinc-50 hover:bg-zinc-100 text-xs font-bold uppercase text-zinc-600 transition-colors">
                                 <span>Launching History</span>
@@ -1443,7 +1457,6 @@ function DashboardView({ products, favorites, setActiveCategory, onProductClick,
                             )}
                         </div>
 
-                        {/* Accordion: Product List */}
                         <div className="border border-zinc-200 rounded-xl overflow-hidden bg-white">
                             <button onClick={() => setExpandedSection(expandedSection === 'list' ? null : 'list')} className="w-full flex justify-between items-center p-4 bg-zinc-50 hover:bg-zinc-100 text-xs font-bold uppercase text-zinc-600 transition-colors">
                                 <span>Product List</span>
@@ -1479,10 +1492,6 @@ function DashboardView({ products, favorites, setActiveCategory, onProductClick,
     </div>
   );
 }
-
-// ----------------------------------------------------------------------
-// Part 2: Shared UI Components (ProductCard, SwatchDisplay, PieChart)
-// ----------------------------------------------------------------------
 
 function ProductCard({ product, onClick, isAdmin, isFavorite, onToggleFavorite, onDuplicate }) {
     return (
@@ -1521,7 +1530,6 @@ function ProductCard({ product, onClick, isAdmin, isFavorite, onToggleFavorite, 
     );
 }
 
-// V0.7.5: Updated SwatchDisplay (Removed small inner circle, full fill)
 function SwatchDisplay({ color, size = 'medium', className = '', onClick }) {
   const isObject = typeof color === 'object' && color !== null;
   const hex = isObject ? color.hex : color;
@@ -1594,7 +1602,6 @@ function PieChartComponent({ data, total, selectedIndex, onSelect }) {
         })}
       </svg>
       
-      {/* Center Text */}
       <div className="absolute inset-0 flex items-center justify-center flex-col pointer-events-none transition-all duration-300">
          {selectedIndex !== null ? (
             <div className="animate-in zoom-in-50 duration-300 text-center">
@@ -1609,7 +1616,6 @@ function PieChartComponent({ data, total, selectedIndex, onSelect }) {
          )}
       </div>
 
-      {/* Labels Logic (Prevent Overlap) */}
       {data.map((item, idx) => {
           let prevP = 0; for(let i=0; i<idx; i++) prevP += data[i].count/total;
           const p = item.count/total;
