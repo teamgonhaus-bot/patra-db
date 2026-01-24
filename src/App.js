@@ -37,7 +37,7 @@ const YOUR_FIREBASE_CONFIG = {
 // ----------------------------------------------------------------------
 // 상수 및 설정
 // ----------------------------------------------------------------------
-const APP_VERSION = "v0.7.8"; 
+const APP_VERSION = "v0.7.9"; 
 const BUILD_DATE = "2026.01.24";
 const ADMIN_PASSWORD = "adminlcg1"; 
 
@@ -132,11 +132,9 @@ const TEXTURE_TYPES = [
     { id: 'MATTE', label: 'Matte' }
 ];
 
-// Hook for scroll locking - Optimized for smoothness
+// Hook for scroll locking
 function useScrollLock() {
   useEffect(() => {
-    // Prevent layout shift by checking scrollbar width if needed, 
-    // but for mobile/modern browsers simple overflow hidden is usually enough.
     const originalStyle = window.getComputedStyle(document.body).overflow;
     document.body.style.overflow = 'hidden';
     // iOS fix
@@ -188,7 +186,7 @@ export default function App() {
   const [showAdminDashboard, setShowAdminDashboard] = useState(false);
   const [activityLogs, setActivityLogs] = useState([]);
   const [toast, setToast] = useState(null);
-  const [favorites, setFavorites] = useState([]);
+  const [favorites, setFavorites] = useState([]); // Stores IDs of Products, Scenes, Swatches
   
   // UI State
   const [sidebarState, setSidebarState] = useState({ spaces: true, collections: true, materials: true });
@@ -363,6 +361,16 @@ export default function App() {
       setIsMobileMenuOpen(false);
   };
 
+  const handleMyPickToggle = () => {
+      if (activeCategory === 'MY_PICK') {
+          setActiveCategory(previousCategory || 'DASHBOARD');
+      } else {
+          setPreviousCategory(activeCategory);
+          setActiveCategory('MY_PICK');
+      }
+      setIsMobileMenuOpen(false);
+  };
+
   const loadFromLocalStorage = () => {
     const saved = localStorage.getItem('patra_products');
     setProducts(saved ? JSON.parse(saved) : []);
@@ -388,14 +396,22 @@ export default function App() {
       else if (password !== null) showToast("비밀번호가 올바르지 않습니다.", "error");
     }
   };
-  const toggleFavorite = (e, productId) => {
+  
+  // Enhanced Toggle Favorite to support Scenes and Swatches
+  const toggleFavorite = (e, itemId) => {
     if(e) e.stopPropagation();
     let newFavs;
-    if (favorites.includes(productId)) { newFavs = favorites.filter(id => id !== productId); showToast("MY PICK에서 제거되었습니다.", "info"); } 
-    else { newFavs = [...favorites, productId]; showToast("MY PICK에 추가되었습니다."); }
+    if (favorites.includes(itemId)) { 
+        newFavs = favorites.filter(id => id !== itemId); 
+        showToast("MY PICK에서 제거되었습니다.", "info"); 
+    } else { 
+        newFavs = [...favorites, itemId]; 
+        showToast("MY PICK에 추가되었습니다."); 
+    }
     setFavorites(newFavs);
     localStorage.setItem('patra_favorites', JSON.stringify(newFavs));
   };
+
   const toggleCompare = (e, product) => {
     if(e) e.stopPropagation();
     if(compareList.find(p => p.id === product.id)) {
@@ -597,6 +613,8 @@ export default function App() {
               setSearchTags([...searchTags, val]);
               setSearchTerm('');
           }
+      } else if (e.key === 'Backspace' && searchTerm === '' && searchTags.length > 0) {
+          setSearchTags(prev => prev.slice(0, -1));
       }
   };
   const removeSearchTag = (idx) => {
@@ -744,7 +762,7 @@ export default function App() {
              {sidebarState.materials && (<div className="space-y-0.5 mt-2 pl-2 animate-in slide-in-from-top-2 duration-200">{SWATCH_CATEGORIES.map((cat) => (<button key={cat.id} onClick={() => handleCategoryClick(cat.id)} className={`w-full text-left px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center justify-between group ${activeCategory === cat.id ? 'bg-zinc-100 text-zinc-900 font-bold' : 'text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900'}`}>{cat.label}</button>))}</div>)}
           </div>
 
-          <div className="pt-2"><button onClick={() => handleCategoryClick('MY_PICK')} className={`w-full text-left px-4 py-3 rounded-xl text-sm font-bold transition-all duration-200 flex items-center space-x-3 group border ${activeCategory === 'MY_PICK' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' : 'text-zinc-400 border-transparent hover:bg-zinc-50 hover:text-zinc-600'}`}><Heart className={`w-4 h-4 ${activeCategory === 'MY_PICK' ? 'fill-yellow-500 text-yellow-500' : ''}`} /><span>My Pick ({favorites.length})</span></button></div>
+          <div className="pt-2"><button onClick={handleMyPickToggle} className={`w-full text-left px-4 py-3 rounded-xl text-sm font-bold transition-all duration-200 flex items-center space-x-3 group border ${activeCategory === 'MY_PICK' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' : 'text-zinc-400 border-transparent hover:bg-zinc-50 hover:text-zinc-600'}`}><Heart className={`w-4 h-4 ${activeCategory === 'MY_PICK' ? 'fill-yellow-500 text-yellow-500' : ''}`} /><span>My Pick ({favorites.length})</span></button></div>
         </nav>
         <div className="p-4 border-t border-zinc-100 bg-zinc-50/50 space-y-3">
            {isAdmin && (<button onClick={() => { fetchLogs(); setShowAdminDashboard(true); }} className="w-full text-[10px] text-blue-600 hover:text-blue-800 flex items-center justify-center font-bold py-1 mb-2 bg-blue-50 rounded border border-blue-100"><Settings className="w-3 h-3 mr-1" /> Dashboard</button>)}
@@ -779,7 +797,7 @@ export default function App() {
           <div className="flex items-center space-x-2 flex-shrink-0">
              {compareList.length > 0 && <button onClick={handleCompareButtonClick} className={`flex items-center px-3 py-1.5 rounded-full text-xs font-bold animate-in fade-in transition-all mr-2 shadow-lg ${activeCategory === 'COMPARE_PAGE' ? 'bg-black text-white ring-2 ring-zinc-200' : 'bg-zinc-900 text-white hover:bg-black'}`}><ArrowLeftRight className="w-3 h-3 mr-1.5"/> Compare ({compareList.length})</button>}
              <button onClick={() => setIsFilterOpen(!isFilterOpen)} className={`p-2 rounded-full transition-all ${isFilterOpen ? 'bg-zinc-200 text-black' : 'hover:bg-zinc-100 text-zinc-500'}`} title="Filters"><SlidersHorizontal className="w-5 h-5" /></button>
-             <button onClick={() => setActiveCategory('MY_PICK')} className={`p-2 rounded-full transition-all items-center space-x-1 ${activeCategory === 'MY_PICK' ? 'bg-yellow-100 text-yellow-600' : 'hover:bg-zinc-100 text-zinc-400 hover:text-zinc-600'}`} title="My Pick"><Heart className={`w-5 h-5 ${activeCategory === 'MY_PICK' ? 'fill-yellow-500 text-yellow-500' : ''}`} /></button>
+             <button onClick={handleMyPickToggle} className={`p-2 rounded-full transition-all items-center space-x-1 ${activeCategory === 'MY_PICK' ? 'bg-yellow-100 text-yellow-600' : 'hover:bg-zinc-100 text-zinc-400 hover:text-zinc-600'}`} title="My Pick"><Heart className={`w-5 h-5 ${activeCategory === 'MY_PICK' ? 'fill-yellow-500 text-yellow-500' : ''}`} /></button>
              <div className="flex items-center bg-zinc-100 rounded-lg p-1">
                 <select value={sortOption} onChange={(e) => setSortOption(e.target.value)} className="bg-transparent text-xs font-bold text-zinc-600 outline-none px-2 py-1 max-w-[80px] md:max-w-none cursor-pointer hidden md:block"><option value="manual">Manual</option><option value="launchDate">Launch</option><option value="createdAt">Added</option><option value="name">Name</option></select>
                 <button onClick={() => setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc')} className="p-1.5 rounded-md hover:bg-white hover:shadow-sm transition-all text-zinc-500" title="Sort">{sortDirection === 'asc' ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />}</button>
@@ -810,6 +828,18 @@ export default function App() {
                 onProductClick={(product) => setSelectedProduct(product)}
                 isAdmin={isAdmin}
             />
+          ) : activeCategory === 'MY_PICK' ? (
+             <MyPickView 
+                favorites={favorites}
+                products={products}
+                spaces={SPACES}
+                spaceContents={spaceContents}
+                swatches={swatches}
+                onProductClick={(p) => setSelectedProduct(p)}
+                onSceneClick={(s) => setSelectedScene(s)}
+                onSwatchClick={(s) => setSelectedSwatch(s)}
+                onToggleFavorite={toggleFavorite}
+             />
           ) : activeCategory === 'ALL' ? (
              <TotalView 
                 products={processedProducts} 
@@ -821,6 +851,9 @@ export default function App() {
                 onProductClick={(p) => setSelectedProduct(p)}
                 onSceneClick={(s) => setSelectedScene(s)}
                 onSwatchClick={(s) => setSelectedSwatch(s)}
+                searchTerm={searchTerm}
+                searchTags={searchTags}
+                filters={filters}
              />
           ) : activeCategory.endsWith('_ROOT') ? (
              <CategoryRootView 
@@ -835,6 +868,11 @@ export default function App() {
                 onProductClick={(p) => setSelectedProduct(p)}
                 onSwatchClick={(s) => setSelectedSwatch(s)}
                 onSceneClick={(s) => setSelectedScene(s)}
+                searchTerm={searchTerm}
+                searchTags={searchTags}
+                filters={filters}
+                onCompareToggle={(e, p) => toggleCompare(e, p)}
+                compareList={compareList}
              />
           ) : (
             <>
@@ -992,6 +1030,8 @@ export default function App() {
               await handleSceneSave(selectedScene.spaceId, updatedScene);
            }}
            onNavigateProduct={(p) => { setSelectedScene(null); setSelectedProduct(p); }}
+           isFavorite={favorites.includes(selectedScene.id)}
+           onToggleFavorite={(e) => toggleFavorite(e, selectedScene.id)}
         />
       )}
       
@@ -1035,7 +1075,48 @@ export default function App() {
 // Helper Components
 // ----------------------------------------------------------------------
 
-function TotalView({ products, categories, spaces, spaceContents, materials, materialCategories, onProductClick, onSceneClick, onSwatchClick }) {
+function CollapsibleSection({ title, count, children, defaultExpanded = true }) {
+    const [isExpanded, setIsExpanded] = useState(defaultExpanded);
+    return (
+        <div className="mb-12">
+            <div className="flex items-center mb-4 border-b border-zinc-100 pb-2 cursor-pointer hover:opacity-70" onClick={() => setIsExpanded(!isExpanded)}>
+                <h4 className="text-lg font-bold text-zinc-800">{title}</h4>
+                <span className="ml-3 text-xs font-medium text-zinc-400 bg-zinc-50 px-2 py-0.5 rounded-full">{count}</span>
+                <div className="ml-auto">
+                    {isExpanded ? <ChevronUp className="w-4 h-4 text-zinc-400"/> : <ChevronDown className="w-4 h-4 text-zinc-400"/>}
+                </div>
+            </div>
+            {isExpanded && (
+                <div className="animate-in fade-in slide-in-from-top-2">
+                    {children}
+                </div>
+            )}
+        </div>
+    );
+}
+
+function TotalView({ products, categories, spaces, spaceContents, materials, materialCategories, onProductClick, onSceneClick, onSwatchClick, searchTerm, searchTags, filters }) {
+    // Filter Logic
+    const filterItem = (item, type) => {
+        const text = type === 'product' ? [item.name, item.category, item.specs].join(' ') : 
+                     type === 'scene' ? [item.title, item.description].join(' ') :
+                     [item.name, item.materialCode].join(' ');
+        const fullText = text.toLowerCase();
+        const matchesSearch = !searchTerm || fullText.includes(searchTerm.toLowerCase());
+        const matchesTags = searchTags.every(t => fullText.includes(t.toLowerCase()));
+        
+        let matchesFilter = true;
+        if (type === 'product') {
+            if(filters.isNew && !item.isNew) matchesFilter = false;
+            if(filters.year && !item.launchDate?.startsWith(filters.year)) matchesFilter = false;
+            if(filters.color) {
+                const colorMatch = [...(item.bodyColors||[]), ...(item.upholsteryColors||[])].some(c => { const name = typeof c === 'object' ? c.name : c; return name.toLowerCase().includes(filters.color.toLowerCase()); });
+                if(!colorMatch) matchesFilter = false;
+            }
+        }
+        return matchesSearch && matchesTags && matchesFilter;
+    };
+
     return (
         <div className="animate-in fade-in slide-in-from-bottom-4 pb-32">
             <div className="mb-8 flex items-center">
@@ -1048,18 +1129,14 @@ function TotalView({ products, categories, spaces, spaceContents, materials, mat
             {/* SPACES SECTION */}
             <div className="mb-16">
                 <h3 className="text-2xl font-black text-zinc-900 mb-6 flex items-center"><Briefcase className="w-6 h-6 mr-2"/> SPACES</h3>
-                <div className="space-y-12">
+                <div className="space-y-4">
                     {spaces.map(space => {
                         const content = spaceContents[space.id] || {};
-                        const scenes = content.scenes || [];
+                        const scenes = (content.scenes || []).filter(s => filterItem(s, 'scene'));
                         if(scenes.length === 0) return null;
 
                         return (
-                            <div key={space.id}>
-                                <div className="flex items-center mb-4 border-b border-zinc-100 pb-2">
-                                    <h4 className="text-lg font-bold text-zinc-800">{space.label}</h4>
-                                    <span className="ml-3 text-xs font-medium text-zinc-400 bg-zinc-50 px-2 py-0.5 rounded-full">{scenes.length}</span>
-                                </div>
+                            <CollapsibleSection key={space.id} title={space.label} count={scenes.length}>
                                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                                     {scenes.map(scene => (
                                         <div key={scene.id} onClick={() => onSceneClick({...scene, spaceId: space.id})} className="group cursor-pointer">
@@ -1070,7 +1147,7 @@ function TotalView({ products, categories, spaces, spaceContents, materials, mat
                                         </div>
                                     ))}
                                 </div>
-                            </div>
+                            </CollapsibleSection>
                         );
                     })}
                 </div>
@@ -1079,22 +1156,17 @@ function TotalView({ products, categories, spaces, spaceContents, materials, mat
             {/* COLLECTIONS SECTION */}
             <div className="mb-16">
                 <h3 className="text-2xl font-black text-zinc-900 mb-6 flex items-center"><Cloud className="w-6 h-6 mr-2"/> COLLECTIONS</h3>
-                <div className="space-y-12">
+                <div className="space-y-4">
                     {categories.map(cat => {
-                        const catProducts = products.filter(p => p.category === cat.id);
+                        const catProducts = products.filter(p => p.category === cat.id && filterItem(p, 'product'));
                         if (catProducts.length === 0) return null;
                         
                         return (
-                            <div key={cat.id}>
-                                <div className="flex items-center mb-4 border-b border-zinc-100 pb-2">
-                                    <span className="w-3 h-3 rounded-full mr-3" style={{backgroundColor: cat.color}}></span>
-                                    <h4 className="text-lg font-bold text-zinc-800">{cat.label}</h4>
-                                    <span className="ml-3 text-xs font-medium text-zinc-400 bg-zinc-50 px-2 py-0.5 rounded-full">{catProducts.length}</span>
-                                </div>
+                            <CollapsibleSection key={cat.id} title={cat.label} count={catProducts.length}>
                                 <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
                                     {catProducts.map(product => (
                                         <div key={product.id} onClick={() => onProductClick(product)} className="group cursor-pointer">
-                                            <div className="aspect-square bg-zinc-50 rounded-xl mb-2 overflow-hidden border border-zinc-100 relative">
+                                            <div className="aspect-square bg-zinc-50 rounded-xl mb-2 overflow-hidden border border-zinc-100 relative p-0">
                                                 {product.images?.[0] ? <img src={typeof product.images[0] === 'object' ? product.images[0].url : product.images[0]} className="w-full h-full object-contain mix-blend-multiply group-hover:scale-105 transition-transform" /> : <ImageIcon className="w-8 h-8 text-zinc-300 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"/>}
                                             </div>
                                             <h4 className="text-xs font-bold text-zinc-900 truncate group-hover:text-blue-600">{product.name}</h4>
@@ -1102,7 +1174,7 @@ function TotalView({ products, categories, spaces, spaceContents, materials, mat
                                         </div>
                                     ))}
                                 </div>
-                            </div>
+                            </CollapsibleSection>
                         );
                     })}
                 </div>
@@ -1111,18 +1183,13 @@ function TotalView({ products, categories, spaces, spaceContents, materials, mat
             {/* MATERIALS SECTION */}
             <div className="mb-16">
                 <h3 className="text-2xl font-black text-zinc-900 mb-6 flex items-center"><Palette className="w-6 h-6 mr-2"/> MATERIALS</h3>
-                <div className="space-y-12">
+                <div className="space-y-4">
                     {materialCategories.map(cat => {
-                        const catSwatches = materials.filter(s => s.category === cat.id);
+                        const catSwatches = materials.filter(s => s.category === cat.id && filterItem(s, 'material'));
                         if (catSwatches.length === 0) return null;
 
                         return (
-                            <div key={cat.id}>
-                                <div className="flex items-center mb-4 border-b border-zinc-100 pb-2">
-                                    <span className="w-3 h-3 rounded-full mr-3" style={{backgroundColor: cat.color}}></span>
-                                    <h4 className="text-lg font-bold text-zinc-800">{cat.label}</h4>
-                                    <span className="ml-3 text-xs font-medium text-zinc-400 bg-zinc-50 px-2 py-0.5 rounded-full">{catSwatches.length}</span>
-                                </div>
+                            <CollapsibleSection key={cat.id} title={cat.label} count={catSwatches.length}>
                                 <div className="grid grid-cols-2 md:grid-cols-5 lg:grid-cols-6 gap-4">
                                     {catSwatches.map(swatch => (
                                         <div key={swatch.id} onClick={() => onSwatchClick(swatch)} className="group cursor-pointer">
@@ -1134,7 +1201,7 @@ function TotalView({ products, categories, spaces, spaceContents, materials, mat
                                         </div>
                                     ))}
                                 </div>
-                            </div>
+                            </CollapsibleSection>
                         );
                     })}
                 </div>
@@ -1143,16 +1210,37 @@ function TotalView({ products, categories, spaces, spaceContents, materials, mat
     );
 }
 
-function CategoryRootView({ type, spaces, spaceContents, collections, materials, products, swatches, onNavigate, onProductClick, onSwatchClick, onSceneClick }) {
+function CategoryRootView({ type, spaces, spaceContents, collections, materials, products, swatches, onNavigate, onProductClick, onSwatchClick, onSceneClick, searchTerm, searchTags, filters, onCompareToggle, compareList }) {
     let title = "";
     let items = [];
     let icon = null;
     let isMaterial = false;
 
+    // Filter Logic
+    const filterItem = (item, itemType) => {
+        const text = itemType === 'product' ? [item.name, item.category, item.specs].join(' ') : 
+                     itemType === 'scene' ? [item.title, item.description].join(' ') :
+                     [item.name, item.materialCode].join(' ');
+        const fullText = text.toLowerCase();
+        const matchesSearch = !searchTerm || fullText.includes(searchTerm.toLowerCase());
+        const matchesTags = searchTags.every(t => fullText.includes(t.toLowerCase()));
+        
+        let matchesFilter = true;
+        if (itemType === 'product') {
+            if(filters.isNew && !item.isNew) matchesFilter = false;
+            if(filters.year && !item.launchDate?.startsWith(filters.year)) matchesFilter = false;
+            if(filters.color) {
+                const colorMatch = [...(item.bodyColors||[]), ...(item.upholsteryColors||[])].some(c => { const name = typeof c === 'object' ? c.name : c; return name.toLowerCase().includes(filters.color.toLowerCase()); });
+                if(!colorMatch) matchesFilter = false;
+            }
+        }
+        return matchesSearch && matchesTags && matchesFilter;
+    };
+
     if (type === 'SPACES_ROOT') {
         title = "Spaces";
         items = spaces;
-        icon = Circle; // Changed from Briefcase to Circle
+        icon = Circle; 
     } else if (type === 'COLLECTIONS_ROOT') {
         title = "Collections";
         items = collections;
@@ -1173,71 +1261,68 @@ function CategoryRootView({ type, spaces, spaceContents, collections, materials,
                 <h2 className="text-4xl font-black text-zinc-900 tracking-tight">{title}</h2>
             </div>
             
-            <div className="space-y-16">
+            <div className="space-y-8">
                 {items.map(item => {
                     let subItems = [];
+                    let itemType = '';
                     
                     if (type === 'SPACES_ROOT') {
                         const content = spaceContents[item.id] || {};
                         subItems = content.scenes || [];
+                        itemType = 'scene';
                     } else if (type === 'COLLECTIONS_ROOT') {
                         subItems = products.filter(p => p.category === item.id);
+                        itemType = 'product';
                     } else if (type === 'MATERIALS_ROOT') {
                         subItems = swatches.filter(s => s.category === item.id);
+                        itemType = 'material';
                     }
+
+                    subItems = subItems.filter(i => filterItem(i, itemType));
 
                     if (subItems.length === 0) return null;
 
                     return (
-                        <div key={item.id}>
-                            <div className="flex items-center justify-between mb-4">
-                                <div className="flex items-center cursor-pointer hover:opacity-70" onClick={() => onNavigate(item.id)}>
-                                    {isMaterial && <div className="w-4 h-4 rounded-full mr-3" style={{backgroundColor: item.color}}></div>}
-                                    <h3 className="text-2xl font-bold text-zinc-900">{item.label}</h3>
-                                    <ChevronRight className="w-5 h-5 ml-2 text-zinc-400"/>
-                                </div>
-                            </div>
-                            
-                            {/* Materials use Grid, Others use Horizontal Scroll */}
-                            {type === 'MATERIALS_ROOT' ? (
-                                <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-4">
-                                    {subItems.map(sub => (
-                                        <div key={sub.id} onClick={() => onSwatchClick(sub)} className="group cursor-pointer">
-                                            <div className="aspect-square bg-zinc-50 rounded-xl mb-2 overflow-hidden border border-zinc-200 relative">
+                        <CollapsibleSection key={item.id} title={item.label} count={subItems.length}>
+                            {/* Grid Layout for all types */}
+                            <div className={`grid gap-4 ${type === 'MATERIALS_ROOT' ? 'grid-cols-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6' : 'grid-cols-2 md:grid-cols-4 lg:grid-cols-5'}`}>
+                                {subItems.map(sub => (
+                                    <div 
+                                        key={sub.id} 
+                                        onClick={() => {
+                                            if (type === 'SPACES_ROOT') onSceneClick({...sub, spaceId: item.id});
+                                            else if (type === 'COLLECTIONS_ROOT') onProductClick(sub);
+                                            else onSwatchClick(sub);
+                                        }}
+                                        className="group cursor-pointer relative"
+                                    >
+                                        <div className={`aspect-square ${isMaterial ? 'rounded-xl' : 'rounded-xl'} bg-zinc-50 overflow-hidden border border-zinc-100 relative mb-2 p-0`}>
+                                            {type === 'SPACES_ROOT' ? (
+                                                <img src={sub.image} className="w-full h-full object-cover group-hover:scale-105 transition-transform"/>
+                                            ) : type === 'MATERIALS_ROOT' ? (
                                                 <SwatchDisplay color={sub} className="w-full h-full rounded-none scale-100"/>
-                                            </div>
-                                            <h4 className="text-xs font-bold text-zinc-900 truncate group-hover:text-blue-600">{sub.name}</h4>
-                                            <p className="text-[10px] text-zinc-400 truncate">{sub.materialCode}</p>
+                                            ) : (
+                                                <img src={sub.images?.[0] ? (typeof sub.images[0] === 'object' ? sub.images[0].url : sub.images[0]) : ''} className="w-full h-full object-contain mix-blend-multiply group-hover:scale-105 transition-transform"/>
+                                            )}
+                                            
+                                            {/* Compare Button for Collections */}
+                                            {type === 'COLLECTIONS_ROOT' && (
+                                                <button 
+                                                    onClick={(e) => onCompareToggle(e, sub)} 
+                                                    className={`absolute top-2 right-2 p-1.5 rounded-full transition-all z-10 ${compareList.find(p=>p.id===sub.id) ? 'bg-zinc-900 text-white' : 'bg-white/80 text-zinc-400 hover:text-zinc-900'}`}
+                                                >
+                                                    <ArrowLeftRight className="w-3.5 h-3.5" />
+                                                </button>
+                                            )}
                                         </div>
-                                    ))}
-                                </div>
-                            ) : (
-                                <div className="flex overflow-x-auto gap-4 pb-4 custom-scrollbar">
-                                    {subItems.map(sub => (
-                                        <div 
-                                            key={sub.id} 
-                                            onClick={() => {
-                                                if (type === 'SPACES_ROOT') onSceneClick({...sub, spaceId: item.id});
-                                                else onProductClick(sub);
-                                            }}
-                                            className="flex-shrink-0 w-40 md:w-56 group cursor-pointer"
-                                        >
-                                            <div className={`aspect-square rounded-xl bg-zinc-50 overflow-hidden border border-zinc-100 relative mb-2`}>
-                                                {type === 'SPACES_ROOT' ? (
-                                                    <img src={sub.image} className="w-full h-full object-cover group-hover:scale-105 transition-transform"/>
-                                                ) : (
-                                                    sub.images?.[0] ? <img src={typeof sub.images[0] === 'object' ? sub.images[0].url : sub.images[0]} className="w-full h-full object-contain mix-blend-multiply group-hover:scale-105 transition-transform"/> : <ImageIcon className="w-8 h-8 text-zinc-300 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"/>
-                                                )}
-                                            </div>
-                                            <h4 className="text-sm font-bold text-zinc-900 truncate group-hover:text-blue-600">
-                                                {type === 'SPACES_ROOT' ? sub.title : sub.name}
-                                            </h4>
-                                            <p className="text-xs text-zinc-400 truncate">{type === 'SPACES_ROOT' ? sub.description : (sub.designer || item.label)}</p>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
+                                        <h4 className="text-sm font-bold text-zinc-900 truncate group-hover:text-blue-600">
+                                            {type === 'SPACES_ROOT' ? sub.title : sub.name}
+                                        </h4>
+                                        {type !== 'MATERIALS_ROOT' && <p className="text-xs text-zinc-400 truncate">{type === 'SPACES_ROOT' ? sub.description : (sub.designer || item.label)}</p>}
+                                    </div>
+                                ))}
+                            </div>
+                        </CollapsibleSection>
                     );
                 })}
             </div>
@@ -1270,85 +1355,159 @@ function CompareView({ products, hiddenIds, onToggleVisibility, onRemove, onEdit
                     <thead>
                         <tr>
                             {/* Fixed Header Column */}
-                            <th className="w-20 md:w-32 bg-zinc-50 border-b border-r border-zinc-100 p-2 md:p-4 text-left text-[10px] md:text-xs font-bold text-zinc-400 uppercase sticky top-0 left-0 z-30 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">Feature</th>
+                            <th className="w-24 md:w-32 bg-zinc-50 border-b border-r border-zinc-100 p-2 md:p-3 text-left text-[10px] md:text-xs font-bold text-zinc-400 uppercase sticky top-0 left-0 z-30 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">Feature</th>
                             {visibleProducts.map(p => (
-                                <th key={p.id} className="w-36 md:w-72 bg-white border-b border-r border-zinc-100 p-2 md:p-4 align-top sticky top-0 z-10">
+                                <th key={p.id} className="w-40 md:w-64 bg-white border-b border-r border-zinc-100 p-2 md:p-3 align-top sticky top-0 z-10">
                                     <div className="relative group">
-                                        <div onClick={() => onProductClick(p)} className="aspect-[4/3] bg-zinc-50 rounded-xl mb-2 md:mb-4 flex items-center justify-center overflow-hidden border border-zinc-100 relative max-h-24 md:max-h-full cursor-pointer">
-                                            {p.images?.[0] ? <img src={typeof p.images[0] === 'object' ? p.images[0].url : p.images[0]} className="w-full h-full object-contain mix-blend-multiply" /> : <ImageIcon className="text-zinc-300"/>}
-                                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors"></div>
-                                        </div>
-                                        <h4 className="font-bold text-xs md:text-lg text-zinc-900 mb-1 truncate">{p.name}</h4>
-                                        <button onClick={() => onRemove(p.id)} className="absolute top-0 right-0 bg-white rounded-full p-1 shadow-sm hover:text-red-500 border border-zinc-100"><X className="w-3 h-3 md:w-4 md:h-4"/></button>
+                                        <h4 className="font-bold text-sm md:text-base text-zinc-900 mb-1 truncate pr-6">{p.name}</h4>
+                                        <button onClick={() => onRemove(p.id)} className="absolute top-0 right-0 text-zinc-300 hover:text-red-500"><X className="w-4 h-4"/></button>
                                     </div>
                                 </th>
                             ))}
-                            {/* Empty Placeholders */}
-                            {visibleProducts.length < 2 && Array(2 - visibleProducts.length).fill(0).map((_, i) => <th key={`ph-${i}`} className="w-36 md:w-72 bg-zinc-50/10 border-b border-zinc-50"></th>)}
+                            {/* Empty Placeholders to keep grid stable */}
+                            {visibleProducts.length < 4 && Array(4 - visibleProducts.length).fill(0).map((_, i) => <th key={`ph-${i}`} className="w-40 md:w-64 bg-zinc-50/10 border-b border-zinc-50"></th>)}
                         </tr>
                     </thead>
                     <tbody className="text-xs md:text-sm">
                         <tr>
-                            <td className="bg-zinc-50 border-r border-b border-zinc-100 p-2 md:p-4 font-bold text-zinc-500 sticky left-0 z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">Category</td>
-                            {visibleProducts.map(p => <td key={p.id} className="border-r border-b border-zinc-100 p-2 md:p-4 text-zinc-700 font-medium truncate">{p.category}</td>)}
-                            {visibleProducts.length < 2 && Array(2 - visibleProducts.length).fill(0).map((_, i) => <td key={i} className="border-b border-zinc-50"></td>)}
-                        </tr>
-                        <tr>
-                            <td className="bg-zinc-50 border-r border-b border-zinc-100 p-2 md:p-4 font-bold text-zinc-500 sticky left-0 z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">Designer</td>
-                            {visibleProducts.map(p => <td key={p.id} className="border-r border-b border-zinc-100 p-2 md:p-4 text-zinc-700 truncate">{p.designer || '-'}</td>)}
-                            {visibleProducts.length < 2 && Array(2 - visibleProducts.length).fill(0).map((_, i) => <td key={i} className="border-b border-zinc-50"></td>)}
-                        </tr>
-                        <tr>
-                            <td className="bg-zinc-50 border-r border-b border-zinc-100 p-2 md:p-4 font-bold text-zinc-500 sticky left-0 z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">Launch</td>
-                            {visibleProducts.map(p => <td key={p.id} className="border-r border-b border-zinc-100 p-2 md:p-4 text-zinc-700">{p.launchDate ? p.launchDate.substring(0,4) : '-'}</td>)}
-                            {visibleProducts.length < 2 && Array(2 - visibleProducts.length).fill(0).map((_, i) => <td key={i} className="border-b border-zinc-50"></td>)}
-                        </tr>
-                        <tr>
-                            <td className="bg-zinc-50 border-r border-b border-zinc-100 p-2 md:p-4 font-bold text-zinc-500 sticky left-0 z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">Specs</td>
-                            {visibleProducts.map(p => <td key={p.id} className="border-r border-b border-zinc-100 p-2 md:p-4 text-zinc-600 text-[10px] md:text-xs leading-relaxed whitespace-pre-wrap">{p.specs}</td>)}
-                            {visibleProducts.length < 2 && Array(2 - visibleProducts.length).fill(0).map((_, i) => <td key={i} className="border-b border-zinc-50"></td>)}
-                        </tr>
-                        <tr>
-                            <td className="bg-zinc-50 border-r border-b border-zinc-100 p-2 md:p-4 font-bold text-zinc-500 sticky left-0 z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">Options</td>
+                            <td className="bg-zinc-50 border-r border-b border-zinc-100 p-2 md:p-3 font-bold text-zinc-500 sticky left-0 z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">Image</td>
                             {visibleProducts.map(p => (
-                                <td key={p.id} className="border-r border-b border-zinc-100 p-2 md:p-4">
+                                <td key={p.id} className="border-r border-b border-zinc-100 p-0">
+                                    <div onClick={() => onProductClick(p)} className="aspect-[4/3] bg-zinc-50 flex items-center justify-center overflow-hidden cursor-pointer relative">
+                                        {p.images?.[0] ? <img src={typeof p.images[0] === 'object' ? p.images[0].url : p.images[0]} className="w-full h-full object-contain mix-blend-multiply" /> : <ImageIcon className="text-zinc-300"/>}
+                                    </div>
+                                </td>
+                            ))}
+                            {visibleProducts.length < 4 && Array(4 - visibleProducts.length).fill(0).map((_, i) => <td key={i} className="border-b border-zinc-50"></td>)}
+                        </tr>
+                        <tr>
+                            <td className="bg-zinc-50 border-r border-b border-zinc-100 p-2 md:p-3 font-bold text-zinc-500 sticky left-0 z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">Category</td>
+                            {visibleProducts.map(p => <td key={p.id} className="border-r border-b border-zinc-100 p-2 md:p-3 text-zinc-700 font-medium truncate">{p.category}</td>)}
+                            {visibleProducts.length < 4 && Array(4 - visibleProducts.length).fill(0).map((_, i) => <td key={i} className="border-b border-zinc-50"></td>)}
+                        </tr>
+                        <tr>
+                            <td className="bg-zinc-50 border-r border-b border-zinc-100 p-2 md:p-3 font-bold text-zinc-500 sticky left-0 z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">Designer</td>
+                            {visibleProducts.map(p => <td key={p.id} className="border-r border-b border-zinc-100 p-2 md:p-3 text-zinc-700 truncate">{p.designer || '-'}</td>)}
+                            {visibleProducts.length < 4 && Array(4 - visibleProducts.length).fill(0).map((_, i) => <td key={i} className="border-b border-zinc-50"></td>)}
+                        </tr>
+                        <tr>
+                            <td className="bg-zinc-50 border-r border-b border-zinc-100 p-2 md:p-3 font-bold text-zinc-500 sticky left-0 z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">Specs</td>
+                            {visibleProducts.map(p => <td key={p.id} className="border-r border-b border-zinc-100 p-2 md:p-3 text-zinc-600 text-[10px] md:text-xs leading-relaxed whitespace-pre-wrap">{p.specs}</td>)}
+                            {visibleProducts.length < 4 && Array(4 - visibleProducts.length).fill(0).map((_, i) => <td key={i} className="border-b border-zinc-50"></td>)}
+                        </tr>
+                        <tr>
+                            <td className="bg-zinc-50 border-r border-b border-zinc-100 p-2 md:p-3 font-bold text-zinc-500 sticky left-0 z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">Options</td>
+                            {visibleProducts.map(p => (
+                                <td key={p.id} className="border-r border-b border-zinc-100 p-2 md:p-3">
                                     <div className="flex flex-wrap gap-1">
                                         {p.options?.map((opt, i) => <span key={i} className="px-1.5 py-0.5 bg-blue-50 text-blue-700 rounded text-[9px] md:text-[10px] font-bold border border-blue-100">{opt}</span>)}
                                     </div>
                                 </td>
                             ))}
-                            {visibleProducts.length < 2 && Array(2 - visibleProducts.length).fill(0).map((_, i) => <td key={i} className="border-b border-zinc-50"></td>)}
+                            {visibleProducts.length < 4 && Array(4 - visibleProducts.length).fill(0).map((_, i) => <td key={i} className="border-b border-zinc-50"></td>)}
                         </tr>
                         <tr>
-                            <td className="bg-zinc-50 border-r border-b border-zinc-100 p-2 md:p-4 font-bold text-zinc-500 sticky left-0 z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">Colors</td>
+                            <td className="bg-zinc-50 border-r border-b border-zinc-100 p-2 md:p-3 font-bold text-zinc-500 sticky left-0 z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">Colors</td>
                             {visibleProducts.map(p => (
-                                <td key={p.id} className="border-r border-b border-zinc-100 p-2 md:p-4">
+                                <td key={p.id} className="border-r border-b border-zinc-100 p-2 md:p-3">
                                     <div className="flex flex-wrap gap-1">
                                         {[...(p.bodyColors||[]), ...(p.upholsteryColors||[])].slice(0, 8).map((c, i) => <SwatchDisplay key={i} color={c} size="small"/>)}
                                         {([...(p.bodyColors||[]), ...(p.upholsteryColors||[])].length > 8) && <span className="text-[9px] text-zinc-400">+</span>}
                                     </div>
                                 </td>
                             ))}
-                            {visibleProducts.length < 2 && Array(2 - visibleProducts.length).fill(0).map((_, i) => <td key={i} className="border-b border-zinc-50"></td>)}
+                            {visibleProducts.length < 4 && Array(4 - visibleProducts.length).fill(0).map((_, i) => <td key={i} className="border-b border-zinc-50"></td>)}
                         </tr>
-                        
-                        {/* Edit Row for Admins */}
-                        {isAdmin && (
-                            <tr>
-                                <td className="bg-zinc-50 border-r border-b border-zinc-100 p-2 md:p-4 font-bold text-zinc-500 sticky left-0 z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">Actions</td>
-                                {visibleProducts.map(p => (
-                                    <td key={p.id} className="border-r border-b border-zinc-100 p-2 md:p-4 text-center">
-                                        <button onClick={() => onEdit(p)} className="px-3 py-1.5 bg-zinc-900 text-white text-[10px] md:text-xs font-bold rounded-lg hover:bg-black transition-colors flex items-center justify-center w-full">
-                                            <Edit2 className="w-3 h-3 mr-1"/> Edit
-                                        </button>
-                                    </td>
-                                ))}
-                                {visibleProducts.length < 2 && Array(2 - visibleProducts.length).fill(0).map((_, i) => <td key={i} className="border-b border-zinc-50"></td>)}
-                            </tr>
-                        )}
                     </tbody>
                 </table>
             </div>
+            
+            {/* Footer Actions */}
+            <div className="fixed bottom-0 left-0 md:left-72 right-0 bg-white border-t border-zinc-200 p-3 flex justify-end gap-3 z-40">
+                <button onClick={() => window.print()} className="flex items-center px-4 py-2 bg-zinc-100 text-zinc-700 rounded-lg text-sm font-bold hover:bg-zinc-200"><Printer className="w-4 h-4 mr-2"/> Print / PDF</button>
+                <button className="flex items-center px-4 py-2 bg-zinc-900 text-white rounded-lg text-sm font-bold hover:bg-black"><Share2 className="w-4 h-4 mr-2"/> Share</button>
+            </div>
+        </div>
+    );
+}
+
+function MyPickView({ favorites, products, spaces, spaceContents, swatches, onProductClick, onSceneClick, onSwatchClick, onToggleFavorite }) {
+    // Group favorites
+    const favProducts = products.filter(p => favorites.includes(p.id));
+    const favScenes = [];
+    SPACES.forEach(space => {
+        const content = spaceContents[space.id] || {};
+        (content.scenes || []).forEach(scene => {
+            if (favorites.includes(scene.id)) favScenes.push({...scene, spaceId: space.id});
+        });
+    });
+    const favSwatches = swatches.filter(s => favorites.includes(s.id));
+
+    return (
+        <div className="animate-in fade-in slide-in-from-bottom-4 pb-32">
+            <div className="mb-8 flex items-center">
+                <div className="p-3 bg-yellow-100 text-yellow-600 rounded-xl mr-4">
+                    <Heart className="w-6 h-6 fill-current" />
+                </div>
+                <h2 className="text-4xl font-black text-zinc-900 tracking-tight">My Pick</h2>
+            </div>
+
+            {favProducts.length > 0 && (
+                <CollapsibleSection title="Products" count={favProducts.length}>
+                    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                        {favProducts.map(product => (
+                            <div key={product.id} onClick={() => onProductClick(product)} className="group cursor-pointer relative">
+                                <div className="aspect-square bg-zinc-50 rounded-xl mb-2 overflow-hidden border border-zinc-100 relative p-0">
+                                    {product.images?.[0] ? <img src={typeof product.images[0] === 'object' ? product.images[0].url : product.images[0]} className="w-full h-full object-contain mix-blend-multiply group-hover:scale-105 transition-transform" /> : <ImageIcon className="w-8 h-8 text-zinc-300 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"/>}
+                                    <button onClick={(e) => onToggleFavorite(e, product.id)} className="absolute top-2 right-2 p-1.5 bg-white/80 rounded-full text-yellow-400 hover:scale-110 transition-all z-10"><Star className="w-3.5 h-3.5 fill-current"/></button>
+                                </div>
+                                <h4 className="text-xs font-bold text-zinc-900 truncate group-hover:text-blue-600">{product.name}</h4>
+                                <p className="text-[10px] text-zinc-400 truncate">{product.category}</p>
+                            </div>
+                        ))}
+                    </div>
+                </CollapsibleSection>
+            )}
+
+            {favScenes.length > 0 && (
+                <CollapsibleSection title="Scenes" count={favScenes.length}>
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                        {favScenes.map(scene => (
+                            <div key={scene.id} onClick={() => onSceneClick(scene)} className="group cursor-pointer relative">
+                                <div className="aspect-[4/3] bg-zinc-50 rounded-xl mb-2 overflow-hidden border border-zinc-100 relative">
+                                    <img src={scene.image} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                                    <button onClick={(e) => onToggleFavorite(e, scene.id)} className="absolute top-2 right-2 p-1.5 bg-white/80 rounded-full text-yellow-400 hover:scale-110 transition-all z-10"><Star className="w-3.5 h-3.5 fill-current"/></button>
+                                </div>
+                                <h4 className="text-xs font-bold text-zinc-900 truncate group-hover:text-blue-600">{scene.title}</h4>
+                            </div>
+                        ))}
+                    </div>
+                </CollapsibleSection>
+            )}
+
+            {favSwatches.length > 0 && (
+                <CollapsibleSection title="Materials" count={favSwatches.length}>
+                    <div className="grid grid-cols-2 md:grid-cols-5 lg:grid-cols-6 gap-4">
+                        {favSwatches.map(swatch => (
+                            <div key={swatch.id} onClick={() => onSwatchClick(swatch)} className="group cursor-pointer relative">
+                                <div className="aspect-square bg-zinc-50 rounded-xl mb-2 overflow-hidden border border-zinc-100 relative">
+                                    <SwatchDisplay color={swatch} className="w-full h-full rounded-none scale-100"/>
+                                    <button onClick={(e) => onToggleFavorite(e, swatch.id)} className="absolute top-2 right-2 p-1.5 bg-white/80 rounded-full text-yellow-400 hover:scale-110 transition-all z-10"><Star className="w-3.5 h-3.5 fill-current"/></button>
+                                </div>
+                                <h4 className="text-xs font-bold text-zinc-900 truncate group-hover:text-blue-600">{swatch.name}</h4>
+                                <p className="text-[10px] text-zinc-400 truncate">{swatch.materialCode}</p>
+                            </div>
+                        ))}
+                    </div>
+                </CollapsibleSection>
+            )}
+            
+            {favProducts.length === 0 && favScenes.length === 0 && favSwatches.length === 0 && (
+                <div className="text-center py-20 text-zinc-400">
+                    <Heart className="w-12 h-12 mx-auto mb-4 opacity-20"/>
+                    <p>No favorites added yet.</p>
+                </div>
+            )}
         </div>
     );
 }
@@ -2465,7 +2624,15 @@ function ProductDetailModal({ product, allProducts, swatches, spaceContents, onC
                  <div className="flex justify-center gap-4">
                     <button onClick={handleShareImage} className="flex flex-col items-center justify-center w-14 h-14 bg-zinc-50 rounded-2xl text-zinc-600 active:scale-95 transition-transform border border-zinc-100">
                         <ImgIcon className="w-5 h-5 mb-1"/>
-                        <span className="text-[9px] font-bold">Image</span>
+                        <span className="text-[9px] font-bold">
+                          네, ProductDetailModal 컴포넌트의 모바일 하단 버튼 영역부터 코드를 이어서 작성해 드리겠습니다.
+
+code
+JavaScript
+download
+content_copy
+expand_less
+Image</span>
                     </button>
                     <button onClick={() => window.print()} className="flex flex-col items-center justify-center w-14 h-14 bg-zinc-50 rounded-2xl text-zinc-600 active:scale-95 transition-transform border border-zinc-100">
                         <Printer className="w-5 h-5 mb-1"/>
@@ -2952,7 +3119,7 @@ function SceneEditModal({ initialData, allProducts, spaceTags = [], spaceOptions
   );
 }
 
-function SpaceSceneModal({ scene, products, allProducts, isAdmin, onClose, onEdit, onProductToggle, onNavigateProduct }) {
+function SpaceSceneModal({ scene, products, allProducts, isAdmin, onClose, onEdit, onProductToggle, onNavigateProduct, isFavorite, onToggleFavorite }) {
   useScrollLock();
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const images = scene.images ? [scene.image, ...scene.images] : [scene.image];
@@ -2973,7 +3140,7 @@ function SpaceSceneModal({ scene, products, allProducts, isAdmin, onClose, onEdi
     <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[60] flex items-center justify-center p-0 md:p-6 animate-in zoom-in-95 duration-200 print:hidden">
       {isZoomed && currentImgUrl && (<div className="fixed inset-0 z-[120] bg-black flex items-center justify-center p-0 cursor-zoom-out print:hidden" onClick={() => setIsZoomed(false)}><img src={currentImgUrl} className="w-full h-full object-contain max-w-none max-h-none" style={{maxWidth: '100vw', maxHeight: '100vh'}} alt="Zoomed" /><button className="absolute top-6 right-6 text-white/50 hover:text-white"><X className="w-10 h-10" /></button></div>)}
       
-      <div className="bg-white w-full h-full md:h-[90vh] md:max-w-6xl md:rounded-3xl overflow-hidden shadow-2xl flex flex-col md:flex-row relative overflow-y-auto md:overflow-hidden">
+      <div className="bg-white w-full h-[100dvh] md:h-[90vh] md:max-w-6xl md:rounded-3xl overflow-hidden shadow-2xl flex flex-col md:flex-row relative">
          <div className="absolute top-4 right-4 z-[100] flex gap-2">
             {isAdmin && <button onClick={onEdit} className="p-2 bg-white/50 hover:bg-zinc-100 rounded-full backdrop-blur shadow-sm"><Edit3 className="w-6 h-6 text-zinc-900" /></button>}
             <button onClick={onClose} className="p-2 bg-white/50 hover:bg-zinc-100 rounded-full backdrop-blur shadow-sm"><X className="w-6 h-6 text-zinc-900" /></button>
@@ -2983,6 +3150,7 @@ function SpaceSceneModal({ scene, products, allProducts, isAdmin, onClose, onEdi
          <div className="w-full md:w-2/3 bg-black relative flex flex-col justify-center shrink-0 md:h-full">
             <div className="relative w-full h-full min-h-[40vh] md:min-h-0">
                 <img src={currentImgUrl} className="w-full h-full object-contain cursor-zoom-in" alt="Scene" onClick={() => setIsZoomed(true)} />
+                <button onClick={onToggleFavorite} className="absolute top-4 left-4 p-2 bg-black/40 backdrop-blur rounded-full text-white hover:text-yellow-400 z-30"><Star className={`w-6 h-6 ${isFavorite ? 'fill-yellow-400 text-yellow-400' : ''}`}/></button>
             </div>
             {/* Caption Outside */}
             {currentImgCaption && <div className="absolute bottom-20 left-0 right-0 text-center text-white/90 text-sm bg-black/40 backdrop-blur-sm p-2 mx-auto max-w-md rounded-xl z-20">{currentImgCaption}</div>}
