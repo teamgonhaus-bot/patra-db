@@ -1,5 +1,5 @@
 /* global __firebase_config, __app_id, __initial_auth_token */
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { 
   Plus, Search, X, Check, Tag, Palette, Settings, Image as ImageIcon,
   Upload, Trash2, Edit2, RefreshCw, Cloud, CloudOff, Lock, Unlock,
@@ -11,7 +11,7 @@ import {
   ChevronsUp, Camera, ImagePlus, Sofa, Briefcase, Users, Home as HomeIcon, MapPin,
   Edit3, Grid, MoreVertical, MousePointer2, CheckSquare, XCircle, Printer, List, Eye,
   PlayCircle, BarChart3, CornerUpLeft, Grid3X3, Droplet, Coffee, GraduationCap, ShoppingBag, FileDown, FileUp,
-  ArrowLeftRight, SlidersHorizontal, Move, Monitor, Maximize, EyeOff, Type, ExternalLink, Circle
+  ArrowLeftRight, SlidersHorizontal, Move, Monitor, Maximize, EyeOff, Type, ExternalLink, Circle, Medal
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { 
@@ -39,7 +39,6 @@ const YOUR_FIREBASE_CONFIG = {
 // ----------------------------------------------------------------------
 const APP_VERSION = "v0.8.0"; 
 const BUILD_DATE = "2026.01.24";
-const UPDATE_NOTE = "V 0.8.0 Update";
 const ADMIN_PASSWORD = "adminlcg1"; 
 
 // Firebase 초기화
@@ -133,10 +132,9 @@ const TEXTURE_TYPES = [
     { id: 'MATTE', label: 'Matte' }
 ];
 
-
-
-// Awards (New in v0.8.0)
+// 기본 어워드 태그
 const DEFAULT_AWARD_TAGS = ['iF', 'reddot', 'IDEA', 'GDA', 'Chicago GD'];
+
 // Hook for scroll locking
 function useScrollLock() {
   useEffect(() => {
@@ -157,13 +155,8 @@ function useScrollLock() {
 export default function App() {
   const [user, setUser] = useState(null);
   const [products, setProducts] = useState([]);
-  const [swatches, setSwatches] = useState([]);
-  const [awards, setAwards] = useState([]); // Awards objects
-  const [awardTags, setAwardTags] = useState(DEFAULT_AWARD_TAGS);
-  const [selectedAward, setSelectedAward] = useState(null);
-  const [isAwardFormOpen, setIsAwardFormOpen] = useState(false);
-  const [editingAward, setEditingAward] = useState(null);
- 
+  const [swatches, setSwatches] = useState([]); 
+  const [awards, setAwards] = useState([]); // New Awards State
   const [activeCategory, setActiveCategory] = useState('DASHBOARD');
   const [previousCategory, setPreviousCategory] = useState('DASHBOARD'); 
   const [activeSpaceTag, setActiveSpaceTag] = useState('ALL'); 
@@ -181,6 +174,7 @@ export default function App() {
   // Selection & Compare (Stacked Modals)
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [selectedSwatch, setSelectedSwatch] = useState(null); 
+  const [selectedAward, setSelectedAward] = useState(null); // New Award Selection
   const [compareList, setCompareList] = useState([]);
   const [hiddenCompareIds, setHiddenCompareIds] = useState([]); 
   const [isCompareModalOpen, setIsCompareModalOpen] = useState(false);
@@ -189,6 +183,7 @@ export default function App() {
   const [isFormOpen, setIsFormOpen] = useState(false); 
   const [editingProduct, setEditingProduct] = useState(null);
   const [editingSwatchFromModal, setEditingSwatchFromModal] = useState(null);
+  const [editingAward, setEditingAward] = useState(null); // New Award Edit
 
   const [isLoading, setIsLoading] = useState(true);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -200,7 +195,7 @@ export default function App() {
   const [favorites, setFavorites] = useState([]); // Stores IDs of Products, Scenes, Swatches
   
   // UI State
-  const [sidebarState, setSidebarState] = useState({ spaces: true, collections: true, materials: true });
+  const [sidebarState, setSidebarState] = useState({ spaces: true, collections: true, materials: true, awards: true });
   const [myPickViewMode, setMyPickViewMode] = useState('grid'); 
   const [bannerData, setBannerData] = useState({ url: null, logoUrl: null, title: 'Design Lab DB', subtitle: 'Integrated Product Database & Archives' });
   const [appSettings, setAppSettings] = useState({ logo: null, title: 'PATRA', subtitle: 'Design Lab DB' });
@@ -225,6 +220,8 @@ export default function App() {
         if (e.key === 'Escape') {
             if (editingSwatchFromModal) setEditingSwatchFromModal(null);
             else if (selectedSwatch) setSelectedSwatch(null);
+            else if (selectedAward) setSelectedAward(null);
+            else if (editingAward) setEditingAward(null);
             else if (selectedProduct) setSelectedProduct(null);
             else if (selectedScene) setSelectedScene(null);
             else if (editingScene) setEditingScene(null);
@@ -236,7 +233,7 @@ export default function App() {
     };
     window.addEventListener('keydown', handleEsc);
     return () => window.removeEventListener('keydown', handleEsc);
-  }, [editingSwatchFromModal, selectedSwatch, selectedProduct, selectedScene, editingScene, isFormOpen, managingSpaceProductsId, editingSpaceInfoId, showAdminDashboard]);
+  }, [editingSwatchFromModal, selectedSwatch, selectedAward, editingAward, selectedProduct, selectedScene, editingScene, isFormOpen, managingSpaceProductsId, editingSpaceInfoId, showAdminDashboard]);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -256,6 +253,8 @@ export default function App() {
     const handlePopState = (event) => {
       if (selectedSwatch) {
           setSelectedSwatch(null);
+      } else if (selectedAward) {
+          setSelectedAward(null);
       } else if (selectedProduct) {
           setSelectedProduct(null);
           window.history.replaceState(null, '', window.location.pathname);
@@ -269,7 +268,7 @@ export default function App() {
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
-  }, [selectedProduct, selectedSwatch, activeCategory, previousCategory]);
+  }, [selectedProduct, selectedSwatch, selectedAward, activeCategory, previousCategory]);
 
   useEffect(() => {
     if (selectedProduct) {
@@ -317,6 +316,8 @@ export default function App() {
     if (!isFirebaseAvailable) {
        const localSwatches = localStorage.getItem('patra_swatches');
        setSwatches(localSwatches ? JSON.parse(localSwatches) : []);
+       const localAwards = localStorage.getItem('patra_awards');
+       setAwards(localAwards ? JSON.parse(localAwards) : []);
     }
   }, []);
 
@@ -333,15 +334,13 @@ export default function App() {
         const loadedSwatches = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         setSwatches(loadedSwatches);
       });
-      
-const qAwards = collection(db, 'artifacts', appId, 'public', 'data', 'awards');
-const unsubAwards = onSnapshot(qAwards, (snapshot) => {
-  const loadedAwards = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-  setAwards(loadedAwards);
-});
-const awardTagsRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'award_tags');
-onSnapshot(awardTagsRef, (d) => { if (d.exists()) { const t = d.data().tags || []; setAwardTags(t.length ? t : DEFAULT_AWARD_TAGS); } });
-const bannerDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'banner');
+      const qAwards = collection(db, 'artifacts', appId, 'public', 'data', 'awards');
+      const unsubAwards = onSnapshot(qAwards, (snapshot) => {
+        const loadedAwards = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        setAwards(loadedAwards);
+      });
+
+      const bannerDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'banner');
       onSnapshot(bannerDocRef, (doc) => { if (doc.exists()) setBannerData(prev => ({ ...prev, ...doc.data() })); });
       const appSettingsRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'app');
       onSnapshot(appSettingsRef, (doc) => { if(doc.exists()) setAppSettings(prev => ({...prev, ...doc.data()})); });
@@ -353,9 +352,7 @@ const bannerDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', '
             }
          });
       });
-      return () => { unsubProducts(); unsubSwatches();
-      try { unsubAwards(); } catch(e) {}
- };
+      return () => { unsubProducts(); unsubSwatches(); unsubAwards(); };
     } else {
       const localBanner = localStorage.getItem('patra_banner_data');
       if (localBanner) setBannerData(JSON.parse(localBanner));
@@ -395,12 +392,6 @@ const bannerDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', '
   const loadFromLocalStorage = () => {
     const saved = localStorage.getItem('patra_products');
     setProducts(saved ? JSON.parse(saved) : []);
-    const savedSwatches = localStorage.getItem('patra_swatches');
-    setSwatches(savedSwatches ? JSON.parse(savedSwatches) : []);
-    const savedAwards = localStorage.getItem('patra_awards');
-    setAwards(savedAwards ? JSON.parse(savedAwards) : []);
-    const savedAwardTags = localStorage.getItem('patra_award_tags');
-    setAwardTags(savedAwardTags ? JSON.parse(savedAwardTags) : DEFAULT_AWARD_TAGS);
     setIsLoading(false);
   };
   const saveToLocalStorage = (newProducts) => {
@@ -411,6 +402,11 @@ const bannerDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', '
     localStorage.setItem('patra_swatches', JSON.stringify(newSwatches));
     setSwatches(newSwatches);
   };
+  const saveAwardsToLocal = (newAwards) => {
+    localStorage.setItem('patra_awards', JSON.stringify(newAwards));
+    setAwards(newAwards);
+  };
+
   const showToast = (message, type = 'success') => {
     setToast({ message, type });
     setTimeout(() => setToast(null), 3000);
@@ -572,8 +568,14 @@ const bannerDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', '
   const handleSpaceProductToggle = async (spaceId, productId, isAdded) => { const product = products.find(p => p.id === productId); if(!product) return; let newSpaces = product.spaces || []; if(isAdded) { if(!newSpaces.includes(spaceId)) newSpaces.push(spaceId); } else { newSpaces = newSpaces.filter(s => s !== spaceId); } if (isFirebaseAvailable && db) { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'products', product.id), { spaces: newSpaces }, { merge: true }); } else { const idx = products.findIndex(p => p.id === productId); const newProds = [...products]; newProds[idx] = { ...product, spaces: newSpaces }; saveToLocalStorage(newProds); } };
   const logActivity = async (action, productName, details = "") => { if (!isFirebaseAvailable || !db) return; try { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'logs'), { action, productName, details, timestamp: Date.now(), adminId: 'admin' }); } catch (e) { console.error(e); } };
   const fetchLogs = async () => { if (!isFirebaseAvailable || !db) return; const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'logs'), orderBy('timestamp', 'desc'), limit(100)); onSnapshot(q, (snapshot) => { setActivityLogs(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))); }); };
+  
   const handleSaveSwatch = async (swatchData) => { const docId = swatchData.id ? String(swatchData.id) : String(Date.now()); const payload = { ...swatchData, id: docId, updatedAt: Date.now() }; if (isFirebaseAvailable && db) { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'swatches', docId), payload, { merge: true }); } else { const idx = swatches.findIndex(s => s.id === docId); let newSwatches = [...swatches]; if (idx >= 0) newSwatches[idx] = payload; else newSwatches = [payload, ...newSwatches]; saveSwatchesToLocal(newSwatches); } showToast("마감재가 저장되었습니다."); };
   const handleDeleteSwatch = async (swatchId) => { if (!window.confirm("정말 삭제하시겠습니까?")) return; if (isFirebaseAvailable && db) { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'swatches', String(swatchId))); } else { saveSwatchesToLocal(swatches.filter(s => s.id !== swatchId)); } showToast("마감재가 삭제되었습니다."); };
+  
+  // Awards Handlers
+  const handleSaveAward = async (awardData) => { const docId = awardData.id ? String(awardData.id) : String(Date.now()); const payload = { ...awardData, id: docId, updatedAt: Date.now() }; if (isFirebaseAvailable && db) { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'awards', docId), payload, { merge: true }); } else { const idx = awards.findIndex(a => a.id === docId); let newAwards = [...awards]; if (idx >= 0) newAwards[idx] = payload; else newAwards = [payload, ...newAwards]; saveAwardsToLocal(newAwards); } showToast("어워드가 저장되었습니다."); };
+  const handleDeleteAward = async (awardId) => { if (!window.confirm("정말 삭제하시겠습니까?")) return; if (isFirebaseAvailable && db) { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'awards', String(awardId))); } else { saveAwardsToLocal(awards.filter(a => a.id !== awardId)); } showToast("어워드가 삭제되었습니다."); };
+
   const handleSaveProduct = async (productData) => { 
       const docId = productData.id ? String(productData.id) : String(Date.now()); 
       const isEdit = !!productData.id && products.some(p => String(p.id) === docId); 
@@ -631,129 +633,6 @@ const bannerDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', '
      showToast("스와치가 복제되었습니다.");
   };
 
-  // --- Awards (v0.8.0) ---
-  const persistAwardsToLocal = (nextAwards) => {
-    localStorage.setItem('patra_awards', JSON.stringify(nextAwards));
-    setAwards(nextAwards);
-  };
-
-  const persistAwardTagsToLocal = (nextTags) => {
-    localStorage.setItem('patra_award_tags', JSON.stringify(nextTags));
-    setAwardTags(nextTags);
-  };
-
-  const handleSaveAwardTags = async (nextTags) => {
-    if (!isAdmin) return;
-    const cleaned = (nextTags || []).map(t => String(t).trim()).filter(Boolean);
-    const current = cleaned.length ? Array.from(new Set(cleaned)) : DEFAULT_AWARD_TAGS;
-    if (isFirebaseAvailable && db) {
-      await setDoc(
-        doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'award_tags'),
-        { tags: current },
-        { merge: true }
-      );
-    } else {
-      persistAwardTagsToLocal(current);
-    }
-    setAwardTags(current);
-    showToast('어워드 태그가 저장되었습니다.');
-  };
-
-  const handleSaveAward = async (awardData) => {
-    if (!isAdmin) return;
-    const docId = awardData.id ? String(awardData.id) : String(Date.now());
-    const payload = {
-      ...awardData,
-      id: docId,
-      updatedAt: Date.now(),
-      createdAt: awardData.createdAt || Date.now(),
-      // Ensure array shapes
-      tags: Array.isArray(awardData.tags) ? awardData.tags : (awardData.tags ? [awardData.tags] : []),
-      products: Array.isArray(awardData.products) ? awardData.products : []
-    };
-
-    if (isFirebaseAvailable && db) {
-      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'awards', docId), payload, { merge: true });
-    } else {
-      const idx = awards.findIndex(a => String(a.id) === docId);
-      const next = [...awards];
-      if (idx >= 0) next[idx] = payload; else next.unshift(payload);
-      persistAwardsToLocal(next);
-    }
-    showToast('어워드가 저장되었습니다.');
-  };
-
-  const syncAwardToProducts = async (awardObj) => {
-    if (!awardObj) return;
-    const awardTitle = awardObj.title;
-    const taggedList = (awardObj.products || []).map(x => ({ productId: String(x.productId), year: x.year || '' }));
-    const taggedIds = new Set(taggedList.map(x => x.productId));
-
-    const nextProducts = products.map(p => {
-      const pid = String(p.id);
-      const has = taggedIds.has(pid);
-      const currentAwards = Array.isArray(p.awards) ? p.awards : [];
-      const currentYears = (p.awardYears && typeof p.awardYears === 'object') ? { ...p.awardYears } : {};
-
-      let nextAwards = currentAwards;
-      if (has && awardTitle) {
-        if (!currentAwards.includes(awardTitle)) nextAwards = [...currentAwards, awardTitle];
-        const yr = taggedList.find(x => x.productId === pid)?.year || '';
-        if (yr) currentYears[awardTitle] = yr; else delete currentYears[awardTitle];
-      } else {
-        if (awardTitle) {
-          nextAwards = currentAwards.filter(a => a !== awardTitle);
-          delete currentYears[awardTitle];
-        }
-      }
-
-      // If nothing changed, return original to reduce re-render
-      const awardsChanged = nextAwards.length !== currentAwards.length || nextAwards.some((v, i) => v !== currentAwards[i]);
-      const yearsChanged = awardTitle ? ((p.awardYears || {})[awardTitle] || '') !== (currentYears[awardTitle] || '') : false;
-      if (!awardsChanged && !yearsChanged) return p;
-      return { ...p, awards: nextAwards, awardYears: currentYears };
-    });
-
-    if (isFirebaseAvailable && db) {
-      // Persist only touched products (cheap diff)
-      for (const p of nextProducts) {
-        const orig = products.find(op => String(op.id) === String(p.id));
-        if (!orig) continue;
-        const origAwards = Array.isArray(orig.awards) ? orig.awards : [];
-        const nextAwards = Array.isArray(p.awards) ? p.awards : [];
-        const sameAwards = origAwards.length === nextAwards.length && origAwards.every((v, i) => v === nextAwards[i]);
-        const origYears = orig.awardYears || {};
-        const nextYears = p.awardYears || {};
-        const sameYears = JSON.stringify(origYears) === JSON.stringify(nextYears);
-        if (sameAwards && sameYears) continue;
-        await setDoc(
-          doc(db, 'artifacts', appId, 'public', 'data', 'products', String(p.id)),
-          { awards: nextAwards, awardYears: nextYears, updatedAt: Date.now() },
-          { merge: true }
-        );
-      }
-    } else {
-      saveToLocalStorage(nextProducts);
-    }
-  };
-
-  const handleDeleteAward = async (awardId) => {
-    if (!isAdmin) return;
-    if (!window.confirm('이 어워드를 삭제하시겠습니까?')) return;
-    const target = awards.find(a => String(a.id) === String(awardId));
-    if (isFirebaseAvailable && db) {
-      await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'awards', String(awardId)));
-    } else {
-      persistAwardsToLocal(awards.filter(a => String(a.id) !== String(awardId)));
-    }
-    // Remove from products
-    if (target?.title) {
-      await syncAwardToProducts({ ...target, products: [] });
-    }
-    setSelectedAward(null);
-    showToast('어워드가 삭제되었습니다.');
-  };
-
   // --- Search Tag Logic ---
   const handleSearchKeyDown = (e) => {
       if (e.key === ',' || e.key === 'Enter') {
@@ -778,7 +657,7 @@ const bannerDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', '
       if (activeCategory === 'DASHBOARD' || activeCategory === 'COMPARE_PAGE') matchesCategory = false; 
       else if (activeCategory === 'MY_PICK') matchesCategory = favorites.includes(product.id);
       else if (activeCategory === 'ALL') matchesCategory = true; // ALL now means Total View (Master List)
-      else if (activeCategory === 'SPACES_ROOT' || activeCategory === 'COLLECTIONS_ROOT' || activeCategory === 'MATERIALS_ROOT') matchesCategory = false; 
+      else if (activeCategory === 'SPACES_ROOT' || activeCategory === 'COLLECTIONS_ROOT' || activeCategory === 'MATERIALS_ROOT' || activeCategory === 'AWARDS_ROOT') matchesCategory = false; 
       else if (SPACES.find(s => s.id === activeCategory)) {
          matchesCategory = product.spaces && product.spaces.includes(activeCategory);
          if (matchesCategory && activeSpaceTag !== 'ALL') { matchesCategory = product.spaceTags && product.spaceTags.includes(activeSpaceTag); }
@@ -786,8 +665,18 @@ const bannerDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', '
       else if (SWATCH_CATEGORIES.find(s => s.id === activeCategory)) matchesCategory = false; 
       else matchesCategory = product.category === activeCategory;
       
-      // Search Logic (Tags + Text)
-      const searchFields = [ product.name, product.specs, product.designer, ...(product.features || []), ...(product.options || []), ...(product.awards || []), ...(product.materials || []), ...(product.bodyColors || []).map(c => typeof c === 'object' ? c.name : c), ...(product.upholsteryColors || []).map(c => typeof c === 'object' ? c.name : c) ];
+      // Search Logic (Tags + Text + Features + Colors)
+      const searchFields = [ 
+          product.name, 
+          product.specs, 
+          product.designer, 
+          ...(product.features || []), 
+          ...(product.options || []), 
+          ...(product.awards || []), 
+          ...(product.materials || []), 
+          ...(product.bodyColors || []).map(c => typeof c === 'object' ? c.name : c), 
+          ...(product.upholsteryColors || []).map(c => typeof c === 'object' ? c.name : c) 
+      ];
       const fullText = searchFields.join(' ').toLowerCase();
       
       const matchesSearchText = !searchTerm || fullText.includes(searchTerm.toLowerCase());
@@ -831,8 +720,8 @@ const bannerDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', '
   const handleNavigatePrev = () => { if(!selectedProduct) return; const currentIndex = processedProducts.findIndex(p => p.id === selectedProduct.id); if(currentIndex > 0) { setSelectedProduct(processedProducts[currentIndex - 1]); } };
 
   // Import/Export
-  const handleExportData = () => { const dataStr = JSON.stringify({ products, swatches, spaces: spaceContents, version: APP_VERSION }, null, 2); const blob = new Blob([dataStr], { type: "application/json" }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `patra_db_backup_${new Date().toISOString().slice(0,10)}.json`; a.click(); showToast("데이터 백업이 완료되었습니다."); };
-  const handleImportData = (e) => { const file = e.target.files[0]; if (!file) return; const reader = new FileReader(); reader.onload = async (event) => { try { const imported = JSON.parse(event.target.result); if (window.confirm(`총 ${imported.products?.length || 0}개 제품, ${imported.swatches?.length || 0}개 스와치를 불러오시겠습니까?`)) { if (!isFirebaseAvailable) { saveToLocalStorage(imported.products || []); saveSwatchesToLocal(imported.swatches || []); window.location.reload(); } else { setProducts(imported.products || []); setSwatches(imported.swatches || []); } showToast("데이터 복원 완료 (메모리 로드)"); } } catch (err) { showToast("파일 형식이 올바르지 않습니다.", "error"); } }; reader.readAsText(file); };
+  const handleExportData = () => { const dataStr = JSON.stringify({ products, swatches, awards, spaces: spaceContents, version: APP_VERSION }, null, 2); const blob = new Blob([dataStr], { type: "application/json" }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `patra_db_backup_${new Date().toISOString().slice(0,10)}.json`; a.click(); showToast("데이터 백업이 완료되었습니다."); };
+  const handleImportData = (e) => { const file = e.target.files[0]; if (!file) return; const reader = new FileReader(); reader.onload = async (event) => { try { const imported = JSON.parse(event.target.result); if (window.confirm(`총 ${imported.products?.length || 0}개 제품, ${imported.swatches?.length || 0}개 스와치, ${imported.awards?.length || 0}개 어워드를 불러오시겠습니까?`)) { if (!isFirebaseAvailable) { saveToLocalStorage(imported.products || []); saveSwatchesToLocal(imported.swatches || []); saveAwardsToLocal(imported.awards || []); window.location.reload(); } else { setProducts(imported.products || []); setSwatches(imported.swatches || []); setAwards(imported.awards || []); } showToast("데이터 복원 완료 (메모리 로드)"); } } catch (err) { showToast("파일 형식이 올바르지 않습니다.", "error"); } }; reader.readAsText(file); };
 
   return (
     <div className="flex h-screen bg-zinc-50 font-sans text-zinc-900 overflow-hidden relative selection:bg-black selection:text-white print:overflow-visible print:h-auto print:bg-white">
@@ -898,8 +787,7 @@ const bannerDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', '
                     {sidebarState.collections ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                 </button>
              </div>
-             {sidebarState.collections && (<div className="space-y-0.5 mt-2 pl-2 animate-in slide-in-from-top-2 duration-200">{CATEGORIES.filter(c => !c.isSpecial).map((cat) => (<button key={cat.id} onClick={() => handleCategoryClick(cat.id)} className={`w-full text-left px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center justify-between group ${activeCategory === cat.id ? 'bg-zinc-100 text-zinc-900 font-bold' : 'text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900'}`}>{cat.label}</button>))}
-             </div>)}
+             {sidebarState.collections && (<div className="space-y-0.5 mt-2 pl-2 animate-in slide-in-from-top-2 duration-200">{CATEGORIES.filter(c => !c.isSpecial).map((cat) => (<button key={cat.id} onClick={() => handleCategoryClick(cat.id)} className={`w-full text-left px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center justify-between group ${activeCategory === cat.id ? 'bg-zinc-100 text-zinc-900 font-bold' : 'text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900'}`}>{cat.label}</button>))}</div>)}
           </div>
 
           {/* Materials Group */}
@@ -910,11 +798,14 @@ const bannerDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', '
                     {sidebarState.materials ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                 </button>
              </div>
-             {sidebarState.materials && (<div className="space-y-0.5 mt-2 pl-2 animate-in slide-in-from-top-2 duration-200">{SWATCH_CATEGORIES.map((cat) => (<button key={cat.id} onClick={() => handleCategoryClick(cat.id)} className={`w-full text-left px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center justify-between group ${activeCategory === cat.id ? 'bg-zinc-100 text-zinc-900 font-bold' : 'text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900'}`}>{cat.label}</button>))}
-                <button onClick={() => handleCategoryClick('AWARDS_ROOT')} className={`w-full text-left px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center justify-between group ${activeCategory === 'AWARDS_ROOT' ? 'bg-zinc-100 text-zinc-900 font-bold' : 'text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900'}`}>
-                  <span className="flex items-center"><Trophy className="w-4 h-4 mr-2 text-zinc-400"/>Awards</span>
-                </button>
-             </div>)}
+             {sidebarState.materials && (<div className="space-y-0.5 mt-2 pl-2 animate-in slide-in-from-top-2 duration-200">{SWATCH_CATEGORIES.map((cat) => (<button key={cat.id} onClick={() => handleCategoryClick(cat.id)} className={`w-full text-left px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center justify-between group ${activeCategory === cat.id ? 'bg-zinc-100 text-zinc-900 font-bold' : 'text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900'}`}>{cat.label}</button>))}</div>)}
+          </div>
+
+          {/* Awards Group (New) */}
+          <div className="py-2">
+             <div className={`w-full flex items-center rounded-xl border mb-1 shadow-sm transition-all ${activeCategory === 'AWARDS_ROOT' ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-600 border-zinc-100 hover:border-zinc-300'}`}>
+                <button onClick={() => handleCategoryClick('AWARDS_ROOT')} className="flex-1 text-left px-4 py-3 text-sm font-bold tracking-tight flex items-center"><Trophy className="w-4 h-4 mr-2"/> AWARDS</button>
+             </div>
           </div>
 
           <div className="pt-2"><button onClick={handleMyPickToggle} className={`w-full text-left px-4 py-3 rounded-xl text-sm font-bold transition-all duration-200 flex items-center space-x-3 group border ${activeCategory === 'MY_PICK' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' : 'text-zinc-400 border-transparent hover:bg-zinc-50 hover:text-zinc-600'}`}><Heart className={`w-4 h-4 ${activeCategory === 'MY_PICK' ? 'fill-yellow-500 text-yellow-500' : ''}`} /><span>My Pick ({favorites.length})</span></button></div>
@@ -1011,12 +902,14 @@ const bannerDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', '
                 filters={filters}
              />
           ) : activeCategory === 'AWARDS_ROOT' ? (
-             <AwardsHubView
+             <AwardsView 
                 awards={awards}
                 products={products}
                 isAdmin={isAdmin}
-                onSelectAward={(a)=>setSelectedAward(a)}
-                onAddAward={()=>{setEditingAward(null); setIsAwardFormOpen(true);}}
+                onSave={handleSaveAward}
+                onDelete={handleDeleteAward}
+                onSelect={(award) => setSelectedAward(award)}
+                onEdit={(award) => { setEditingAward(award); }}
                 searchTerm={searchTerm}
                 searchTags={searchTags}
              />
@@ -1029,9 +922,6 @@ const bannerDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', '
                 materials={SWATCH_CATEGORIES}
                 products={products}
                 swatches={swatches}
-                awards={awards}
-                favorites={favorites}
-                onToggleFavorite={toggleFavorite}
                 onNavigate={handleCategoryClick}
                 onProductClick={(p) => setSelectedProduct(p)}
                 onSwatchClick={(s) => setSelectedSwatch(s)}
@@ -1099,6 +989,7 @@ const bannerDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', '
           product={selectedProduct} 
           allProducts={products}
           swatches={swatches}
+          awards={awards}
           spaceContents={spaceContents} 
           onClose={() => setSelectedProduct(null)} 
           onEdit={() => { setEditingProduct(selectedProduct); setIsFormOpen(true); }} 
@@ -1112,6 +1003,7 @@ const bannerDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', '
           onNavigateScene={(scene) => { setSelectedProduct(null); setActiveCategory(scene.spaceId || scene.id); setSelectedScene({...scene, spaceId: scene.spaceId || 'UNKNOWN'}); }}
           onNavigateProduct={(product) => setSelectedProduct(product)}
           onNavigateSwatch={(swatch) => { setSelectedSwatch(swatch); /* Stacks on top */ }}
+          onSaveProduct={handleSaveProduct}
         />
       )}
       
@@ -1130,29 +1022,6 @@ const bannerDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', '
         />
       )}
       
-      {selectedAward && (
-        <AwardDetailModal
-          award={selectedAward}
-          products={products}
-          isAdmin={isAdmin}
-          onClose={() => setSelectedAward(null)}
-          onOpenEdit={(a) => { setEditingAward(a); setIsAwardFormOpen(true); }}
-          onSave={handleSaveAward}
-          onDelete={handleDeleteAward}
-          onSync={syncAwardToProducts}
-        />
-      )}
-
-      {isAwardFormOpen && (
-        <AwardFormModal
-          initialData={editingAward}
-          awardTags={awardTags}
-          onClose={() => { setIsAwardFormOpen(false); setEditingAward(null); }}
-          onSave={(data) => { handleSaveAward(data); setIsAwardFormOpen(false); setEditingAward(null); }}
-          onSaveTags={handleSaveAwardTags}
-        />
-      )}
-
       {selectedSwatch && (
         <SwatchDetailModal 
           swatch={selectedSwatch}
@@ -1172,6 +1041,25 @@ const bannerDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', '
            existingData={editingSwatchFromModal}
            onClose={() => setEditingSwatchFromModal(null)}
            onSave={(data) => { handleSaveSwatch(data); setEditingSwatchFromModal(null); }}
+        />
+      )}
+
+      {selectedAward && (
+        <AwardDetailModal 
+           award={selectedAward}
+           products={products}
+           onClose={() => setSelectedAward(null)}
+           onNavigateProduct={(product) => { setSelectedAward(null); setSelectedProduct(product); }}
+           isAdmin={isAdmin}
+           onEdit={() => { setSelectedAward(null); setEditingAward(selectedAward); }}
+        />
+      )}
+
+      {editingAward && (
+        <AwardFormModal 
+           existingData={editingAward}
+           onClose={() => setEditingAward(null)}
+           onSave={(data) => { handleSaveAward(data); setEditingAward(null); }}
         />
       )}
 
@@ -1357,8 +1245,9 @@ function TotalView({ products, categories, spaces, spaceContents, materials, mat
                                 <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
                                     {catProducts.map(product => (
                                         <div key={product.id} onClick={() => onProductClick(product)} className="group cursor-pointer">
-                                            <div className="aspect-square bg-zinc-50 rounded-xl mb-2 overflow-hidden border border-zinc-100 relative p-0">
-                                                {product.images?.[0] ? <img src={typeof product.images[0] === 'object' ? product.images[0].url : product.images[0]} className="w-full h-full object-contain mix-blend-multiply group-hover:scale-105 transition-transform" /> : <ImageIcon className="w-8 h-8 text-zinc-300 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"/>}
+                                            {/* Updated Design: Full Image Card (Collections Style) */}
+                                            <div className="aspect-square bg-zinc-50 rounded-xl mb-2 overflow-hidden border border-zinc-100 relative">
+                                                {product.images?.[0] ? <img src={typeof product.images[0] === 'object' ? product.images[0].url : product.images[0]} className="w-full h-full object-cover group-hover:scale-105 transition-transform" /> : <ImageIcon className="w-8 h-8 text-zinc-300 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"/>}
                                             </div>
                                             <h4 className="text-xs font-bold text-zinc-900 truncate group-hover:text-blue-600">{product.name}</h4>
                                             <p className="text-[10px] text-zinc-400 truncate">{product.designer || 'Patra Design'}</p>
@@ -1401,7 +1290,7 @@ function TotalView({ products, categories, spaces, spaceContents, materials, mat
     );
 }
 
-function CategoryRootView({ type, spaces, spaceContents, collections, materials, products, swatches, awards, favorites, onToggleFavorite, onNavigate, onProductClick, onSwatchClick, onSceneClick, searchTerm, searchTags, filters, onCompareToggle, compareList }) {
+function CategoryRootView({ type, spaces, spaceContents, collections, materials, products, swatches, onNavigate, onProductClick, onSwatchClick, onSceneClick, searchTerm, searchTags, filters, onCompareToggle, compareList }) {
     let title = "";
     let items = [];
     let icon = null;
@@ -1409,7 +1298,7 @@ function CategoryRootView({ type, spaces, spaceContents, collections, materials,
 
     // Filter Logic
     const filterItem = (item, itemType) => {
-        const text = itemType === 'product' ? [item.name, item.category, item.specs, item.designer, item.description, ...(item.features||[]), ...(item.options||[]), ...(item.materials||[]), ...(item.awards||[]), ...(item.spaceTags||[]), ...(item.bodyColors||[]).map(c=>typeof c==='object'?c.name:c), ...(item.upholsteryColors||[]).map(c=>typeof c==='object'?c.name:c) ].join(' ') : 
+        const text = itemType === 'product' ? [item.name, item.category, item.specs].join(' ') : 
                      itemType === 'scene' ? [item.title, item.description].join(' ') :
                      [item.name, item.materialCode].join(' ');
         const fullText = text.toLowerCase();
@@ -1491,17 +1380,10 @@ function CategoryRootView({ type, spaces, spaceContents, collections, materials,
                                             {type === 'SPACES_ROOT' ? (
                                                 <img src={sub.image} className="w-full h-full object-cover group-hover:scale-105 transition-transform"/>
                                             ) : type === 'MATERIALS_ROOT' ? (
-                                                <>
-                                                    <SwatchDisplay color={sub} className="w-full h-full rounded-none scale-100"/>
-                                                    <button
-                                                        onClick={(e) => onToggleFavorite(e, sub.id)}
-                                                        className="absolute top-2 right-2 p-1.5 bg-white/80 rounded-full text-zinc-300 hover:text-yellow-400 hover:scale-110 transition-all z-10"
-                                                    >
-                                                        <Star className={`w-3.5 h-3.5 ${favorites?.includes(sub.id) ? 'fill-yellow-400 text-yellow-400' : ''}`} />
-                                                    </button>
-                                                </>
+                                                <SwatchDisplay color={sub} className="w-full h-full rounded-none scale-100"/>
                                             ) : (
-                                                <img src={sub.images?.[0] ? (typeof sub.images[0] === 'object' ? sub.images[0].url : sub.images[0]) : ''} className="w-full h-full object-contain mix-blend-multiply group-hover:scale-105 transition-transform"/>
+                                                // Updated Collections Card: Full Image
+                                                <img src={sub.images?.[0] ? (typeof sub.images[0] === 'object' ? sub.images[0].url : sub.images[0]) : ''} className="w-full h-full object-cover group-hover:scale-105 transition-transform"/>
                                             )}
                                             
                                             {/* Compare Button for Collections */}
@@ -1525,6 +1407,235 @@ function CategoryRootView({ type, spaces, spaceContents, collections, materials,
                     );
                 })}
             </div>
+        </div>
+    );
+}
+
+function AwardsView({ awards, products, isAdmin, onSave, onDelete, onSelect, onEdit, searchTerm, searchTags }) {
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    
+    // Filter Logic
+    const filteredAwards = awards.filter(a => {
+        const fullText = [a.title, a.organization, a.description].join(' ').toLowerCase();
+        const matchesSearch = !searchTerm || fullText.includes(searchTerm.toLowerCase());
+        const matchesTags = searchTags.every(t => fullText.includes(t.toLowerCase()));
+        return matchesSearch && matchesTags;
+    });
+
+    return (
+        <div className="animate-in fade-in slide-in-from-bottom-4 pb-32">
+            <div className="mb-8 flex items-center justify-between">
+                <div className="flex items-center">
+                    <div className="p-3 bg-zinc-900 text-white rounded-xl mr-4">
+                        <Trophy className="w-6 h-6" />
+                    </div>
+                    <h2 className="text-4xl font-black text-zinc-900 tracking-tight">Awards</h2>
+                </div>
+                {isAdmin && (
+                    <button onClick={() => setIsModalOpen(true)} className="px-4 py-2 bg-zinc-900 text-white text-sm font-bold rounded-xl hover:bg-black transition-all flex items-center shadow-lg whitespace-nowrap">
+                        <Plus className="w-4 h-4 mr-2" /> Add Award
+                    </button>
+                )}
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {filteredAwards.map(award => (
+                    <div key={award.id} onClick={() => onSelect(award)} className="bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer group border border-zinc-100 flex flex-col h-full">
+                        <div className="aspect-[4/3] bg-zinc-50 relative overflow-hidden">
+                            {award.image ? <img src={award.image} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" /> : <div className="w-full h-full flex items-center justify-center text-zinc-300"><Trophy className="w-12 h-12 opacity-20"/></div>}
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                            {isAdmin && (
+                                <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                                    <button onClick={(e) => { e.stopPropagation(); onEdit(award); }} className="p-1.5 bg-white rounded-full shadow hover:text-blue-600"><Edit2 className="w-3.5 h-3.5"/></button>
+                                    <button onClick={(e) => { e.stopPropagation(); onDelete(award.id); }} className="p-1.5 bg-white rounded-full shadow hover:text-red-600"><Trash2 className="w-3.5 h-3.5"/></button>
+                                </div>
+                            )}
+                        </div>
+                        <div className="p-5 flex-1 flex flex-col">
+                            <h3 className="text-lg font-bold text-zinc-900 mb-1 group-hover:text-blue-600 transition-colors">{award.title}</h3>
+                            <p className="text-xs text-zinc-500 font-medium mb-3">{award.organization}</p>
+                            <p className="text-sm text-zinc-600 line-clamp-2 mb-4">{award.description}</p>
+                            <div className="mt-auto pt-3 border-t border-zinc-50 flex flex-wrap gap-1">
+                                {award.tags?.map(t => <span key={t} className="px-2 py-0.5 bg-zinc-100 text-zinc-600 text-[10px] font-bold rounded">{t}</span>)}
+                            </div>
+                        </div>
+                    </div>
+                ))}
+            </div>
+            
+            {filteredAwards.length === 0 && (
+                <div className="text-center py-20 text-zinc-400 border-2 border-dashed border-zinc-100 rounded-2xl">
+                    <Trophy className="w-12 h-12 mx-auto mb-3 opacity-20" />
+                    <p>No awards registered.</p>
+                </div>
+            )}
+
+            {isModalOpen && (
+                <AwardFormModal 
+                    onClose={() => setIsModalOpen(false)} 
+                    onSave={(data) => { onSave(data); setIsModalOpen(false); }} 
+                />
+            )}
+        </div>
+    );
+}
+
+function AwardDetailModal({ award, products, onClose, onNavigateProduct, isAdmin, onEdit }) {
+    useScrollLock();
+    
+    // Filter products that have this award tag
+    const relatedProducts = products.filter(p => p.awards && p.awards.includes(award.title));
+
+    return (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[150] flex items-center justify-center p-0 md:p-4 animate-in zoom-in-95 duration-200">
+            <div className="bg-white w-full h-full md:h-auto md:max-w-4xl rounded-none md:rounded-3xl overflow-hidden shadow-2xl flex flex-col md:flex-row md:max-h-[90vh] relative">
+                <div className="absolute top-4 right-4 z-[100] flex gap-2">
+                   {isAdmin && <button onClick={onEdit} className="p-2 bg-white/50 hover:bg-zinc-100 rounded-full backdrop-blur shadow-sm"><Edit3 className="w-6 h-6 text-zinc-900"/></button>}
+                   <button onClick={onClose} className="p-2 bg-white/50 hover:bg-zinc-100 rounded-full backdrop-blur shadow-sm"><X className="w-6 h-6 text-zinc-900"/></button>
+                </div>
+                
+                <div className="w-full md:w-5/12 bg-zinc-900 flex items-center justify-center p-0 relative min-h-[30vh]">
+                    {award.image ? <img src={award.image} className="w-full h-full object-cover opacity-80" /> : <Trophy className="w-24 h-24 text-white/20"/>}
+                    <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-black/90 to-transparent text-white">
+                        <h2 className="text-2xl font-black mb-1">{award.title}</h2>
+                        <p className="text-sm text-zinc-300">{award.organization}</p>
+                    </div>
+                </div>
+
+                <div className="w-full md:w-7/12 bg-white p-8 md:p-10 flex flex-col overflow-y-auto pb-safe">
+                    <div className="mb-6">
+                        <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2">Description</h3>
+                        <p className="text-sm text-zinc-600 leading-relaxed whitespace-pre-wrap">{award.description || "No description."}</p>
+                    </div>
+
+                    <div className="flex-1">
+                        <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-3 flex justify-between items-center">
+                             Awarded Products 
+                             <span className="bg-zinc-100 text-zinc-600 px-2 py-0.5 rounded-full text-[10px]">{relatedProducts.length}</span>
+                        </h3>
+                        <div className="grid grid-cols-2 gap-3 max-h-80 overflow-y-auto custom-scrollbar p-1">
+                             {relatedProducts.length > 0 ? relatedProducts.map(p => (
+                                 <button key={p.id} onClick={() => onNavigateProduct(p)} className="flex items-center p-2 rounded-lg border border-zinc-100 hover:border-zinc-300 hover:bg-zinc-50 transition-all text-left group">
+                                     <div className="w-10 h-10 rounded-md bg-zinc-100 overflow-hidden mr-3 flex-shrink-0">
+                                        {p.images?.[0] ? <img src={typeof p.images[0] === 'object' ? p.images[0].url : p.images[0]} className="w-full h-full object-cover" /> : <div className="w-full h-full bg-zinc-200"></div>}
+                                     </div>
+                                     <div className="min-w-0">
+                                         <div className="text-xs font-bold text-zinc-900 truncate group-hover:text-blue-600">{p.name}</div>
+                                         <div className="text-[10px] text-zinc-500 truncate">{p.category}</div>
+                                     </div>
+                                 </button>
+                             )) : (
+                                 <div className="col-span-2 text-center py-6 text-zinc-300 text-xs">No products linked to this award yet.</div>
+                             )}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+function AwardFormModal({ existingData, onClose, onSave }) {
+    const [data, setData] = useState({ id: null, title: '', organization: '', description: '', image: null, tags: [] });
+    const [tagInput, setTagInput] = useState('');
+    const fileRef = useRef(null);
+
+    useEffect(() => {
+        if(existingData) {
+            setData({
+                id: existingData.id,
+                title: existingData.title || '',
+                organization: existingData.organization || '',
+                description: existingData.description || '',
+                image: existingData.image || null,
+                tags: existingData.tags || []
+            });
+        }
+    }, [existingData]);
+
+    const processImage = (file) => {
+        return new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            const img = new Image();
+            img.onload = () => {
+               const canvas = document.createElement('canvas'); const MAX = 800; let w = img.width; let h = img.height; 
+               if (w > MAX) { h *= MAX / w; w = MAX; } canvas.width = w; canvas.height = h;
+               const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0, w, h); resolve(canvas.toDataURL('image/jpeg', 0.8));
+            };
+            img.src = e.target.result;
+          };
+          reader.readAsDataURL(file);
+        });
+    };
+
+    const handleUpload = async (e) => {
+        const file = e.target.files[0];
+        if(file) {
+           try { const url = await processImage(file); setData(p => ({...p, image: url})); } catch(e){}
+        }
+    };
+
+    const addTag = () => {
+        if(tagInput && !data.tags.includes(tagInput)) {
+            setData(p => ({...p, tags: [...p.tags, tagInput]}));
+            setTagInput('');
+        }
+    };
+
+    const removeTag = (tag) => {
+        setData(p => ({...p, tags: p.tags.filter(t => t !== tag)}));
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[160] flex items-center justify-center p-4">
+           <div className="bg-white rounded-2xl w-full max-w-md overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
+              <div className="px-6 py-4 border-b border-zinc-100 font-bold text-lg flex-shrink-0">
+                 {existingData ? 'Edit Award' : 'Add Award'}
+              </div>
+              <div className="p-6 space-y-4 overflow-y-auto custom-scrollbar">
+                 <div onClick={() => fileRef.current.click()} className="w-full h-40 bg-zinc-100 rounded-xl flex items-center justify-center cursor-pointer border border-dashed border-zinc-300 overflow-hidden relative hover:border-zinc-400 transition-colors">
+                    {data.image ? <img src={data.image} className="w-full h-full object-cover" /> : <div className="flex flex-col items-center text-zinc-400"><ImagePlus className="w-8 h-8 mb-2"/><span className="text-xs">Upload Image</span></div>}
+                 </div>
+                 <input type="file" ref={fileRef} className="hidden" accept="image/*" onChange={handleUpload} />
+
+                 <div>
+                    <label className="text-xs font-bold text-zinc-500 uppercase block mb-1">Award Title</label>
+                    <input value={data.title} onChange={e=>setData({...data, title: e.target.value})} className="w-full border rounded-lg p-2 text-sm outline-none" placeholder="e.g. iF Design Award" />
+                 </div>
+                 <div>
+                    <label className="text-xs font-bold text-zinc-500 uppercase block mb-1">Organization</label>
+                    <input value={data.organization} onChange={e=>setData({...data, organization: e.target.value})} className="w-full border rounded-lg p-2 text-sm outline-none" placeholder="e.g. iF International Forum Design" />
+                 </div>
+                 <div>
+                    <label className="text-xs font-bold text-zinc-500 uppercase block mb-1">Description</label>
+                    <textarea value={data.description} onChange={e=>setData({...data, description: e.target.value})} className="w-full border rounded-lg p-2 text-sm outline-none" rows={3} />
+                 </div>
+                 <div>
+                    <label className="text-xs font-bold text-zinc-500 uppercase block mb-1">Tags (Year, etc.)</label>
+                    <div className="flex gap-2 mb-2">
+                        <input value={tagInput} onChange={e=>setTagInput(e.target.value)} className="flex-1 border rounded-lg p-2 text-sm outline-none" placeholder="e.g. 2025" />
+                        <button onClick={addTag} className="px-3 bg-zinc-900 text-white rounded-lg text-xs font-bold">Add</button>
+                    </div>
+                    <div className="flex flex-wrap gap-1">
+                        {DEFAULT_AWARD_TAGS.map(t => (
+                            <button key={t} onClick={() => !data.tags.includes(t) && setData(p=>({...p, tags:[...p.tags, t]}))} className="px-2 py-1 bg-zinc-100 hover:bg-zinc-200 rounded text-[10px] text-zinc-600">{t}</button>
+                        ))}
+                    </div>
+                    <div className="flex flex-wrap gap-1 mt-2">
+                        {data.tags.map(t => (
+                            <span key={t} className="px-2 py-1 bg-blue-50 text-blue-600 rounded text-xs font-bold flex items-center">
+                                {t} <button onClick={()=>removeTag(t)} className="ml-1 hover:text-red-500"><X className="w-3 h-3"/></button>
+                            </span>
+                        ))}
+                    </div>
+                 </div>
+              </div>
+              <div className="px-6 py-4 border-t border-zinc-100 bg-zinc-50 flex justify-end space-x-2 flex-shrink-0">
+                 <button onClick={onClose} className="px-4 py-2 text-sm font-bold text-zinc-500 hover:text-zinc-900">Cancel</button>
+                 <button onClick={() => onSave(data)} className="px-4 py-2 bg-zinc-900 text-white rounded-lg text-sm font-bold shadow-md hover:bg-black">Save</button>
+              </div>
+           </div>
         </div>
     );
 }
@@ -1657,7 +1768,7 @@ function MyPickView({ favorites, products, spaces, spaceContents, swatches, onPr
                         {favProducts.map(product => (
                             <div key={product.id} onClick={() => onProductClick(product)} className="group cursor-pointer relative">
                                 <div className="aspect-square bg-zinc-50 rounded-xl mb-2 overflow-hidden border border-zinc-100 relative p-0">
-                                    {product.images?.[0] ? <img src={typeof product.images[0] === 'object' ? product.images[0].url : product.images[0]} className="w-full h-full object-contain mix-blend-multiply group-hover:scale-105 transition-transform" /> : <ImageIcon className="w-8 h-8 text-zinc-300 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"/>}
+                                    {product.images?.[0] ? <img src={typeof product.images[0] === 'object' ? product.images[0].url : product.images[0]} className="w-full h-full object-cover group-hover:scale-105 transition-transform" /> : <ImageIcon className="w-8 h-8 text-zinc-300 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"/>}
                                     <button onClick={(e) => onToggleFavorite(e, product.id)} className="absolute top-2 right-2 p-1.5 bg-white/80 rounded-full text-yellow-400 hover:scale-110 transition-all z-10"><Star className="w-3.5 h-3.5 fill-current"/></button>
                                 </div>
                                 <h4 className="text-xs font-bold text-zinc-900 truncate group-hover:text-blue-600">{product.name}</h4>
@@ -1831,12 +1942,12 @@ function SwatchManager({ category, swatches, isAdmin, onSave, onDelete, onSelect
           {filteredSwatches.map(swatch => (
              <div key={swatch.id} onClick={() => handleCardClick(swatch)} className="bg-white rounded-xl border border-zinc-200 overflow-hidden group hover:shadow-lg transition-all relative cursor-pointer">
                 <div className="aspect-square relative bg-zinc-100 flex items-center justify-center">
-                   {/* Fix: removed size prop, passed explicit w-full h-full rounded-none to ensure fill */}
                    <SwatchDisplay color={swatch} className="w-full h-full rounded-none scale-100"/>
+                   {/* My Pick Button for Swatch */}
+                   <button onClick={(e) => onToggleFavorite(e, swatch.id)} className="absolute top-2 right-2 p-1.5 bg-white/80 rounded-full text-yellow-400 hover:scale-110 transition-all z-10 shadow-sm"><Star className={`w-3.5 h-3.5 ${favorites.includes(swatch.id) ? 'fill-current' : ''}`}/></button>
                    
-                   <button onClick={(e) => onToggleFavorite(e, swatch.id)} className="absolute top-2 left-2 p-1.5 bg-white/80 rounded-full text-zinc-300 hover:text-yellow-400 hover:scale-110 transition-all z-20"><Star className={`w-3.5 h-3.5 ${favorites?.includes(swatch.id) ? 'fill-yellow-400 text-yellow-400' : ''}`} /></button>
-{isAdmin && (
-                     <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                   {isAdmin && (
+                     <div className="absolute bottom-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
                         <button onClick={(e) => {e.stopPropagation(); onDuplicate(swatch);}} className="p-1.5 bg-white rounded-full shadow hover:text-green-600"><Layers className="w-3 h-3"/></button>
                         <button onClick={(e) => handleEditClick(e, swatch)} className="p-1.5 bg-white rounded-full shadow hover:text-blue-600"><Edit2 className="w-3 h-3"/></button>
                         <button onClick={(e) => { e.stopPropagation(); onDelete(swatch.id); }} className="p-1.5 bg-white rounded-full shadow hover:text-red-600"><Trash2 className="w-3 h-3"/></button>
@@ -2517,10 +2628,14 @@ function SpaceDetailView({ space, spaceContent, activeTag, setActiveTag, isAdmin
           </div>
         ) : (<div className="text-center py-12 bg-zinc-50 rounded-2xl border border-dashed border-zinc-200 text-zinc-400"><ImageIcon className="w-12 h-12 mx-auto mb-3 opacity-20" /><p className="text-sm">등록된 공간 장면이 없습니다.</p></div>)}
       </div>
-      <div className="flex items-center justify-between mb-6 border-t border-zinc-100 pt-12 print:border-none print:pt-0">
+      
+      {/* Curating Area - Reduced Padding */}
+      <div className="flex items-center justify-between mb-6 border-t border-zinc-100 pt-8 print:border-none print:pt-0">
          <h3 className="text-xl font-bold text-zinc-900 flex items-center"><Tag className="w-5 h-5 mr-2 text-zinc-400" /> All Curated Products <span className="ml-2 text-sm font-medium text-zinc-400 bg-zinc-100 px-2 py-0.5 rounded-full">{productCount}</span></h3>
          {isAdmin && (<button onClick={onManageProducts} className="flex items-center text-sm font-bold text-zinc-500 hover:text-zinc-900 bg-white border border-zinc-200 px-4 py-2 rounded-lg hover:border-zinc-400 transition-colors"><Settings className="w-4 h-4 mr-2" /> Manage List</button>)}
       </div>
+      {/* If no products, don't show extra padding */}
+      {productCount === 0 && <div className="mb-4"></div>}
     </div>
   );
 }
@@ -2579,12 +2694,13 @@ function ProductCard({ product, onClick, showMoveControls, onMove, isFavorite, o
   );
 }
 
-function ProductDetailModal({ product, allProducts, swatches, spaceContents, onClose, onEdit, isAdmin, showToast, isFavorite, onToggleFavorite, onNavigateSpace, onNavigateScene, onNavigateNext, onNavigatePrev, onNavigateProduct, onNavigateSwatch }) {
+function ProductDetailModal({ product, allProducts, swatches, awards, spaceContents, onClose, onEdit, isAdmin, showToast, isFavorite, onToggleFavorite, onNavigateSpace, onNavigateScene, onNavigateNext, onNavigatePrev, onNavigateProduct, onNavigateSwatch, onSaveProduct }) {
   useScrollLock();
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [isZoomed, setIsZoomed] = useState(false);
   const canvasRef = useRef(null);
   const [swatchPopup, setSwatchPopup] = useState(null); 
+  const [isAdminTaggingOpen, setIsAdminTaggingOpen] = useState(false); // Admin Quick Tagging
 
   useEffect(() => {
       const closePopup = () => setSwatchPopup(null);
@@ -2663,6 +2779,18 @@ function ProductDetailModal({ product, allProducts, swatches, spaceContents, onC
   };
 
   const handleShareImage = async () => { /* ... */ };
+
+  // Admin Quick Tagging Handlers
+  const toggleAwardTag = (awardTitle) => {
+      const currentAwards = product.awards || [];
+      let newAwards;
+      if (currentAwards.includes(awardTitle)) {
+          newAwards = currentAwards.filter(a => a !== awardTitle);
+      } else {
+          newAwards = [...currentAwards, awardTitle];
+      }
+      onSaveProduct({ ...product, awards: newAwards });
+  };
 
   return (
     <div key={product.id} className="fixed inset-0 bg-black/60 backdrop-blur-md z-50 flex items-center justify-center p-0 md:p-4 animate-in fade-in duration-300 slide-in-animation print:fixed print:inset-0 print:z-[100] print:bg-white print:h-auto print:overflow-visible">
@@ -2743,6 +2871,33 @@ function ProductDetailModal({ product, allProducts, swatches, spaceContents, onC
               </div>
             </div>
             
+            {/* Admin Quick Tagging Section */}
+            {isAdmin && (
+                <div className="mb-6 border border-zinc-200 rounded-xl p-4 bg-zinc-50">
+                    <div className="flex justify-between items-center mb-2 cursor-pointer" onClick={() => setIsAdminTaggingOpen(!isAdminTaggingOpen)}>
+                        <h4 className="text-xs font-bold text-zinc-500 uppercase flex items-center"><Settings className="w-3 h-3 mr-1"/> Quick Tagging (Admin)</h4>
+                        {isAdminTaggingOpen ? <ChevronUp className="w-3 h-3"/> : <ChevronDown className="w-3 h-3"/>}
+                    </div>
+                    {isAdminTaggingOpen && (
+                        <div className="space-y-3 animate-in fade-in slide-in-from-top-2">
+                            <div>
+                                <span className="text-[10px] font-bold text-zinc-400 block mb-1">Awards</span>
+                                <div className="flex flex-wrap gap-1">
+                                    {awards.map(a => {
+                                        const isTagged = product.awards?.includes(a.title);
+                                        return (
+                                            <button key={a.id} onClick={() => toggleAwardTag(a.title)} className={`px-2 py-1 rounded text-[10px] border ${isTagged ? 'bg-yellow-100 border-yellow-300 text-yellow-800' : 'bg-white border-zinc-200 text-zinc-500'}`}>
+                                                {a.title}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            )}
+
             <div className="space-y-6 md:space-y-10">
               <div><h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-3 flex items-center justify-between">Specifications <button onClick={copyToClipboard} className="text-zinc-400 hover:text-zinc-900 print:hidden"><Copy className="w-4 h-4" /></button></h3><p className="text-sm text-zinc-600 leading-relaxed bg-zinc-50 p-4 md:p-6 rounded-2xl border border-zinc-100 whitespace-pre-wrap print:bg-transparent print:border-none print:p-0">{product.specs}</p></div>
               {(product.features?.length > 0 || product.options?.length > 0) && (<div><h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-3">Features & Options</h3><div className="flex flex-wrap gap-2">{product.options?.map((opt, idx) => (<span key={idx} className="px-3 py-1.5 bg-blue-50 text-blue-600 border border-blue-100 rounded-lg text-xs font-bold print:border-gray-300 print:text-black">{opt}</span>))}{product.features?.map((ft, idx) => (<span key={idx} className="px-3 py-1.5 bg-zinc-100 text-zinc-600 rounded-lg text-xs font-medium flex items-center print:bg-transparent"><Check className="w-3 h-3 mr-1.5" /> {ft}</span>))}</div></div>)}
@@ -2884,7 +3039,7 @@ function ProductFormModal({ categories, swatches = [], allProducts = [], existin
   const isEditMode = !!existingData;
   const fileInputRef = useRef(null);
   const contentInputRef = useRef(null);
-  const defaultCategory = (initialCategory && !['ALL','NEW','MY_PICK','DASHBOARD','COMPARE_PAGE'].includes(initialCategory) && !SPACES.find(s=>s.id===initialCategory)) ? initialCategory : 'EXECUTIVE';
+  const defaultCategory = (initialCategory && !['ALL','NEW','MY_PICK','DASHBOARD','COMPARE_PAGE','AWARDS_ROOT'].includes(initialCategory) && !SPACES.find(s=>s.id===initialCategory)) ? initialCategory : 'EXECUTIVE';
   
   const [formData, setFormData] = useState({ 
     id: null, name: '', category: defaultCategory, specs: '', designer: '',
@@ -3087,7 +3242,7 @@ function ProductFormModal({ categories, swatches = [], allProducts = [], existin
   );
 }
 
-function SwatchSelector({ label, selected, swatches, onChange }) {
+function SwatchSelector({ label, selected = [], swatches = [], onChange }) {
   const [isOpen, setIsOpen] = useState(false);
   const [filter, setFilter] = useState('');
   const [activeTab, setActiveTab] = useState('ALL');
@@ -3103,606 +3258,51 @@ function SwatchSelector({ label, selected, swatches, onChange }) {
      setIsOpen(false);
   };
 
-  const handleRemove = (index) => {
-     const newSelected = [...selected];
-     newSelected.splice(index, 1);
-     onChange(newSelected);
-  };
-  
-  const handleMove = (index, direction) => {
-     const newSelected = [...selected];
-     const targetIndex = index + direction;
-     if (targetIndex >= 0 && targetIndex < newSelected.length) {
-        const temp = newSelected[index];
-        newSelected[index] = newSelected[targetIndex];
-        newSelected[targetIndex] = temp;
-        onChange(newSelected);
-     }
+  const handleRemove = (id) => {
+    onChange(selected.filter(s => !(typeof s === 'object' ? s.id === id : false)));
   };
 
-  const handleManualAdd = () => {
-     const hex = prompt("Enter Hex Color (e.g. #000000) or Name:");
-     if(hex) onChange([...selected, hex]);
-  };
-
-  const filteredSwatches = swatches.filter(s => {
-     if(activeTab !== 'ALL' && s.category !== activeTab) return false;
-     return s.name.toLowerCase().includes(filter.toLowerCase());
+  const filtered = swatches.filter(s => {
+    const q = filter.trim().toLowerCase();
+    if (!q) return true;
+    return (s.name || '').toLowerCase().includes(q) || (s.materialCode || '').toLowerCase().includes(q);
   });
 
   return (
     <div className="relative">
-       <div className="flex justify-between items-center mb-1">
-          <label className="block text-xs font-bold text-zinc-500 uppercase">{label}</label>
-          <button type="button" onClick={handleManualAdd} className="text-[10px] text-blue-600 font-bold hover:underline">Manual Input</button>
-       </div>
-       <div className="flex flex-wrap gap-2 min-h-[40px] p-2 bg-white border rounded-lg items-center">
-          {selected.map((item, idx) => (
-             <div key={idx} className="relative group">
-                <SwatchDisplay color={item} size="small" />
-                <div className="absolute -top-3 left-1/2 -translate-x-1/2 flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity bg-white shadow-md rounded-full border border-zinc-200 overflow-hidden z-20 scale-75">
-                  <button type="button" onClick={()=>handleMove(idx, -1)} className="p-1 hover:bg-zinc-100"><ChevronLeft size={10}/></button>
-                  <button type="button" onClick={()=>handleRemove(idx)} className="p-1 hover:bg-zinc-100 text-red-500"><X size={10}/></button>
-                  <button type="button" onClick={()=>handleMove(idx, 1)} className="p-1 hover:bg-zinc-100"><ChevronRight size={10}/></button>
-                </div>
-             </div>
+      <label className="block text-xs font-bold text-zinc-500 uppercase mb-2">{label}</label>
+      <div className="flex items-center gap-2">
+        <div className="flex gap-2 flex-wrap">
+          {selected.map(s => (
+            <div key={typeof s === 'object' ? s.id : s} className="flex items-center px-2 py-1 bg-zinc-50 border border-zinc-200 rounded">
+              <SwatchDisplay color={s} size="small" />
+              <span className="ml-2 text-xs font-medium">{typeof s === 'object' ? s.name : s}</span>
+              <button onClick={() => handleRemove(typeof s === 'object' ? s.id : s)} className="ml-2 text-red-500"><X className="w-3 h-3" /></button>
+            </div>
           ))}
-          <button type="button" onClick={() => setIsOpen(true)} className="w-6 h-6 rounded-full border border-dashed border-zinc-400 flex items-center justify-center text-zinc-400 hover:border-zinc-900 hover:text-zinc-900"><Plus className="w-3 h-3"/></button>
-       </div>
-
-       {isOpen && (
-          <div className="absolute top-full left-0 z-50 mt-2 w-full md:w-[400px] bg-white rounded-xl shadow-xl border border-zinc-200 p-4">
-             <div className="flex justify-between items-center mb-3">
-                <h4 className="font-bold text-sm">Select Material</h4>
-                <button onClick={() => setIsOpen(false)}><X className="w-4 h-4 text-zinc-400 hover:text-black"/></button>
-             </div>
-             
-             <div className="flex gap-1 overflow-x-auto pb-2 mb-2 custom-scrollbar">
-                <button type="button" onClick={()=>setActiveTab('ALL')} className={`px-2 py-1 rounded text-[10px] font-bold whitespace-nowrap ${activeTab==='ALL'?'bg-black text-white':'bg-zinc-100'}`}>ALL</button>
-                {SWATCH_CATEGORIES.map(c => (
-                   <button key={c.id} type="button" onClick={()=>setActiveTab(c.id)} className={`px-2 py-1 rounded text-[10px] font-bold whitespace-nowrap ${activeTab===c.id?'bg-black text-white':'bg-zinc-100'}`}>{c.label}</button>
-                ))}
-             </div>
-
-             <input placeholder="Search materials..." value={filter} onChange={e=>setFilter(e.target.value)} className="w-full text-xs p-2 bg-zinc-50 rounded border mb-3 outline-none" />
-             
-             <div className="grid grid-cols-5 gap-2 max-h-48 overflow-y-auto custom-scrollbar">
-                {filteredSwatches.map(s => (
-                   <button key={s.id} type="button" onClick={() => handleSelect(s)} className="flex flex-col items-center group">
-                      <div className="w-8 h-8 rounded-full border overflow-hidden relative">
-                         {s.image ? <img src={s.image} className="w-full h-full object-cover"/> : <div className="w-full h-full" style={{backgroundColor:s.hex}}></div>}
-                         <div className="absolute inset-0 bg-black/20 hidden group-hover:flex items-center justify-center"><Plus className="w-4 h-4 text-white"/></div>
-                      </div>
-                      <span className="text-[9px] text-zinc-500 truncate w-full text-center mt-1">{s.name}</span>
-                   </button>
-                ))}
-             </div>
-          </div>
-       )}
-    </div>
-  );
-}
-
-function SpaceProductManager({ spaceId, products, onClose, onToggle }) {
-  const [filter, setFilter] = useState('');
-  return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[80] flex items-center justify-center p-4">
-      <div className="bg-white w-full max-w-3xl rounded-2xl overflow-hidden shadow-2xl flex flex-col max-h-[85vh]">
-        <div className="px-6 py-4 border-b border-zinc-100 flex justify-between items-center bg-indigo-50"><div><h3 className="text-lg font-bold text-indigo-900">Manage Products</h3><p className="text-xs text-indigo-600">Select products to display in {spaceId}</p></div><button onClick={onClose}><X className="w-5 h-5 text-indigo-400" /></button></div>
-        <div className="p-4 border-b border-zinc-100"><input type="text" placeholder="Filter products..." className="w-full px-4 py-2 bg-zinc-50 rounded-lg border border-zinc-200 text-sm focus:outline-none focus:border-indigo-500" value={filter} onChange={(e) => setFilter(e.target.value)} /></div>
-        <div className="flex-1 overflow-y-auto p-4 grid grid-cols-1 md:grid-cols-2 gap-3 custom-scrollbar">{products.filter(p => p.name.toLowerCase().includes(filter.toLowerCase())).map(product => { const isAdded = product.spaces && product.spaces.includes(spaceId); return (<div key={product.id} className={`flex items-center p-3 rounded-xl border cursor-pointer transition-all ${isAdded ? 'border-indigo-500 bg-indigo-50' : 'border-zinc-200 hover:border-zinc-300'}`} onClick={() => onToggle(product.id, !isAdded)}><div className={`w-5 h-5 rounded border flex items-center justify-center mr-3 ${isAdded ? 'bg-indigo-500 border-indigo-500' : 'bg-white border-zinc-300'}`}>{isAdded && <Check className="w-3.5 h-3.5 text-white" />}</div>{product.images?.[0] && <img src={typeof product.images[0] === 'object' ? product.images[0].url : product.images[0]} className="w-10 h-10 rounded-lg object-cover mr-3" />}<div><div className="text-sm font-bold text-zinc-900">{product.name}</div><div className="text-xs text-zinc-500">{product.category}</div></div></div>); })}</div>
-      </div>
-    </div>
-  );
-}
-
-function SceneEditModal({ initialData, allProducts, spaceTags = [], spaceOptions = [], onClose, onSave, onDelete }) {
-  const [data, setData] = useState({ id: null, title: '', description: '', image: null, images: [], productIds: [], tags: [], spaceId: '' });
-  const [filter, setFilter] = useState('');
-  const mainInputRef = useRef(null);
-  const galleryInputRef = useRef(null);
-  
-  const normalizeImages = (imgs) => imgs.map(img => typeof img === 'string' ? { url: img, caption: '' } : img);
-
-  useEffect(() => {
-    if(initialData) {
-      setData({ 
-        id: initialData.id || null, 
-        title: initialData.title || '', 
-        description: initialData.description || '', 
-        image: initialData.image || null, 
-        images: normalizeImages(initialData.images || []), 
-        productIds: initialData.productIds || [], 
-        tags: initialData.tags || [],
-        spaceId: initialData.spaceId 
-      });
-    }
-  }, [initialData]);
-
-  const processImage = (file) => { return new Promise((resolve) => { const reader = new FileReader(); reader.onload = (e) => { const img = new Image(); img.onload = () => { const canvas = document.createElement('canvas'); const MAX_WIDTH = 1200; let width = img.width; let height = img.height; if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; } canvas.width = width; canvas.height = height; const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0, width, height); resolve(canvas.toDataURL('image/jpeg', 0.8)); }; img.src = e.target.result; }; reader.readAsDataURL(file); }); };
-  
-  const handleMainImage = async (e) => { const file = e.target.files[0]; if (file) { const imageUrl = await processImage(file); setData(prev => ({ ...prev, image: imageUrl })); } };
-  const handleGalleryUpload = async (e) => { 
-      const files = Array.from(e.target.files); 
-      if(files.length > 0) { 
-          const newUrls = []; 
-          for(const file of files) { try { newUrls.push({ url: await processImage(file), caption: '' }); } catch(e) {} } 
-          setData(prev => ({ ...prev, images: [...prev.images, ...newUrls] })); 
-      } 
-  };
-  
-  const handleCaptionChange = (index, val) => {
-      setData(prev => {
-          const newImgs = [...prev.images];
-          newImgs[index] = { ...newImgs[index], caption: val };
-          return { ...prev, images: newImgs };
-      });
-  };
-
-  const toggleProduct = (pid) => { setData(prev => { const ids = prev.productIds || []; return ids.includes(pid) ? { ...prev, productIds: ids.filter(id => id !== pid) } : { ...prev, productIds: [...ids, pid] }; }); };
-  const toggleTag = (tag) => { setData(prev => { const tags = prev.tags || []; if (tags.includes(tag)) return { ...prev, tags: tags.filter(t => t !== tag) }; else return { ...prev, tags: [...tags, tag] }; }); };
-
-  return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[80] flex items-center justify-center p-4">
-      <div className="bg-white w-full max-w-2xl rounded-2xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
-         <div className="px-6 py-4 border-b border-zinc-100 flex justify-between items-center bg-white z-10">
-            <h3 className="text-lg font-bold text-zinc-900">{!initialData.id ? 'New Scene' : 'Edit Scene'}</h3>
-            <div className="flex gap-2">
-                {!(!initialData.id) && <button onClick={()=>onDelete(data.id)} className="text-red-500 p-2 hover:bg-red-50 rounded-full"><Trash2 className="w-5 h-5"/></button>}
-                <button onClick={onClose} className="p-2 bg-white/50 hover:bg-zinc-100 rounded-full backdrop-blur shadow-sm"><X className="w-5 h-5 text-zinc-400 hover:text-black"/></button>
-            </div>
-         </div>
-         <div className="flex-1 overflow-y-auto p-6 space-y-8 bg-zinc-50">
-            <div className="space-y-4">
-              <div><label className="block text-xs font-bold text-zinc-500 uppercase mb-2">Main Image</label><div onClick={() => mainInputRef.current.click()} className="w-full h-48 bg-white rounded-xl flex items-center justify-center cursor-pointer border border-dashed border-zinc-300 overflow-hidden relative hover:border-zinc-400 transition-colors shadow-sm">{data.image ? <img src={data.image} className="w-full h-full object-cover" /> : <div className="flex flex-col items-center text-zinc-400"><ImagePlus className="w-8 h-8 mb-2"/><span className="text-xs">Upload Main</span></div>}</div><input type="file" ref={mainInputRef} className="hidden" accept="image/*" onChange={handleMainImage} /></div>
-              
-              {spaceOptions.length > 0 && (
-                  <div>
-                      <label className="block text-xs font-bold text-zinc-500 uppercase mb-2">Belongs To Space</label>
-                      <select className="w-full border border-zinc-300 rounded-lg p-2.5 text-sm bg-white" value={data.spaceId} onChange={e => setData({...data, spaceId: e.target.value})}>
-                          {spaceOptions.map(s => (
-                              <option key={s.id} value={s.id}>{s.label}</option>
-                          ))}
-                      </select>
-                  </div>
-              )}
-
-              {spaceTags.length > 0 && (
-                 <div>
-                    <label className="block text-xs font-bold text-zinc-500 uppercase mb-2">Space Tags (Filter)</label>
-                    <div className="flex flex-wrap gap-2">
-                       {spaceTags.map(tag => (
-                          <button key={tag} onClick={() => toggleTag(tag)} className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-colors ${data.tags?.includes(tag) ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-500 border-zinc-200'}`}>
-                             {tag}
-                          </button>
-                       ))}
-                    </div>
-                 </div>
-              )}
-
-              <div>
-                 <div className="flex justify-between items-center mb-2"><label className="block text-xs font-bold text-zinc-500 uppercase">Additional Images</label><button type="button" onClick={() => galleryInputRef.current.click()} className="text-[10px] bg-white border px-2 py-1 rounded hover:bg-zinc-100">+ Add</button><input type="file" ref={galleryInputRef} multiple className="hidden" accept="image/*" onChange={handleGalleryUpload} /></div>
-                 {data.images.length > 0 && <div className="grid grid-cols-5 gap-2">{data.images.map((img, i) => (
-                     <div key={i} className="relative aspect-square rounded-lg overflow-hidden group border border-zinc-200">
-                         <img src={img.url || img} className="w-full h-full object-cover" />
-                         <input className="absolute bottom-0 w-full text-[8px] bg-white/90 p-1 opacity-0 group-hover:opacity-100" value={img.caption || ''} onChange={e => handleCaptionChange(i, e.target.value)} placeholder="Caption"/>
-                         <button onClick={() => setData(prev => ({...prev, images: prev.images.filter((_, idx) => idx !== i)}))} className="absolute top-0.5 right-0.5 bg-red-500 text-white p-0.5 rounded-full opacity-0 group-hover:opacity-100"><X className="w-3 h-3"/></button>
-                     </div>
-                 ))}</div>}
-              </div>
-              <div className="grid grid-cols-1 gap-4">
-                <div><label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Title</label><input className="w-full border border-zinc-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-zinc-900 outline-none" value={data.title} onChange={e=>setData({...data, title: e.target.value})} placeholder="e.g. Modern Office Lounge" /></div>
-                <div><label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Description</label><textarea className="w-full border border-zinc-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-zinc-900 outline-none" rows={2} value={data.description} onChange={e=>setData({...data, description: e.target.value})} placeholder="Short description..." /></div>
-              </div>
-            </div>
-            <div className="pt-6 border-t border-zinc-200">
-               <div className="flex justify-between items-end mb-3"><div><h4 className="text-sm font-bold text-zinc-900">Related Products</h4><p className="text-[10px] text-zinc-500">Select products visible in this scene</p></div><span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded-full">{data.productIds.length} selected</span></div>
-               <div className="bg-white rounded-xl border border-zinc-200 overflow-hidden shadow-sm">
-                  <div className="p-2 border-b border-zinc-100 bg-zinc-50/50"><div className="flex items-center bg-white border border-zinc-200 rounded-lg px-2"><Search className="w-4 h-4 text-zinc-400 mr-2"/><input className="w-full py-2 text-xs outline-none bg-transparent" placeholder="Search product name..." value={filter} onChange={e => setFilter(e.target.value)} /></div></div>
-                  <div className="h-48 overflow-y-auto p-2 space-y-1 custom-scrollbar">{allProducts.filter(p => p.name.toLowerCase().includes(filter.toLowerCase())).map(p => { const isSelected = data.productIds.includes(p.id); return (<div key={p.id} onClick={() => toggleProduct(p.id)} className={`flex items-center p-2 rounded-lg cursor-pointer transition-colors ${isSelected ? 'bg-indigo-50 border border-indigo-100' : 'hover:bg-zinc-50 border border-transparent'}`}><div className={`w-4 h-4 rounded border flex items-center justify-center mr-3 flex-shrink-0 ${isSelected ? 'bg-indigo-500 border-indigo-500' : 'bg-white border-zinc-300'}`}>{isSelected && <Check className="w-2 h-2 text-white"/>}</div>{p.images?.[0] && <img src={p.images[0]} className="w-8 h-8 rounded object-cover mr-3 bg-zinc-100" />}<div className="min-w-0"><div className={`text-xs font-bold truncate ${isSelected ? 'text-indigo-900' : 'text-zinc-700'}`}>{p.name}</div><div className="text-[10px] text-zinc-400 truncate">{p.category}</div></div></div>) })}</div>
-               </div>
-            </div>
-         </div>
-         <div className="px-6 py-4 border-t border-zinc-100 bg-white flex justify-end items-center z-10 gap-3">
-            <button onClick={onClose} className="px-4 py-2 border border-zinc-300 text-zinc-600 rounded-lg text-sm font-bold hover:bg-zinc-50">Cancel</button>
-            <button onClick={()=>onSave(data)} className="px-6 py-2 bg-zinc-900 text-white rounded-lg text-sm font-bold hover:bg-black shadow-md">Save Scene</button>
-         </div>
-      </div>
-    </div>
-  );
-}
-
-function SpaceSceneModal({ scene, products, allProducts, isAdmin, onClose, onEdit, onProductToggle, onNavigateProduct, isFavorite, onToggleFavorite }) {
-  const getProductThumb = (p) => {
-    const tryArr = (arr) => {
-      if (!arr || arr.length === 0) return null;
-      for (const it of arr) {
-        const url = typeof it === 'object' ? it.url : it;
-        if (typeof url === 'string' && url.trim()) return url;
-      }
-      return null;
-    };
-    return tryArr(p.images) || tryArr(p.contentImages) || null;
-  };
-  useScrollLock();
-  const [currentImageIndex, setCurrentImageIndex] = useState(0);
-  const images = scene.images ? [scene.image, ...scene.images] : [scene.image];
-  const [isProductManagerOpen, setProductManagerOpen] = useState(false);
-  const [productFilter, setProductFilter] = useState('');
-  const [isZoomed, setIsZoomed] = useState(false);
-
-  const currentImgObj = images[currentImageIndex];
-  const currentImgUrl = typeof currentImgObj === 'object' ? currentImgObj.url : currentImgObj;
-  const currentImgCaption = typeof currentImgObj === 'object' ? currentImgObj.caption : '';
-
-  const handleNext = () => { if(currentImageIndex < images.length - 1) setCurrentImageIndex(currentImageIndex + 1); };
-  const handlePrev = () => { if(currentImageIndex > 0) setCurrentImageIndex(currentImageIndex - 1); };
-
-  const handleShareImage = async () => { /* Placeholder */ };
-
-  return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[60] flex items-center justify-center p-0 md:p-6 animate-in zoom-in-95 duration-200 print:hidden">
-      {isZoomed && currentImgUrl && (<div className="fixed inset-0 z-[120] bg-black flex items-center justify-center p-0 cursor-zoom-out print:hidden" onClick={() => setIsZoomed(false)}><img src={currentImgUrl} className="w-full h-full object-contain max-w-none max-h-none" style={{maxWidth: '100vw', maxHeight: '100vh'}} alt="Zoomed" /><button className="absolute top-6 right-6 text-white/50 hover:text-white"><X className="w-10 h-10" /></button></div>)}
-      
-      <div className="bg-white w-full h-[100dvh] md:h-[90vh] md:max-w-6xl md:rounded-3xl overflow-hidden shadow-2xl flex flex-col md:flex-row relative">
-         <div className="absolute top-4 right-4 z-[100] flex gap-2">
-            {isAdmin && <button onClick={onEdit} className="p-2 bg-white/50 hover:bg-zinc-100 rounded-full backdrop-blur shadow-sm"><Edit3 className="w-6 h-6 text-zinc-900" /></button>}
-            <button onClick={onClose} className="p-2 bg-white/50 hover:bg-zinc-100 rounded-full backdrop-blur shadow-sm"><X className="w-6 h-6 text-zinc-900" /></button>
-         </div>
-         
-         {/* Image Section - Scrolls with content on mobile, Fixed on Desktop */}
-         <div className="w-full md:w-2/3 bg-black relative flex flex-col justify-center shrink-0 md:h-full">
-            <div className="relative w-full h-full min-h-[40vh] md:min-h-0">
-                <img src={currentImgUrl} className="w-full h-full object-contain cursor-zoom-in" alt="Scene" onClick={() => setIsZoomed(true)} />
-                <button onClick={onToggleFavorite} className="absolute top-4 left-4 p-2 bg-black/40 backdrop-blur rounded-full text-white hover:text-yellow-400 z-30"><Star className={`w-6 h-6 ${isFavorite ? 'fill-yellow-400 text-yellow-400' : ''}`}/></button>
-            </div>
-            {/* Caption Outside */}
-            {currentImgCaption && <div className="absolute bottom-20 left-0 right-0 text-center text-white/90 text-sm bg-black/40 backdrop-blur-sm p-2 mx-auto max-w-md rounded-xl z-20">{currentImgCaption}</div>}
-            
-            {/* Navigation Arrows */}
-            {images.length > 1 && (
-                <>
-                    <button onClick={(e) => {e.stopPropagation(); handlePrev()}} className="absolute left-4 top-1/2 -translate-y-1/2 p-2 bg-white/10 hover:bg-white/30 rounded-full text-white backdrop-blur-sm disabled:opacity-30" disabled={currentImageIndex === 0}><ChevronLeft className="w-6 h-6"/></button>
-                    <button onClick={(e) => {e.stopPropagation(); handleNext()}} className="absolute right-4 top-1/2 -translate-y-1/2 p-2 bg-white/10 hover:bg-white/30 rounded-full text-white backdrop-blur-sm disabled:opacity-30" disabled={currentImageIndex === images.length - 1}><ChevronRight className="w-6 h-6"/></button>
-                </>
-            )}
-
-            {/* Mini Thumbnails */}
-            {images.length > 1 && (
-                <div className="absolute bottom-4 left-0 right-0 flex justify-center space-x-2 px-4 overflow-x-auto custom-scrollbar z-20">
-                    {images.map((img, idx) => (
-                        <button key={idx} onClick={() => setCurrentImageIndex(idx)} className={`w-10 h-10 rounded-lg overflow-hidden border-2 transition-all flex-shrink-0 ${currentImageIndex === idx ? 'border-white scale-110' : 'border-transparent opacity-50 hover:opacity-100'}`}>
-                            <img src={typeof img === 'object' ? img.url : img} className="w-full h-full object-cover" />
-                        </button>
-                    ))}
-                </div>
-            )}
-         </div>
-
-         {/* Content Section */}
-         <div className="w-full md:w-1/3 bg-white flex flex-col border-l border-zinc-100 md:h-full relative">
-            <div className="p-6 md:p-8 border-b border-zinc-50 pt-8 md:pt-16 flex-shrink-0">
-               <div className="mb-4">
-                   <h2 className="text-2xl md:text-3xl font-black text-zinc-900 mb-2">{scene.title}</h2>
-                   <p className="text-zinc-500 text-sm leading-relaxed">{scene.description}</p>
-               </div>
-            </div>
-            <div className="flex-1 p-6 md:p-8 custom-scrollbar bg-zinc-50/50 overflow-y-auto pb-24 pb-safe">
-               <div className="flex justify-between items-center mb-4"><h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Tagged Products</h3>{isAdmin && <button onClick={() => setProductManagerOpen(!isProductManagerOpen)} className="text-xs font-bold text-indigo-600 hover:text-indigo-800">+ Add Tag</button>}</div>
-               {isAdmin && isProductManagerOpen && (
-                 <div className="mb-4 bg-white p-3 rounded-xl border border-indigo-100 shadow-sm animate-in slide-in-from-top-2">
-                    <input type="text" placeholder="Search to tag..." className="w-full text-xs p-2 bg-zinc-50 rounded-lg border border-zinc-200 mb-2 outline-none focus:border-indigo-500" value={productFilter} onChange={(e) => setProductFilter(e.target.value)} />
-                    <div className="max-h-32 overflow-y-auto space-y-1 custom-scrollbar">{allProducts.filter(p => p.name.toLowerCase().includes(productFilter.toLowerCase())).map(p => { const isTagged = scene.productIds?.includes(p.id); return (<div key={p.id} onClick={() => onProductToggle(p.id, !isTagged)} className={`flex items-center p-1.5 rounded cursor-pointer ${isTagged ? 'bg-indigo-50 text-indigo-700' : 'hover:bg-zinc-50'}`}><div className={`w-3 h-3 border rounded mr-2 flex items-center justify-center ${isTagged ? 'bg-indigo-500 border-indigo-500' : 'border-zinc-300'}`}>{isTagged && <Check className="w-2 h-2 text-white"/>}</div><span className="text-xs truncate">{p.name}</span></div>) })}</div>
-                 </div>
-               )}
-               <div className="space-y-3 mb-8">{products.length > 0 ? products.map(product => (<div key={product.id} onClick={() => onNavigateProduct(product)} className="flex items-center p-3 bg-white rounded-xl border border-zinc-100 shadow-sm hover:border-zinc-300 transition-all cursor-pointer group"><div className="w-12 h-12 bg-zinc-50 rounded-lg flex-shrink-0 flex items-center justify-center mr-3 overflow-hidden">{getProductThumb(product) ? <img src={getProductThumb(product)} className="w-full h-full object-cover" /> : <ImageIcon className="w-5 h-5 text-zinc-300"/>}</div><div className="flex-1 min-w-0"><h4 className="text-sm font-bold text-zinc-900 truncate group-hover:text-blue-600">{product.name}</h4><p className="text-xs text-zinc-500">{product.category}</p></div><ChevronRight className="w-4 h-4 text-zinc-300 group-hover:text-zinc-600"/></div>)) : (<div className="text-center py-8 text-zinc-400 text-xs">연관된 제품이 없습니다.</div>)}</div>
-            
-               {/* Share & Print for Mobile Consistency */}
-               <div className="pt-4 border-t border-zinc-100 flex gap-3 print:hidden mb-safe">
-                    <button onClick={handleShareImage} className="flex-1 py-3 bg-white border border-zinc-200 text-zinc-600 rounded-xl text-xs font-bold hover:bg-zinc-50 flex items-center justify-center"><ImgIcon className="w-4 h-4 mr-2"/> Share</button>
-                    <button onClick={() => window.print()} className="flex-1 py-3 bg-white border border-zinc-200 text-zinc-600 rounded-xl text-xs font-bold hover:bg-zinc-50 flex items-center justify-center"><Printer className="w-4 h-4 mr-2"/> PDF</button>
-               </div>
-            </div>
-         </div>
-      </div>
-    </div>
-  );
-}
-
-/* ----------------------------------------------------------------------
-   Awards UI (v0.8.0)
----------------------------------------------------------------------- */
-
-function AwardsHubView({ awards, products, isAdmin, onSelectAward, onAddAward, searchTerm, searchTags }) {
-  const filtered = (awards || []).filter(a => {
-    const fullText = [a.title, a.organization, a.description, ...(a.tags||[])].join(' ').toLowerCase();
-    const okText = !searchTerm || fullText.includes(searchTerm.toLowerCase());
-    const okTags = (searchTags||[]).every(t => fullText.includes(t.toLowerCase()));
-    return okText && okTags;
-  });
-
-  return (
-    <div className="animate-in fade-in slide-in-from-bottom-4 pb-32">
-      <div className="mb-8 flex items-center justify-between">
-        <div className="flex items-center">
-          <div className="p-3 bg-zinc-900 text-white rounded-xl mr-4"><Trophy className="w-6 h-6" /></div>
-          <div>
-            <h2 className="text-4xl font-black text-zinc-900 tracking-tight">Awards</h2>
-            <p className="text-sm text-zinc-500 font-medium mt-1">{filtered.length} awards</p>
-          </div>
         </div>
-        {isAdmin && (
-          <button onClick={onAddAward} className="px-4 py-2 bg-zinc-900 text-white text-sm font-bold rounded-xl hover:bg-black transition-all flex items-center shadow-lg">
-            <Plus className="w-4 h-4 mr-2" /> Add Award
-          </button>
-        )}
+        <button type="button" onClick={() => setIsOpen(true)} className="ml-auto px-3 py-1.5 bg-white border rounded text-xs">Add</button>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
-        {filtered.map(a => (
-          <div key={a.id} onClick={() => onSelectAward(a)} className="bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer group border border-zinc-100 relative">
-            <div className="aspect-[4/3] bg-zinc-50 overflow-hidden relative">
-              <div className="absolute inset-0 bg-zinc-100/30 mix-blend-multiply pointer-events-none z-10"></div>
-              {a.image ? (
-                <img src={a.image} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" alt={a.title} />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center text-zinc-300">
-                  <Trophy className="w-10 h-10" />
-                </div>
-              )}
+      {isOpen && (
+        <div className="fixed inset-0 z-[200] bg-black/40 flex items-start justify-center p-4">
+          <div className="bg-white w-full max-w-xl rounded-xl shadow-lg overflow-hidden">
+            <div className="p-4 border-b flex items-center gap-3">
+              <input className="flex-1 border p-2 rounded" placeholder="Filter swatches..." value={filter} onChange={e=>setFilter(e.target.value)} />
+              <button onClick={() => setIsOpen(false)} className="text-zinc-500"><X className="w-5 h-5" /></button>
             </div>
-            <div className="p-4">
-              <h3 className="text-sm font-extrabold text-zinc-900 leading-tight line-clamp-1 mb-1">{a.title || 'Untitled Award'}</h3>
-              <p className="text-xs text-zinc-500 line-clamp-1">{a.organization || 'Organization'}</p>
-              <div className="mt-3 pt-3 border-t border-zinc-50 flex justify-between items-center">
-                <span className="text-[10px] font-medium text-zinc-400 truncate">{(a.tags||[]).slice(0,2).join(' · ')}</span>
-                <span className="text-[9px] font-bold text-zinc-500 bg-zinc-50 px-1.5 py-0.5 rounded uppercase tracking-wider">{(a.products||[]).length} products</span>
-              </div>
-            </div>
-          </div>
-        ))}
-        {filtered.length === 0 && (
-          <div className="col-span-full py-20 text-center text-zinc-400 border-2 border-dashed border-zinc-100 rounded-xl">
-            <Trophy className="w-10 h-10 mx-auto mb-2 opacity-20" />
-            No awards found.
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function AwardDetailModal({ award, products, isAdmin, onClose, onOpenEdit, onSave, onDelete, onSync }) {
-  useScrollLock();
-  const [localAward, setLocalAward] = useState(award);
-
-  useEffect(() => setLocalAward(award), [award]);
-
-  if (!award) return null;
-
-  const related = (localAward.products || [])
-    .map(({ productId, year }) => {
-      const p = products.find(pp => pp.id === productId);
-      return p ? { product: p, year } : null;
-    })
-    .filter(Boolean);
-
-  const toggleProduct = (productId) => {
-    setLocalAward(prev => {
-      const exists = (prev.products || []).some(x => x.productId === productId);
-      const next = exists ? (prev.products||[]).filter(x => x.productId !== productId) : [...(prev.products||[]), { productId, year: '' }];
-      return { ...prev, products: next };
-    });
-  };
-
-  const setYear = (productId, year) => {
-    setLocalAward(prev => ({
-      ...prev,
-      products: (prev.products||[]).map(x => x.productId === productId ? { ...x, year } : x)
-    }));
-  };
-
-  const saveAndSync = async () => {
-    if (onSave) await onSave(localAward);
-    if (onSync) await onSync(localAward);
-    onClose();
-  };
-
-  return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[170] flex items-center justify-center p-4">
-      <div className="bg-white w-full max-w-4xl rounded-2xl overflow-hidden shadow-2xl flex flex-col max-h-[95vh]">
-        <div className="px-6 py-4 border-b border-zinc-100 flex justify-between items-center bg-white">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-zinc-900 text-white rounded-xl"><Trophy className="w-5 h-5" /></div>
-            <div>
-              <h3 className="text-lg font-bold text-zinc-900">{award.title}</h3>
-              <p className="text-xs text-zinc-500">{award.organization}</p>
-            </div>
-          </div>
-          <div className="flex gap-2">
-            {isAdmin && (
-              <>
-                <button onClick={() => onOpenEdit(award)} className="p-2 hover:bg-zinc-100 rounded-full"><Edit2 className="w-5 h-5 text-zinc-500"/></button>
-                <button onClick={() => onDelete(award.id)} className="p-2 hover:bg-red-50 rounded-full"><Trash2 className="w-5 h-5 text-red-500"/></button>
-              </>
-            )}
-            <button onClick={onClose} className="p-2 hover:bg-zinc-100 rounded-full"><X className="w-5 h-5 text-zinc-400"/></button>
-          </div>
-        </div>
-
-        <div className="flex-1 overflow-y-auto p-6 bg-zinc-50 space-y-6 pb-24 pb-safe">
-          {award.image && (
-            <div className="rounded-2xl overflow-hidden bg-white border border-zinc-100">
-              <img src={award.image} className="w-full h-64 object-cover" alt={award.title} />
-            </div>
-          )}
-
-          <div className="bg-white rounded-2xl border border-zinc-100 p-5">
-            <div className="grid md:grid-cols-2 gap-4">
-              <div>
-                <div className="text-xs font-bold text-zinc-400 uppercase mb-1">Title</div>
-                <div className="font-extrabold text-zinc-900">{award.title}</div>
-              </div>
-              <div>
-                <div className="text-xs font-bold text-zinc-400 uppercase mb-1">Organization</div>
-                <div className="font-bold text-zinc-700">{award.organization || '-'}</div>
-              </div>
-            </div>
-            <div className="mt-4">
-              <div className="text-xs font-bold text-zinc-400 uppercase mb-1">Description</div>
-              <div className="text-sm text-zinc-700 whitespace-pre-wrap leading-relaxed">{award.description || '-'}</div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-2xl border border-zinc-100 p-5">
-            <div className="flex items-center justify-between mb-3">
-              <h4 className="text-sm font-extrabold text-zinc-900 flex items-center"><Tag className="w-4 h-4 mr-2 text-zinc-400" /> Awarded Products</h4>
-              {isAdmin && <span className="text-xs text-zinc-400">Click to toggle · Year editable</span>}
-            </div>
-
-            {isAdmin && (
-              <div className="mb-4 max-h-44 overflow-y-auto custom-scrollbar border border-zinc-100 rounded-xl p-2 bg-zinc-50">
-                {products.map(p => {
-                  const tagged = (localAward.products||[]).some(x => x.productId === p.id);
-                  return (
-                    <div key={p.id} className={`flex items-center justify-between p-2 rounded-lg cursor-pointer ${tagged ? 'bg-indigo-50' : 'hover:bg-white'}`}>
-                      <div className="flex items-center gap-2 min-w-0" onClick={() => toggleProduct(p.id)}>
-                        <div className={`w-4 h-4 rounded border flex items-center justify-center ${tagged ? 'bg-indigo-500 border-indigo-500' : 'border-zinc-300'}`}>
-                          {tagged && <Check className="w-3 h-3 text-white" />}
-                        </div>
-                        <span className="text-xs font-bold truncate">{p.name}</span>
-                      </div>
-                      {tagged && (
-                        <input
-                          value={(localAward.products||[]).find(x => x.productId === p.id)?.year || ''}
-                          onChange={(e) => setYear(p.id, e.target.value)}
-                          placeholder="Year"
-                          className="w-20 text-xs p-1.5 border border-zinc-200 rounded-lg bg-white"
-                        />
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-
-            <div className="space-y-3">
-              {related.length > 0 ? related.map(({ product, year }) => (
-                <div key={product.id} className="flex items-center justify-between p-3 bg-zinc-50 rounded-xl border border-zinc-100">
-                  <div className="min-w-0">
-                    <div className="text-sm font-bold text-zinc-900 truncate">{product.name}</div>
-                    <div className="text-xs text-zinc-500">{product.category}</div>
-                  </div>
-                  <div className="text-xs font-bold text-zinc-600 bg-white border border-zinc-200 px-2 py-1 rounded-lg">{year || '-'}</div>
-                </div>
-              )) : (
-                <div className="text-center py-8 text-zinc-400 text-xs">No products tagged.</div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {isAdmin && (
-          <div className="border-t border-zinc-100 bg-white p-4 flex justify-end gap-2">
-            <button onClick={saveAndSync} className="px-4 py-2 bg-zinc-900 text-white rounded-xl text-sm font-bold hover:bg-black">Save</button>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function AwardFormModal({ initialData, awardTags, onClose, onSave, onSaveTags }) {
-  useScrollLock();
-  const [data, setData] = useState(() => ({
-    id: initialData?.id || null,
-    title: initialData?.title || '',
-    organization: initialData?.organization || '',
-    description: initialData?.description || '',
-    image: initialData?.image || null,
-    tagsString: (initialData?.tags || []).join(', '),
-    products: initialData?.products || []
-  }));
-  const inputRef = useRef(null);
-
-  const processImage = (file) => new Promise((resolve) => {
-    const reader = new FileReader();
-    reader.onload = (e) => resolve(e.target.result);
-    reader.readAsDataURL(file);
-  });
-
-  const handleImage = async (e) => {
-    const f = e.target.files?.[0];
-    if (!f) return;
-    const url = await processImage(f);
-    setData(prev => ({ ...prev, image: url }));
-  };
-
-  const save = () => {
-    const tags = data.tagsString.split(',').map(s => s.trim()).filter(Boolean);
-    onSave({ ...data, tags });
-  };
-
-  const editTags = () => {
-    const next = window.prompt("Award tags (comma separated):", (awardTags||[]).join(', '));
-    if (next == null) return;
-    onSaveTags(next.split(',').map(s => s.trim()));
-  };
-
-  return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[180] flex items-center justify-center p-4">
-      <div className="bg-white w-full max-w-2xl rounded-2xl overflow-hidden shadow-2xl flex flex-col max-h-[95vh]">
-        <div className="px-6 py-4 border-b border-zinc-100 flex justify-between items-center bg-white">
-          <h3 className="text-lg font-bold text-zinc-900">{data.id ? 'Edit Award' : 'New Award'}</h3>
-          <div className="flex gap-2">
-            <button onClick={editTags} className="p-2 hover:bg-zinc-100 rounded-full" title="Manage tags"><Tag className="w-5 h-5 text-zinc-500"/></button>
-            <button onClick={onClose} className="p-2 hover:bg-zinc-100 rounded-full"><X className="w-5 h-5 text-zinc-400"/></button>
-          </div>
-        </div>
-
-        <div className="flex-1 overflow-y-auto p-6 bg-zinc-50 space-y-6 pb-24 pb-safe">
-          <div>
-            <div className="text-xs font-bold text-zinc-500 uppercase mb-2">Representative Image</div>
-            <div onClick={() => inputRef.current?.click()} className="w-full h-48 bg-white rounded-xl flex items-center justify-center cursor-pointer border border-dashed border-zinc-300 overflow-hidden relative hover:border-zinc-400 transition-colors shadow-sm">
-              {data.image ? <img src={data.image} className="w-full h-full object-cover" alt="Award" /> : <div className="flex flex-col items-center text-zinc-400"><ImagePlus className="w-8 h-8 mb-2"/><span className="text-xs">Upload Image</span></div>}
-            </div>
-            <input type="file" ref={inputRef} className="hidden" accept="image/*" onChange={handleImage} />
-          </div>
-
-          <div className="grid md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-bold text-zinc-500 uppercase mb-2">Title</label>
-              <input className="w-full border border-zinc-300 rounded-lg p-2.5 text-sm bg-white" value={data.title} onChange={(e)=>setData(p=>({...p,title:e.target.value}))}/>
-            </div>
-            <div>
-              <label className="block text-xs font-bold text-zinc-500 uppercase mb-2">Organization</label>
-              <input className="w-full border border-zinc-300 rounded-lg p-2.5 text-sm bg-white" value={data.organization} onChange={(e)=>setData(p=>({...p,organization:e.target.value}))}/>
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-xs font-bold text-zinc-500 uppercase mb-2">Description</label>
-            <textarea className="w-full border border-zinc-300 rounded-lg p-2.5 text-sm bg-white min-h-[120px]" value={data.description} onChange={(e)=>setData(p=>({...p,description:e.target.value}))}/>
-          </div>
-
-          <div>
-            <label className="block text-xs font-bold text-zinc-500 uppercase mb-2">Tags (comma)</label>
-            <input className="w-full border border-zinc-300 rounded-lg p-2.5 text-sm bg-white" value={data.tagsString} onChange={(e)=>setData(p=>({...p,tagsString:e.target.value}))}/>
-            <div className="mt-2 flex flex-wrap gap-2">
-              {(awardTags||[]).map(t => (
-                <button key={t} onClick={() => setData(p => ({ ...p, tagsString: Array.from(new Set([...(p.tagsString.split(',').map(s=>s.trim()).filter(Boolean)), t])).join(', ') }))} className="px-3 py-1.5 rounded-full text-xs font-bold border bg-white text-zinc-600 hover:bg-zinc-100">
-                  {t}
+            <div className="p-4 grid grid-cols-4 gap-3 max-h-64 overflow-y-auto">
+              {filtered.map(s => (
+                <button key={s.id} onClick={() => handleSelect(s)} className="flex flex-col items-center p-2 bg-zinc-50 rounded hover:bg-zinc-100">
+                  <SwatchDisplay color={s} size="medium" />
+                  <span className="text-xs mt-2">{s.name}</span>
                 </button>
               ))}
+              {filtered.length === 0 && <div className="col-span-4 text-center text-sm text-zinc-400">No swatches found</div>}
             </div>
           </div>
         </div>
-
-        <div className="border-t border-zinc-100 bg-white p-4 flex justify-end gap-2">
-          <button onClick={onClose} className="px-4 py-2 bg-white border border-zinc-200 rounded-xl text-sm font-bold hover:bg-zinc-50">Cancel</button>
-          <button onClick={save} className="px-4 py-2 bg-zinc-900 text-white rounded-xl text-sm font-bold hover:bg-black">Save</button>
-        </div>
-      </div>
+      )}
     </div>
   );
-}
+} 
