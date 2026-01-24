@@ -1362,8 +1362,13 @@ function CategoryRootView({ type, spaces, spaceContents, collections, materials,
                                                 <img src={sub.image} className="w-full h-full object-cover group-hover:scale-105 transition-transform"/>
                                             ) : type === 'MATERIALS_ROOT' ? (
                                                 <>
-                                                  <SwatchDisplay color={sub} className="w-full h-full rounded-none scale-100"/>
-                                                  <button onClick={(e) => onToggleFavorite(e, sub.id)} className="absolute top-2 right-2 p-1.5 bg-white/80 rounded-full text-zinc-300 hover:text-yellow-400 hover:scale-110 transition-all z-10"><Star className={`w-3.5 h-3.5 ${favorites?.includes(sub.id) ? 'fill-yellow-400 text-yellow-400' : ''}`} /></button>
+                                                    <SwatchDisplay color={sub} className="w-full h-full rounded-none scale-100"/>
+                                                    <button
+                                                        onClick={(e) => onToggleFavorite(e, sub.id)}
+                                                        className="absolute top-2 right-2 p-1.5 bg-white/80 rounded-full text-zinc-300 hover:text-yellow-400 hover:scale-110 transition-all z-10"
+                                                    >
+                                                        <Star className={`w-3.5 h-3.5 ${favorites?.includes(sub.id) ? 'fill-yellow-400 text-yellow-400' : ''}`} />
+                                                    </button>
                                                 </>
                                             ) : (
                                                 <img src={sub.images?.[0] ? (typeof sub.images[0] === 'object' ? sub.images[0].url : sub.images[0]) : ''} className="w-full h-full object-contain mix-blend-multiply group-hover:scale-105 transition-transform"/>
