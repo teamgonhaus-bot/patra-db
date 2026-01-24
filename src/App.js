@@ -395,6 +395,12 @@ const bannerDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', '
   const loadFromLocalStorage = () => {
     const saved = localStorage.getItem('patra_products');
     setProducts(saved ? JSON.parse(saved) : []);
+    const savedSwatches = localStorage.getItem('patra_swatches');
+    setSwatches(savedSwatches ? JSON.parse(savedSwatches) : []);
+    const savedAwards = localStorage.getItem('patra_awards');
+    setAwards(savedAwards ? JSON.parse(savedAwards) : []);
+    const savedAwardTags = localStorage.getItem('patra_award_tags');
+    setAwardTags(savedAwardTags ? JSON.parse(savedAwardTags) : DEFAULT_AWARD_TAGS);
     setIsLoading(false);
   };
   const saveToLocalStorage = (newProducts) => {
@@ -623,6 +629,129 @@ const bannerDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', '
      const newSwatch = { ...swatch, id: Date.now().toString(), name: `${swatch.name} (Copy)`, updatedAt: Date.now() };
      await handleSaveSwatch(newSwatch);
      showToast("스와치가 복제되었습니다.");
+  };
+
+  // --- Awards (v0.8.0) ---
+  const persistAwardsToLocal = (nextAwards) => {
+    localStorage.setItem('patra_awards', JSON.stringify(nextAwards));
+    setAwards(nextAwards);
+  };
+
+  const persistAwardTagsToLocal = (nextTags) => {
+    localStorage.setItem('patra_award_tags', JSON.stringify(nextTags));
+    setAwardTags(nextTags);
+  };
+
+  const handleSaveAwardTags = async (nextTags) => {
+    if (!isAdmin) return;
+    const cleaned = (nextTags || []).map(t => String(t).trim()).filter(Boolean);
+    const current = cleaned.length ? Array.from(new Set(cleaned)) : DEFAULT_AWARD_TAGS;
+    if (isFirebaseAvailable && db) {
+      await setDoc(
+        doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'award_tags'),
+        { tags: current },
+        { merge: true }
+      );
+    } else {
+      persistAwardTagsToLocal(current);
+    }
+    setAwardTags(current);
+    showToast('어워드 태그가 저장되었습니다.');
+  };
+
+  const handleSaveAward = async (awardData) => {
+    if (!isAdmin) return;
+    const docId = awardData.id ? String(awardData.id) : String(Date.now());
+    const payload = {
+      ...awardData,
+      id: docId,
+      updatedAt: Date.now(),
+      createdAt: awardData.createdAt || Date.now(),
+      // Ensure array shapes
+      tags: Array.isArray(awardData.tags) ? awardData.tags : (awardData.tags ? [awardData.tags] : []),
+      products: Array.isArray(awardData.products) ? awardData.products : []
+    };
+
+    if (isFirebaseAvailable && db) {
+      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'awards', docId), payload, { merge: true });
+    } else {
+      const idx = awards.findIndex(a => String(a.id) === docId);
+      const next = [...awards];
+      if (idx >= 0) next[idx] = payload; else next.unshift(payload);
+      persistAwardsToLocal(next);
+    }
+    showToast('어워드가 저장되었습니다.');
+  };
+
+  const syncAwardToProducts = async (awardObj) => {
+    if (!awardObj) return;
+    const awardTitle = awardObj.title;
+    const taggedList = (awardObj.products || []).map(x => ({ productId: String(x.productId), year: x.year || '' }));
+    const taggedIds = new Set(taggedList.map(x => x.productId));
+
+    const nextProducts = products.map(p => {
+      const pid = String(p.id);
+      const has = taggedIds.has(pid);
+      const currentAwards = Array.isArray(p.awards) ? p.awards : [];
+      const currentYears = (p.awardYears && typeof p.awardYears === 'object') ? { ...p.awardYears } : {};
+
+      let nextAwards = currentAwards;
+      if (has && awardTitle) {
+        if (!currentAwards.includes(awardTitle)) nextAwards = [...currentAwards, awardTitle];
+        const yr = taggedList.find(x => x.productId === pid)?.year || '';
+        if (yr) currentYears[awardTitle] = yr; else delete currentYears[awardTitle];
+      } else {
+        if (awardTitle) {
+          nextAwards = currentAwards.filter(a => a !== awardTitle);
+          delete currentYears[awardTitle];
+        }
+      }
+
+      // If nothing changed, return original to reduce re-render
+      const awardsChanged = nextAwards.length !== currentAwards.length || nextAwards.some((v, i) => v !== currentAwards[i]);
+      const yearsChanged = awardTitle ? ((p.awardYears || {})[awardTitle] || '') !== (currentYears[awardTitle] || '') : false;
+      if (!awardsChanged && !yearsChanged) return p;
+      return { ...p, awards: nextAwards, awardYears: currentYears };
+    });
+
+    if (isFirebaseAvailable && db) {
+      // Persist only touched products (cheap diff)
+      for (const p of nextProducts) {
+        const orig = products.find(op => String(op.id) === String(p.id));
+        if (!orig) continue;
+        const origAwards = Array.isArray(orig.awards) ? orig.awards : [];
+        const nextAwards = Array.isArray(p.awards) ? p.awards : [];
+        const sameAwards = origAwards.length === nextAwards.length && origAwards.every((v, i) => v === nextAwards[i]);
+        const origYears = orig.awardYears || {};
+        const nextYears = p.awardYears || {};
+        const sameYears = JSON.stringify(origYears) === JSON.stringify(nextYears);
+        if (sameAwards && sameYears) continue;
+        await setDoc(
+          doc(db, 'artifacts', appId, 'public', 'data', 'products', String(p.id)),
+          { awards: nextAwards, awardYears: nextYears, updatedAt: Date.now() },
+          { merge: true }
+        );
+      }
+    } else {
+      saveToLocalStorage(nextProducts);
+    }
+  };
+
+  const handleDeleteAward = async (awardId) => {
+    if (!isAdmin) return;
+    if (!window.confirm('이 어워드를 삭제하시겠습니까?')) return;
+    const target = awards.find(a => String(a.id) === String(awardId));
+    if (isFirebaseAvailable && db) {
+      await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'awards', String(awardId)));
+    } else {
+      persistAwardsToLocal(awards.filter(a => String(a.id) !== String(awardId)));
+    }
+    // Remove from products
+    if (target?.title) {
+      await syncAwardToProducts({ ...target, products: [] });
+    }
+    setSelectedAward(null);
+    showToast('어워드가 삭제되었습니다.');
   };
 
   // --- Search Tag Logic ---
@@ -1007,7 +1136,8 @@ const bannerDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', '
           products={products}
           isAdmin={isAdmin}
           onClose={() => setSelectedAward(null)}
-          onEdit={(a) => { setEditingAward(a); setIsAwardFormOpen(true); }}
+          onOpenEdit={(a) => { setEditingAward(a); setIsAwardFormOpen(true); }}
+          onSave={handleSaveAward}
           onDelete={handleDeleteAward}
           onSync={syncAwardToProducts}
         />
@@ -3342,7 +3472,7 @@ function AwardsHubView({ awards, products, isAdmin, onSelectAward, onAddAward, s
   );
 }
 
-function AwardDetailModal({ award, products, isAdmin, onClose, onEdit, onDelete, onSync }) {
+function AwardDetailModal({ award, products, isAdmin, onClose, onOpenEdit, onSave, onDelete, onSync }) {
   useScrollLock();
   const [localAward, setLocalAward] = useState(award);
 
@@ -3373,7 +3503,7 @@ function AwardDetailModal({ award, products, isAdmin, onClose, onEdit, onDelete,
   };
 
   const saveAndSync = async () => {
-    await onEdit(localAward);
+    if (onSave) await onSave(localAward);
     if (onSync) await onSync(localAward);
     onClose();
   };
@@ -3392,7 +3522,7 @@ function AwardDetailModal({ award, products, isAdmin, onClose, onEdit, onDelete,
           <div className="flex gap-2">
             {isAdmin && (
               <>
-                <button onClick={() => onEdit({ ...award, __openForm: true })} className="p-2 hover:bg-zinc-100 rounded-full"><Edit2 className="w-5 h-5 text-zinc-500"/></button>
+                <button onClick={() => onOpenEdit(award)} className="p-2 hover:bg-zinc-100 rounded-full"><Edit2 className="w-5 h-5 text-zinc-500"/></button>
                 <button onClick={() => onDelete(award.id)} className="p-2 hover:bg-red-50 rounded-full"><Trash2 className="w-5 h-5 text-red-500"/></button>
               </>
             )}
