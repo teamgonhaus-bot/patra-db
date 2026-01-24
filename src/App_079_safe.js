@@ -37,7 +37,7 @@ const YOUR_FIREBASE_CONFIG = {
 // ----------------------------------------------------------------------
 // 상수 및 설정
 // ----------------------------------------------------------------------
-const APP_VERSION = "v0.8.0"; 
+const APP_VERSION = "v0.7.9"; 
 const BUILD_DATE = "2026.01.24";
 const ADMIN_PASSWORD = "adminlcg1"; 
 
@@ -137,8 +137,10 @@ function useScrollLock() {
   useEffect(() => {
     const originalStyle = window.getComputedStyle(document.body).overflow;
     document.body.style.overflow = 'hidden';
+    // iOS fix
     document.body.style.position = 'fixed';
     document.body.style.width = '100%';
+    
     return () => {
       document.body.style.overflow = originalStyle;
       document.body.style.position = '';
@@ -165,7 +167,7 @@ export default function App() {
   const [filters, setFilters] = useState({ year: '', color: '', isNew: false });
   const [isFilterOpen, setIsFilterOpen] = useState(false);
 
-  // Selection & Compare
+  // Selection & Compare (Stacked Modals)
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [selectedSwatch, setSelectedSwatch] = useState(null); 
   const [compareList, setCompareList] = useState([]);
@@ -184,7 +186,7 @@ export default function App() {
   const [showAdminDashboard, setShowAdminDashboard] = useState(false);
   const [activityLogs, setActivityLogs] = useState([]);
   const [toast, setToast] = useState(null);
-  const [favorites, setFavorites] = useState([]);
+  const [favorites, setFavorites] = useState([]); // Stores IDs of Products, Scenes, Swatches
   
   // UI State
   const [sidebarState, setSidebarState] = useState({ spaces: true, collections: true, materials: true });
@@ -395,6 +397,7 @@ export default function App() {
     }
   };
   
+  // Enhanced Toggle Favorite to support Scenes and Swatches
   const toggleFavorite = (e, itemId) => {
     if(e) e.stopPropagation();
     let newFavs;
@@ -532,6 +535,8 @@ export default function App() {
           await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'space_contents', targetSpaceId), { scenes: targetScenes }, { merge: true }); 
       } 
       showToast(isMove ? "장면이 이동되었습니다." : "장면이 저장되었습니다."); 
+      
+      // Return to View Mode with updated data
       setSelectedScene({...sceneData, spaceId: targetSpaceId});
       setEditingScene(null);
   };
@@ -599,6 +604,7 @@ export default function App() {
      showToast("스와치가 복제되었습니다.");
   };
 
+  // --- Search Tag Logic ---
   const handleSearchKeyDown = (e) => {
       if (e.key === ',' || e.key === 'Enter') {
           e.preventDefault();
@@ -615,12 +621,13 @@ export default function App() {
       setSearchTags(searchTags.filter((_, i) => i !== idx));
   };
 
+  // --- Data & Filters ---
   const getProcessedProducts = () => {
     let filtered = products.filter(product => {
       let matchesCategory = true;
       if (activeCategory === 'DASHBOARD' || activeCategory === 'COMPARE_PAGE') matchesCategory = false; 
       else if (activeCategory === 'MY_PICK') matchesCategory = favorites.includes(product.id);
-      else if (activeCategory === 'ALL') matchesCategory = true; 
+      else if (activeCategory === 'ALL') matchesCategory = true; // ALL now means Total View (Master List)
       else if (activeCategory === 'SPACES_ROOT' || activeCategory === 'COLLECTIONS_ROOT' || activeCategory === 'MATERIALS_ROOT') matchesCategory = false; 
       else if (SPACES.find(s => s.id === activeCategory)) {
          matchesCategory = product.spaces && product.spaces.includes(activeCategory);
@@ -629,6 +636,7 @@ export default function App() {
       else if (SWATCH_CATEGORIES.find(s => s.id === activeCategory)) matchesCategory = false; 
       else matchesCategory = product.category === activeCategory;
       
+      // Search Logic (Tags + Text)
       const searchFields = [ product.name, product.specs, product.designer, ...(product.features || []), ...(product.options || []), ...(product.awards || []), ...(product.materials || []), ...(product.bodyColors || []).map(c => typeof c === 'object' ? c.name : c), ...(product.upholsteryColors || []).map(c => typeof c === 'object' ? c.name : c) ];
       const fullText = searchFields.join(' ').toLowerCase();
       
@@ -656,6 +664,7 @@ export default function App() {
   };
   const processedProducts = getProcessedProducts();
 
+  // --- Drag & Drop ---
   const handleDragStart = (e, index) => { dragItem.current = index; };
   const handleDragEnter = (e, index) => { dragOverItem.current = index; };
   const handleDragEnd = async () => {
@@ -667,9 +676,11 @@ export default function App() {
      setProducts(_products); dragItem.current = null; dragOverItem.current = null;
   };
 
+  // --- Navigation ---
   const handleNavigateNext = () => { if(!selectedProduct) return; const currentIndex = processedProducts.findIndex(p => p.id === selectedProduct.id); if(currentIndex >= 0 && currentIndex < processedProducts.length - 1) { setSelectedProduct(processedProducts[currentIndex + 1]); } };
   const handleNavigatePrev = () => { if(!selectedProduct) return; const currentIndex = processedProducts.findIndex(p => p.id === selectedProduct.id); if(currentIndex > 0) { setSelectedProduct(processedProducts[currentIndex - 1]); } };
 
+  // Import/Export
   const handleExportData = () => { const dataStr = JSON.stringify({ products, swatches, spaces: spaceContents, version: APP_VERSION }, null, 2); const blob = new Blob([dataStr], { type: "application/json" }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `patra_db_backup_${new Date().toISOString().slice(0,10)}.json`; a.click(); showToast("데이터 백업이 완료되었습니다."); };
   const handleImportData = (e) => { const file = e.target.files[0]; if (!file) return; const reader = new FileReader(); reader.onload = async (event) => { try { const imported = JSON.parse(event.target.result); if (window.confirm(`총 ${imported.products?.length || 0}개 제품, ${imported.swatches?.length || 0}개 스와치를 불러오시겠습니까?`)) { if (!isFirebaseAvailable) { saveToLocalStorage(imported.products || []); saveSwatchesToLocal(imported.swatches || []); window.location.reload(); } else { setProducts(imported.products || []); setSwatches(imported.swatches || []); } showToast("데이터 복원 완료 (메모리 로드)"); } } catch (err) { showToast("파일 형식이 올바르지 않습니다.", "error"); } }; reader.readAsText(file); };
 
@@ -688,6 +699,7 @@ export default function App() {
       `}</style>
       {isMobileMenuOpen && <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 md:hidden animate-in fade-in" onClick={() => setIsMobileMenuOpen(false)} />}
       
+      {/* Sidebar */}
       <aside className={`fixed inset-y-0 left-0 z-50 w-72 bg-white/90 backdrop-blur-md border-r border-zinc-200 flex flex-col shadow-2xl md:shadow-none transition-transform duration-300 md:relative md:translate-x-0 print:hidden ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         <div className="p-6 border-b border-zinc-100 flex items-center justify-between cursor-pointer group relative" onClick={handleHomeClick}>
           <div className="flex flex-col group/header">
@@ -717,6 +729,7 @@ export default function App() {
         <nav className="flex-1 overflow-y-auto py-6 px-4 space-y-4 custom-scrollbar">
           <div className="space-y-1">{CATEGORIES.filter(c => c.isSpecial).map((cat) => (<button key={cat.id} onClick={() => handleCategoryClick(cat.id)} className={`w-full text-left px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 flex items-center justify-between group border ${activeCategory === cat.id ? 'bg-zinc-900 text-white shadow-lg border-zinc-900' : 'bg-white text-zinc-600 border-zinc-100 hover:bg-zinc-50 hover:border-zinc-300'}`}><div className="flex items-center">{cat.id === 'ALL' && <LayoutGrid className="w-4 h-4 mr-3 opacity-70" />}<span className="font-bold tracking-tight">{cat.label}</span></div></button>))}</div>
           
+          {/* Spaces Group */}
           <div className="py-2">
              <div className={`w-full flex items-center rounded-xl border mb-1 shadow-sm transition-all ${activeCategory === 'SPACES_ROOT' ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-600 border-zinc-100 hover:border-zinc-300'}`}>
                 <button onClick={() => handleCategoryClick('SPACES_ROOT')} className="flex-1 text-left px-4 py-3 text-sm font-bold tracking-tight">SPACES</button>
@@ -727,6 +740,7 @@ export default function App() {
              {sidebarState.spaces && (<div className="space-y-1 mt-2 pl-2 animate-in slide-in-from-top-2 duration-200">{SPACES.map((space) => (<button key={space.id} onClick={() => handleCategoryClick(space.id)} className={`w-full text-left px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 flex items-center justify-between group ${activeCategory === space.id ? 'bg-zinc-800 text-white font-bold' : 'text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900'}`}><div className="flex items-center"><space.icon className={`w-3.5 h-3.5 mr-3 ${activeCategory === space.id ? 'text-white' : 'text-zinc-400'}`} />{space.label}</div>{activeCategory === space.id && <div className="w-1.5 h-1.5 rounded-full bg-green-500"></div>}</button>))}</div>)}
           </div>
 
+          {/* Collections Group */}
           <div className="py-2">
              <div className={`w-full flex items-center rounded-xl border mb-1 shadow-sm transition-all ${activeCategory === 'COLLECTIONS_ROOT' ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-600 border-zinc-100 hover:border-zinc-300'}`}>
                 <button onClick={() => handleCategoryClick('COLLECTIONS_ROOT')} className="flex-1 text-left px-4 py-3 text-sm font-bold tracking-tight flex items-center">COLLECTIONS</button>
@@ -737,6 +751,7 @@ export default function App() {
              {sidebarState.collections && (<div className="space-y-0.5 mt-2 pl-2 animate-in slide-in-from-top-2 duration-200">{CATEGORIES.filter(c => !c.isSpecial).map((cat) => (<button key={cat.id} onClick={() => handleCategoryClick(cat.id)} className={`w-full text-left px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center justify-between group ${activeCategory === cat.id ? 'bg-zinc-100 text-zinc-900 font-bold' : 'text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900'}`}>{cat.label}</button>))}</div>)}
           </div>
 
+          {/* Materials Group */}
           <div className="py-2">
              <div className={`w-full flex items-center rounded-xl border mb-1 shadow-sm transition-all ${activeCategory === 'MATERIALS_ROOT' ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-600 border-zinc-100 hover:border-zinc-300'}`}>
                 <button onClick={() => handleCategoryClick('MATERIALS_ROOT')} className="flex-1 text-left px-4 py-3 text-sm font-bold tracking-tight">MATERIALS</button>
@@ -839,8 +854,6 @@ export default function App() {
                 searchTerm={searchTerm}
                 searchTags={searchTags}
                 filters={filters}
-                favorites={favorites}
-                onToggleFavorite={toggleFavorite}
              />
           ) : activeCategory.endsWith('_ROOT') ? (
              <CategoryRootView 
@@ -860,8 +873,6 @@ export default function App() {
                 filters={filters}
                 onCompareToggle={(e, p) => toggleCompare(e, p)}
                 compareList={compareList}
-                favorites={favorites}
-                onToggleFavorite={toggleFavorite}
              />
           ) : (
             <>
@@ -869,7 +880,7 @@ export default function App() {
                  <SpaceDetailView space={SPACES.find(s => s.id === activeCategory)} spaceContent={spaceContents[activeCategory] || {}} isAdmin={isAdmin} activeTag={activeSpaceTag} setActiveTag={setActiveSpaceTag} onBannerUpload={(e) => handleSpaceBannerUpload(e, activeCategory)} onEditInfo={() => setEditingSpaceInfoId(activeCategory)} onManageProducts={() => setManagingSpaceProductsId(activeCategory)} onAddScene={() => setEditingScene({ isNew: true, spaceId: activeCategory })} onViewScene={(scene) => setSelectedScene({ ...scene, spaceId: activeCategory })} productCount={processedProducts.length} searchTerm={searchTerm} searchTags={searchTags} />
               )}
               {SWATCH_CATEGORIES.find(s => s.id === activeCategory) && (
-                <SwatchManager category={SWATCH_CATEGORIES.find(s => s.id === activeCategory)} swatches={swatches.filter(s => s.category === activeCategory)} isAdmin={isAdmin} onSave={handleSaveSwatch} onDelete={handleDeleteSwatch} onSelect={(swatch) => setSelectedSwatch(swatch)} onDuplicate={handleDuplicateSwatch} searchTerm={searchTerm} searchTags={searchTags} favorites={favorites} onToggleFavorite={toggleFavorite} />
+                <SwatchManager category={SWATCH_CATEGORIES.find(s => s.id === activeCategory)} swatches={swatches.filter(s => s.category === activeCategory)} isAdmin={isAdmin} onSave={handleSaveSwatch} onDelete={handleDeleteSwatch} onSelect={(swatch) => setSelectedSwatch(swatch)} onDuplicate={handleDuplicateSwatch} searchTerm={searchTerm} searchTags={searchTags} />
               )}
               {!SWATCH_CATEGORIES.find(s => s.id === activeCategory) && (
                 <>
@@ -961,8 +972,6 @@ export default function App() {
           onNavigateProduct={(product) => { setSelectedSwatch(null); setSelectedProduct(product); }}
           onNavigateSwatch={(swatch) => setSelectedSwatch(swatch)}
           onEdit={() => { setSelectedSwatch(null); setEditingSwatchFromModal(selectedSwatch); }}
-          isFavorite={favorites.includes(selectedSwatch.id)}
-          onToggleFavorite={(e) => toggleFavorite(e, selectedSwatch.id)}
         />
       )}
       
@@ -1086,7 +1095,7 @@ function CollapsibleSection({ title, count, children, defaultExpanded = true }) 
     );
 }
 
-function TotalView({ products, categories, spaces, spaceContents, materials, materialCategories, onProductClick, onSceneClick, onSwatchClick, searchTerm, searchTags, filters, favorites, onToggleFavorite }) {
+function TotalView({ products, categories, spaces, spaceContents, materials, materialCategories, onProductClick, onSceneClick, onSwatchClick, searchTerm, searchTags, filters }) {
     // Filter Logic
     const filterItem = (item, type) => {
         const text = type === 'product' ? [item.name, item.category, item.specs].join(' ') : 
@@ -1130,13 +1139,9 @@ function TotalView({ products, categories, spaces, spaceContents, materials, mat
                             <CollapsibleSection key={space.id} title={space.label} count={scenes.length}>
                                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                                     {scenes.map(scene => (
-                                        <div key={scene.id} onClick={() => onSceneClick({...scene, spaceId: space.id})} className="group cursor-pointer relative">
+                                        <div key={scene.id} onClick={() => onSceneClick({...scene, spaceId: space.id})} className="group cursor-pointer">
                                             <div className="aspect-[4/3] bg-zinc-50 rounded-xl mb-2 overflow-hidden border border-zinc-100 relative">
                                                 <img src={scene.image} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
-                                                {/* Unified Star Button */}
-                                                <button onClick={(e) => onToggleFavorite(e, scene.id)} className="absolute top-2 right-2 p-1.5 bg-white/80 rounded-full text-zinc-300 hover:text-yellow-400 hover:scale-110 transition-all z-20">
-                                                    <Star className={`w-3.5 h-3.5 ${favorites.includes(scene.id) ? 'fill-yellow-400 text-yellow-400' : ''}`}/>
-                                                </button>
                                             </div>
                                             <h4 className="text-xs font-bold text-zinc-900 truncate group-hover:text-blue-600">{scene.title}</h4>
                                         </div>
@@ -1160,16 +1165,13 @@ function TotalView({ products, categories, spaces, spaceContents, materials, mat
                             <CollapsibleSection key={cat.id} title={cat.label} count={catProducts.length}>
                                 <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
                                     {catProducts.map(product => (
-                                        <ProductCard 
-                                            key={product.id} 
-                                            product={product} 
-                                            onClick={() => onProductClick(product)}
-                                            isFavorite={favorites.includes(product.id)}
-                                            onToggleFavorite={(e) => onToggleFavorite(e, product.id)}
-                                            onCompareToggle={() => {}} 
-                                            isCompared={false}
-                                            isAdmin={false} 
-                                        />
+                                        <div key={product.id} onClick={() => onProductClick(product)} className="group cursor-pointer">
+                                            <div className="aspect-square bg-zinc-50 rounded-xl mb-2 overflow-hidden border border-zinc-100 relative p-0">
+                                                {product.images?.[0] ? <img src={typeof product.images[0] === 'object' ? product.images[0].url : product.images[0]} className="w-full h-full object-contain mix-blend-multiply group-hover:scale-105 transition-transform" /> : <ImageIcon className="w-8 h-8 text-zinc-300 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"/>}
+                                            </div>
+                                            <h4 className="text-xs font-bold text-zinc-900 truncate group-hover:text-blue-600">{product.name}</h4>
+                                            <p className="text-[10px] text-zinc-400 truncate">{product.designer || 'Patra Design'}</p>
+                                        </div>
                                     ))}
                                 </div>
                             </CollapsibleSection>
@@ -1190,13 +1192,9 @@ function TotalView({ products, categories, spaces, spaceContents, materials, mat
                             <CollapsibleSection key={cat.id} title={cat.label} count={catSwatches.length}>
                                 <div className="grid grid-cols-2 md:grid-cols-5 lg:grid-cols-6 gap-4">
                                     {catSwatches.map(swatch => (
-                                        <div key={swatch.id} onClick={() => onSwatchClick(swatch)} className="group cursor-pointer relative">
+                                        <div key={swatch.id} onClick={() => onSwatchClick(swatch)} className="group cursor-pointer">
                                             <div className="aspect-square bg-zinc-50 rounded-xl mb-2 overflow-hidden border border-zinc-100 relative">
                                                 <SwatchDisplay color={swatch} className="w-full h-full rounded-none scale-100"/>
-                                                {/* Unified Star Button */}
-                                                <button onClick={(e) => onToggleFavorite(e, swatch.id)} className="absolute top-2 right-2 p-1.5 bg-white/80 rounded-full text-zinc-300 hover:text-yellow-400 hover:scale-110 transition-all z-20">
-                                                    <Star className={`w-3.5 h-3.5 ${favorites.includes(swatch.id) ? 'fill-yellow-400 text-yellow-400' : ''}`}/>
-                                                </button>
                                             </div>
                                             <h4 className="text-xs font-bold text-zinc-900 truncate group-hover:text-blue-600">{swatch.name}</h4>
                                             <p className="text-[10px] text-zinc-400 truncate">{swatch.materialCode}</p>
@@ -1212,227 +1210,7 @@ function TotalView({ products, categories, spaces, spaceContents, materials, mat
     );
 }
 
-function DashboardView({ products, favorites, setActiveCategory, setSelectedProduct, isAdmin, bannerData, onBannerUpload, onLogoUpload, onBannerTextChange, onSaveBannerText }) {
-  const totalCount = products.length; const newCount = products.filter(p => p.isNew).length; const pickCount = favorites.length;
-  const categoryCounts = []; let totalStandardProducts = 0;
-  CATEGORIES.filter(c => !c.isSpecial).forEach(c => { const count = products.filter(p => p.category === c.id).length; if (count > 0) { categoryCounts.push({ ...c, count }); totalStandardProducts += count; } });
-  
-  const donutColors = ['#2563eb', '#0891b2', '#7c3aed', '#db2777', '#059669', '#d97706', '#ea580c', '#475569', '#9ca3af'];
-  const chartData = categoryCounts.map((item, idx) => ({ ...item, color: donutColors[idx % donutColors.length] }));
-  
-  const recentUpdates = [...products].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)).slice(0, 6);
-  const fileInputRef = useRef(null);
-  const logoInputRef = useRef(null);
-
-  const [selectedSlice, setSelectedSlice] = useState(null);
-  const [isListExpanded, setIsListExpanded] = useState(false); // For Dropdown
-  const [isLaunchExpanded, setIsLaunchExpanded] = useState(false); // For Launching Dropdown
-
-  // Helper for Selected Slice Data
-  const getSelectedSliceDetails = () => {
-      if(selectedSlice === null) return null;
-      const catId = chartData[selectedSlice].id;
-      const catProducts = products.filter(p => p.category === catId);
-      
-      const years = [...new Set(catProducts.map(p => p.launchDate ? p.launchDate.substring(0,4) : 'Unknown'))].sort().join(', ');
-      const awardCount = catProducts.reduce((acc, curr) => acc + (curr.awards?.length || 0), 0);
-      const uniqueColors = new Set();
-      catProducts.forEach(p => {
-          (p.bodyColors || []).forEach(c => uniqueColors.add(c));
-          (p.upholsteryColors || []).forEach(c => uniqueColors.add(c));
-      });
-
-      return { products: catProducts, years, awardCount, uniqueColors: Array.from(uniqueColors) };
-  };
-
-  const sliceDetails = getSelectedSliceDetails();
-
-  return (
-    <div className="max-w-7xl mx-auto space-y-6 md:space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-32 print:hidden" onClick={() => setSelectedSlice(null)}>
-      
-      <div className="relative w-full h-48 md:h-80 rounded-3xl overflow-hidden shadow-lg border border-zinc-200 group bg-zinc-900">
-         <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/40 to-transparent z-10"></div>
-         {bannerData.url ? <img src={bannerData.url} alt="Dashboard Banner" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" /> : <div className="w-full h-full flex items-center justify-center opacity-20"><img src="/api/placeholder/1200/400" className="w-full h-full object-cover grayscale" alt="Pattern" /></div>}
-         <div className="absolute bottom-6 left-6 md:bottom-10 md:left-10 z-20 max-w-2xl">
-            {isAdmin ? (
-              <div className="space-y-4">
-                 <div className="flex items-center gap-4">
-                    {bannerData.logoUrl ? (
-                        <div className="relative group/logo">
-                            <img src={bannerData.logoUrl} className="h-16 md:h-24 w-auto object-contain" alt="Logo" />
-                            <button onClick={()=>logoInputRef.current.click()} className="absolute inset-0 bg-black/50 flex items-center justify-center text-white opacity-0 group-hover/logo:opacity-100 rounded"><Edit2 className="w-4 h-4"/></button>
-                        </div>
-                    ) : (
-                        <button onClick={()=>logoInputRef.current.click()} className="text-xs text-white bg-white/20 px-3 py-1 rounded hover:bg-white/40">+ Upload Logo</button>
-                    )}
-                    <input type="text" value={bannerData.title} onChange={(e) => onBannerTextChange('title', e.target.value)} onBlur={onSaveBannerText} className="bg-transparent text-3xl md:text-5xl font-black text-white tracking-tighter w-full outline-none placeholder-zinc-500 border-b border-transparent hover:border-zinc-500 transition-colors" placeholder="Main Title" />
-                 </div>
-                <input type="text" value={bannerData.subtitle} onChange={(e) => onBannerTextChange('subtitle', e.target.value)} onBlur={onSaveBannerText} className="bg-transparent text-zinc-300 font-medium text-sm md:text-xl w-full outline-none placeholder-zinc-500 border-b border-transparent hover:border-zinc-500 transition-colors" placeholder="Subtitle" />
-                <input type="file" ref={logoInputRef} className="hidden" accept="image/*" onChange={onLogoUpload} />
-              </div>
-            ) : (
-              <>
-                {bannerData.logoUrl ? <img src={bannerData.logoUrl} className="h-16 md:h-24 w-auto object-contain mb-4" alt="Logo" /> : <h2 className="text-3xl md:text-6xl font-black text-white tracking-tighter mb-2">{bannerData.title}</h2>}
-                <p className="text-zinc-300 font-medium text-sm md:text-xl opacity-90">{bannerData.subtitle}</p>
-              </>
-            )}
-         </div>
-         {isAdmin && (<><button onClick={() => fileInputRef.current.click()} className="absolute top-4 right-4 z-30 p-2 bg-white/20 backdrop-blur rounded-full text-white hover:bg-white hover:text-black transition-all opacity-0 group-hover:opacity-100" title="Change Banner Image"><Camera className="w-5 h-5" /></button><input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={onBannerUpload} /></>)}
-      </div>
-
-      <div className="grid grid-cols-2 gap-2 md:gap-4">
-        <div onClick={() => setActiveCategory('ALL')} className="bg-white p-3 md:p-5 rounded-xl md:rounded-2xl border border-zinc-100 shadow-sm hover:shadow-md cursor-pointer group flex flex-col md:flex-row items-center md:justify-between transition-all text-center md:text-left">
-          <div className="flex flex-col md:flex-row items-center md:space-x-4 w-full justify-center md:justify-start">
-             <div className="p-2 md:p-3 bg-zinc-100 rounded-xl group-hover:bg-zinc-900 group-hover:text-white transition-colors text-zinc-500 mb-1 md:mb-0"><LayoutGrid className="w-4 h-4 md:w-6 md:h-6" /></div>
-             <div className="flex flex-col">
-                <span className="text-[10px] md:text-xs font-bold text-zinc-400 uppercase tracking-wide">Total</span>
-                <span className="text-base md:text-2xl font-black text-zinc-900 leading-tight">{totalCount}</span>
-             </div>
-          </div>
-          <ChevronRight className="w-5 h-5 text-zinc-300 group-hover:text-zinc-600 hidden md:block" />
-        </div>
-        <div onClick={() => setActiveCategory('MY_PICK')} className="bg-white p-3 md:p-5 rounded-xl md:rounded-2xl border border-zinc-100 shadow-sm hover:shadow-md cursor-pointer group flex flex-col md:flex-row items-center md:justify-between transition-all text-center md:text-left">
-          <div className="flex flex-col md:flex-row items-center md:space-x-4 w-full justify-center md:justify-start">
-             <div className="p-2 md:p-3 bg-yellow-50 rounded-xl text-yellow-500 group-hover:bg-yellow-400 group-hover:text-white transition-colors mb-1 md:mb-0"><Heart className="w-4 h-4 md:w-6 md:h-6 fill-current" /></div>
-             <div className="flex flex-col">
-                <span className="text-[10px] md:text-xs font-bold text-yellow-500 uppercase tracking-wide">Pick</span>
-                <span className="text-base md:text-2xl font-black text-zinc-900 leading-tight">{pickCount}</span>
-             </div>
-          </div>
-          <ChevronRight className="w-5 h-5 text-zinc-300 group-hover:text-zinc-600 hidden md:block" />
-        </div>
-      </div>
-
-      <div className="bg-white p-6 md:p-8 rounded-3xl border border-zinc-100 shadow-sm">
-         <div className="flex items-center justify-between mb-8">
-            <h3 className="text-xl font-bold text-zinc-900 flex items-center"><PieChart className="w-6 h-6 mr-3 text-zinc-400" /> Category Contribution</h3>
-            <span className="text-xs font-medium text-zinc-400 bg-zinc-50 px-3 py-1 rounded-full">{totalStandardProducts} items</span>
-         </div>
-         {totalStandardProducts > 0 ? (
-           <div className="flex flex-col lg:flex-row gap-12 items-center">
-              <div className="relative w-72 h-72 md:w-96 md:h-96 flex-shrink-0">
-                 <PieChartComponent data={chartData} total={totalStandardProducts} selectedIndex={selectedSlice} onSelect={setSelectedSlice} />
-              </div>
-              <div className="flex-1 w-full" onClick={(e) => e.stopPropagation()}>
-                 {selectedSlice !== null ? (
-                    <div className="animate-in fade-in slide-in-from-left-4 h-full flex flex-col justify-center">
-                        <div className="flex items-center gap-3 mb-4 pb-2 border-b border-zinc-100">
-                             <div className="w-4 h-4 rounded-full" style={{backgroundColor: chartData[selectedSlice].color}}></div>
-                             <h4 className="text-2xl font-black text-zinc-900">{chartData[selectedSlice].label}</h4>
-                             <button onClick={() => setActiveCategory(chartData[selectedSlice].id)} className="ml-auto text-xs font-bold text-blue-600 hover:underline flex items-center">Explore <ArrowRight className="w-3 h-3 ml-1"/></button>
-                        </div>
-                        
-                        <div className="grid grid-cols-2 gap-4 mb-6">
-                           <div className="bg-zinc-50 p-3 rounded-xl border border-zinc-100">
-                              <span className="text-[10px] text-zinc-400 uppercase font-bold block mb-1">Products</span>
-                              <span className="text-xl font-black text-zinc-900">{chartData[selectedSlice].count}</span>
-                           </div>
-                           <div className="bg-zinc-50 p-3 rounded-xl border border-zinc-100">
-                              <span className="text-[10px] text-zinc-400 uppercase font-bold block mb-1">New Arrivals</span>
-                              <span className="text-xl font-black text-zinc-900">{sliceDetails.products.filter(p=>p.isNew).length}</span>
-                           </div>
-                           <div className="bg-zinc-50 p-3 rounded-xl border border-zinc-100">
-                              <span className="text-[10px] text-zinc-400 uppercase font-bold block mb-1">Total Awards</span>
-                              <span className="text-xl font-black text-zinc-900">{sliceDetails.awardCount}</span>
-                           </div>
-                           
-                           {/* Dropdown for Launch Years if many */}
-                           <div className="bg-zinc-50 p-3 rounded-xl border border-zinc-100 relative group cursor-pointer" onClick={() => setIsLaunchExpanded(!isLaunchExpanded)}>
-                              <div className="flex justify-between items-center">
-                                  <span className="text-[10px] text-zinc-400 uppercase font-bold block mb-1">Launching</span>
-                                  <ChevronDown className={`w-3 h-3 text-zinc-400 transition-transform ${isLaunchExpanded ? 'rotate-180' : ''}`}/>
-                              </div>
-                              <span className="text-xs font-bold text-zinc-900 truncate block">{sliceDetails.years.substring(0,15)}...</span>
-                              {isLaunchExpanded && (
-                                  <div className="absolute top-full left-0 w-full bg-white border border-zinc-200 shadow-lg rounded-lg p-2 z-10 text-xs mt-1 max-h-32 overflow-y-auto custom-scrollbar">
-                                      {sliceDetails.years}
-                                  </div>
-                              )}
-                           </div>
-                        </div>
-
-                        <div className="mb-4">
-                            <span className="text-xs text-zinc-400 uppercase font-bold block mb-2">Palette Preview</span>
-                            <div className="flex flex-wrap gap-1">
-                                {sliceDetails.uniqueColors.slice(0, 10).map((c, i) => (
-                                    <div key={i}><SwatchDisplay color={c} size="small"/></div>
-                                ))}
-                                {sliceDetails.uniqueColors.length > 10 && <span className="text-[9px] text-zinc-400">+{sliceDetails.uniqueColors.length - 10}</span>}
-                            </div>
-                        </div>
-
-                        {/* Product List - Dropdown Style (Scrollable) */}
-                        <div className="flex-1 bg-zinc-50 p-3 rounded-xl border border-zinc-100 transition-all">
-                            <div className="flex justify-between items-center mb-2 sticky top-0 bg-zinc-50 pb-1 border-b border-zinc-100 cursor-pointer" onClick={() => setIsListExpanded(!isListExpanded)}>
-                                <span className="text-[10px] text-zinc-400 uppercase font-bold">Product List ({sliceDetails.products.length})</span>
-                                <ChevronDown className={`w-4 h-4 text-zinc-400 transition-transform ${isListExpanded ? 'rotate-180' : ''}`}/>
-                            </div>
-                            <div className={`grid grid-cols-2 gap-1 overflow-y-auto custom-scrollbar transition-all ${isListExpanded ? 'max-h-60' : 'max-h-24'}`}>
-                                {sliceDetails.products.map(p => (
-                                    <div key={p.id} className="text-[11px] truncate text-zinc-600 hover:text-black cursor-pointer p-1 hover:bg-zinc-100 rounded font-medium" onClick={() => setSelectedProduct(p)}>• {p.name}</div>
-                                ))}
-                            </div>
-                        </div>
-                    </div>
-                 ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-4">
-                        {chartData.map((item) => {
-                            const percent = Math.round((item.count/totalStandardProducts)*100);
-                            return (
-                                <button key={item.id} onClick={() => setActiveCategory(item.id)} className="flex flex-col group p-2 rounded-lg hover:bg-zinc-50 transition-colors text-left">
-                                    <div className="flex items-center justify-between mb-1.5">
-                                        <div className="flex items-center">
-                                            <div className="w-3 h-3 rounded-full mr-2.5 shadow-sm" style={{ backgroundColor: item.color }}></div>
-                                            <span className="text-sm font-bold text-zinc-700 group-hover:text-zinc-900">{item.label}</span>
-                                        </div>
-                                        <div className="flex items-baseline space-x-1">
-                                            <span className="text-sm font-black text-zinc-900">{item.count}</span>
-                                            <span className="text-[10px] text-zinc-400 font-medium">({percent}%)</span>
-                                        </div>
-                                    </div>
-                                    <div className="w-full h-1.5 bg-zinc-100 rounded-full overflow-hidden">
-                                        <div className="h-full rounded-full" style={{ width: `${percent}%`, backgroundColor: item.color }}></div>
-                                    </div>
-                                </button>
-                            );
-                        })}
-                    </div>
-                 )}
-              </div>
-           </div>
-         ) : <div className="text-center py-20 text-zinc-300">No category data available</div>}
-      </div>
-
-      <div className="bg-white p-6 md:p-8 rounded-3xl border border-zinc-100 shadow-sm">
-         <div className="flex items-center justify-between mb-6">
-            <h3 className="text-xl font-bold text-zinc-900 flex items-center"><Clock className="w-6 h-6 mr-3 text-zinc-400" /> Recent Updates</h3>
-         </div>
-         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-            {recentUpdates.length > 0 ? recentUpdates.map(product => (
-               <div key={product.id} onClick={() => setSelectedProduct(product)} className="flex flex-col p-3 rounded-xl border border-zinc-100 hover:border-zinc-300 hover:bg-zinc-50 cursor-pointer transition-all group">
-                  <div className="aspect-[4/3] bg-zinc-100 rounded-lg flex items-center justify-center overflow-hidden border border-zinc-200 mb-2 relative">
-                     {/* Multiple Mix Blend Mode Overlay */}
-                     <div className="absolute inset-0 bg-zinc-100/50 mix-blend-multiply z-10 pointer-events-none"></div>
-                     {product.images?.[0] ? <img src={typeof product.images[0] === 'object' ? product.images[0].url : product.images[0]} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" alt="" /> : <ImageIcon className="w-6 h-6 text-zinc-300"/>}
-                  </div>
-                  <h4 className="text-xs font-bold text-zinc-900 truncate">{product.name}</h4>
-                  <div className="flex justify-between items-center mt-1">
-                     <span className="text-[9px] text-zinc-400 uppercase">{product.category}</span>
-                     {product.isNew && <span className="w-1.5 h-1.5 rounded-full bg-red-500"></span>}
-                  </div>
-               </div>
-            )) : <div className="col-span-full text-center text-zinc-300 py-10">No recent updates.</div>}
-         </div>
-      </div>
-    </div>
-  );
-}
-```
-
-### 2️⃣ Part 2: CategoryRootView ~ End (하단부)
-
-```javascript
-function CategoryRootView({ type, spaces, spaceContents, collections, materials, products, swatches, onNavigate, onProductClick, onSwatchClick, onSceneClick, searchTerm, searchTags, filters, onCompareToggle, compareList, favorites, onToggleFavorite }) {
+function CategoryRootView({ type, spaces, spaceContents, collections, materials, products, swatches, onNavigate, onProductClick, onSwatchClick, onSceneClick, searchTerm, searchTags, filters, onCompareToggle, compareList }) {
     let title = "";
     let items = [];
     let icon = null;
@@ -1508,50 +1286,41 @@ function CategoryRootView({ type, spaces, spaceContents, collections, materials,
                         <CollapsibleSection key={item.id} title={item.label} count={subItems.length}>
                             {/* Grid Layout for all types */}
                             <div className={`grid gap-4 ${type === 'MATERIALS_ROOT' ? 'grid-cols-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6' : 'grid-cols-2 md:grid-cols-4 lg:grid-cols-5'}`}>
-                                {subItems.map(sub => {
-                                    if (type === 'COLLECTIONS_ROOT') {
-                                        return (
-                                            <ProductCard 
-                                                key={sub.id} 
-                                                product={sub} 
-                                                onClick={() => onProductClick(sub)}
-                                                isFavorite={favorites.includes(sub.id)}
-                                                onToggleFavorite={(e) => onToggleFavorite(e, sub.id)}
-                                                onCompareToggle={(e) => onCompareToggle(e, sub)}
-                                                isCompared={!!compareList.find(p=>p.id===sub.id)}
-                                                isAdmin={false}
-                                            />
-                                        );
-                                    }
-                                    
-                                    return (
-                                        <div 
-                                            key={sub.id} 
-                                            onClick={() => {
-                                                if (type === 'SPACES_ROOT') onSceneClick({...sub, spaceId: item.id});
-                                                else onSwatchClick(sub);
-                                            }}
-                                            className="group cursor-pointer relative"
-                                        >
-                                            <div className={`aspect-square ${isMaterial ? 'rounded-xl' : 'rounded-xl'} bg-zinc-50 overflow-hidden border border-zinc-100 relative mb-2 p-0`}>
-                                                {type === 'SPACES_ROOT' ? (
-                                                    <img src={sub.image} className="w-full h-full object-cover group-hover:scale-105 transition-transform"/>
-                                                ) : (
-                                                    <SwatchDisplay color={sub} className="w-full h-full rounded-none scale-100"/>
-                                                )}
-                                                
-                                                {/* Unified Star Button */}
-                                                <button onClick={(e) => onToggleFavorite(e, sub.id)} className="absolute top-2 right-2 p-1.5 bg-white/80 rounded-full text-zinc-300 hover:text-yellow-400 hover:scale-110 transition-all z-20">
-                                                    <Star className={`w-3.5 h-3.5 ${favorites.includes(sub.id) ? 'fill-yellow-400 text-yellow-400' : ''}`}/>
+                                {subItems.map(sub => (
+                                    <div 
+                                        key={sub.id} 
+                                        onClick={() => {
+                                            if (type === 'SPACES_ROOT') onSceneClick({...sub, spaceId: item.id});
+                                            else if (type === 'COLLECTIONS_ROOT') onProductClick(sub);
+                                            else onSwatchClick(sub);
+                                        }}
+                                        className="group cursor-pointer relative"
+                                    >
+                                        <div className={`aspect-square ${isMaterial ? 'rounded-xl' : 'rounded-xl'} bg-zinc-50 overflow-hidden border border-zinc-100 relative mb-2 p-0`}>
+                                            {type === 'SPACES_ROOT' ? (
+                                                <img src={sub.image} className="w-full h-full object-cover group-hover:scale-105 transition-transform"/>
+                                            ) : type === 'MATERIALS_ROOT' ? (
+                                                <SwatchDisplay color={sub} className="w-full h-full rounded-none scale-100"/>
+                                            ) : (
+                                                <img src={sub.images?.[0] ? (typeof sub.images[0] === 'object' ? sub.images[0].url : sub.images[0]) : ''} className="w-full h-full object-contain mix-blend-multiply group-hover:scale-105 transition-transform"/>
+                                            )}
+                                            
+                                            {/* Compare Button for Collections */}
+                                            {type === 'COLLECTIONS_ROOT' && (
+                                                <button 
+                                                    onClick={(e) => onCompareToggle(e, sub)} 
+                                                    className={`absolute top-2 right-2 p-1.5 rounded-full transition-all z-10 ${compareList.find(p=>p.id===sub.id) ? 'bg-zinc-900 text-white' : 'bg-white/80 text-zinc-400 hover:text-zinc-900'}`}
+                                                >
+                                                    <ArrowLeftRight className="w-3.5 h-3.5" />
                                                 </button>
-                                            </div>
-                                            <h4 className="text-sm font-bold text-zinc-900 truncate group-hover:text-blue-600">
-                                                {type === 'SPACES_ROOT' ? sub.title : sub.name}
-                                            </h4>
-                                            <p className="text-xs text-zinc-400 truncate">{type === 'SPACES_ROOT' ? sub.description : sub.materialCode}</p>
+                                            )}
                                         </div>
-                                    );
-                                })}
+                                        <h4 className="text-sm font-bold text-zinc-900 truncate group-hover:text-blue-600">
+                                            {type === 'SPACES_ROOT' ? sub.title : sub.name}
+                                        </h4>
+                                        {type !== 'MATERIALS_ROOT' && <p className="text-xs text-zinc-400 truncate">{type === 'SPACES_ROOT' ? sub.description : (sub.designer || item.label)}</p>}
+                                    </div>
+                                ))}
                             </div>
                         </CollapsibleSection>
                     );
@@ -1622,11 +1391,6 @@ function CompareView({ products, hiddenIds, onToggleVisibility, onRemove, onEdit
                             {visibleProducts.length < 4 && Array(4 - visibleProducts.length).fill(0).map((_, i) => <td key={i} className="border-b border-zinc-50"></td>)}
                         </tr>
                         <tr>
-                            <td className="bg-zinc-50 border-r border-b border-zinc-100 p-2 md:p-3 font-bold text-zinc-500 sticky left-0 z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">Launch</td>
-                            {visibleProducts.map(p => <td key={p.id} className="border-r border-b border-zinc-100 p-2 md:p-4 text-zinc-700">{p.launchDate ? p.launchDate.substring(0,4) : '-'}</td>)}
-                            {visibleProducts.length < 4 && Array(4 - visibleProducts.length).fill(0).map((_, i) => <td key={i} className="border-b border-zinc-50"></td>)}
-                        </tr>
-                        <tr>
                             <td className="bg-zinc-50 border-r border-b border-zinc-100 p-2 md:p-3 font-bold text-zinc-500 sticky left-0 z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">Specs</td>
                             {visibleProducts.map(p => <td key={p.id} className="border-r border-b border-zinc-100 p-2 md:p-3 text-zinc-600 text-[10px] md:text-xs leading-relaxed whitespace-pre-wrap">{p.specs}</td>)}
                             {visibleProducts.length < 4 && Array(4 - visibleProducts.length).fill(0).map((_, i) => <td key={i} className="border-b border-zinc-50"></td>)}
@@ -1692,16 +1456,14 @@ function MyPickView({ favorites, products, spaces, spaceContents, swatches, onPr
                 <CollapsibleSection title="Products" count={favProducts.length}>
                     <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
                         {favProducts.map(product => (
-                            <ProductCard 
-                                key={product.id} 
-                                product={product} 
-                                onClick={() => onProductClick(product)}
-                                isFavorite={true}
-                                onToggleFavorite={(e) => onToggleFavorite(e, product.id)}
-                                onCompareToggle={() => {}} 
-                                isCompared={false}
-                                isAdmin={false} 
-                            />
+                            <div key={product.id} onClick={() => onProductClick(product)} className="group cursor-pointer relative">
+                                <div className="aspect-square bg-zinc-50 rounded-xl mb-2 overflow-hidden border border-zinc-100 relative p-0">
+                                    {product.images?.[0] ? <img src={typeof product.images[0] === 'object' ? product.images[0].url : product.images[0]} className="w-full h-full object-contain mix-blend-multiply group-hover:scale-105 transition-transform" /> : <ImageIcon className="w-8 h-8 text-zinc-300 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"/>}
+                                    <button onClick={(e) => onToggleFavorite(e, product.id)} className="absolute top-2 right-2 p-1.5 bg-white/80 rounded-full text-yellow-400 hover:scale-110 transition-all z-10"><Star className="w-3.5 h-3.5 fill-current"/></button>
+                                </div>
+                                <h4 className="text-xs font-bold text-zinc-900 truncate group-hover:text-blue-600">{product.name}</h4>
+                                <p className="text-[10px] text-zinc-400 truncate">{product.category}</p>
+                            </div>
                         ))}
                     </div>
                 </CollapsibleSection>
@@ -1821,7 +1583,7 @@ function SwatchDisplay({ color, size = 'medium', className = '', onClick }) {
   );
 }
 
-function SwatchManager({ category, swatches, isAdmin, onSave, onDelete, onSelect, onDuplicate, searchTerm, searchTags, favorites, onToggleFavorite }) {
+function SwatchManager({ category, swatches, isAdmin, onSave, onDelete, onSelect, onDuplicate, searchTerm, searchTags }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingSwatch, setEditingSwatch] = useState(null);
   const [activeTag, setActiveTag] = useState('ALL');
@@ -1872,14 +1634,8 @@ function SwatchManager({ category, swatches, isAdmin, onSave, onDelete, onSelect
                 <div className="aspect-square relative bg-zinc-100 flex items-center justify-center">
                    {/* Fix: removed size prop, passed explicit w-full h-full rounded-none to ensure fill */}
                    <SwatchDisplay color={swatch} className="w-full h-full rounded-none scale-100"/>
-                   
-                   {/* Unified Star Button */}
-                   <button onClick={(e) => onToggleFavorite(e, swatch.id)} className="absolute top-2 right-2 p-1.5 bg-white/80 rounded-full text-zinc-300 hover:text-yellow-400 hover:scale-110 transition-all z-20 opacity-0 group-hover:opacity-100">
-                        <Star className={`w-3.5 h-3.5 ${favorites.includes(swatch.id) ? 'fill-yellow-400 text-yellow-400' : ''}`}/>
-                   </button>
-
                    {isAdmin && (
-                     <div className="absolute top-2 left-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                     <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
                         <button onClick={(e) => {e.stopPropagation(); onDuplicate(swatch);}} className="p-1.5 bg-white rounded-full shadow hover:text-green-600"><Layers className="w-3 h-3"/></button>
                         <button onClick={(e) => handleEditClick(e, swatch)} className="p-1.5 bg-white rounded-full shadow hover:text-blue-600"><Edit2 className="w-3 h-3"/></button>
                         <button onClick={(e) => { e.stopPropagation(); onDelete(swatch.id); }} className="p-1.5 bg-white rounded-full shadow hover:text-red-600"><Trash2 className="w-3 h-3"/></button>
@@ -1915,7 +1671,7 @@ function SwatchManager({ category, swatches, isAdmin, onSave, onDelete, onSelect
   );
 }
 
-function SwatchDetailModal({ swatch, allProducts, swatches, onClose, onNavigateProduct, onNavigateSwatch, isAdmin, onEdit, isFavorite, onToggleFavorite }) {
+function SwatchDetailModal({ swatch, allProducts, swatches, onClose, onNavigateProduct, onNavigateSwatch, isAdmin, onEdit }) {
     useScrollLock();
     const relatedProducts = allProducts.filter(p => {
         const inBody = p.bodyColors?.some(c => typeof c === 'object' && c.id === swatch.id);
@@ -1934,11 +1690,8 @@ function SwatchDetailModal({ swatch, allProducts, swatches, onClose, onNavigateP
                 </div>
                 
                 <div className="w-full md:w-5/12 bg-zinc-50 flex items-center justify-center p-8 relative min-h-[40vh]">
-                    <div className="w-48 h-48 md:w-64 md:h-64 rounded-full shadow-2xl overflow-hidden border-4 border-white ring-1 ring-black/5 flex items-center justify-center bg-white relative">
+                    <div className="w-48 h-48 md:w-64 md:h-64 rounded-full shadow-2xl overflow-hidden border-4 border-white ring-1 ring-black/5 flex items-center justify-center bg-white">
                         <SwatchDisplay color={swatch} size="large" className="w-full h-full scale-100 rounded-full"/>
-                        <button onClick={(e) => onToggleFavorite(e, swatch.id)} className="absolute top-4 left-4 p-2 bg-white/80 rounded-full text-zinc-300 hover:text-yellow-400 hover:scale-110 transition-all z-20 shadow-sm">
-                            <Star className={`w-5 h-5 ${isFavorite ? 'fill-yellow-400 text-yellow-400' : ''}`}/>
-                        </button>
                     </div>
                 </div>
 
@@ -2502,11 +2255,7 @@ function DashboardView({ products, favorites, setActiveCategory, setSelectedProd
     </div>
   );
 }
-```
 
-### 2️⃣ Part 2: SpaceDetailView ~ End (하단부)
-
-```javascript
 function SpaceDetailView({ space, spaceContent, activeTag, setActiveTag, isAdmin, onBannerUpload, onEditInfo, onManageProducts, onAddScene, onViewScene, productCount, searchTerm, searchTags }) {
   const banner = spaceContent.banner;
   const description = spaceContent.description || "이 공간에 대한 설명이 없습니다.";
@@ -2875,7 +2624,7 @@ function ProductDetailModal({ product, allProducts, swatches, spaceContents, onC
                  <div className="flex justify-center gap-4">
                     <button onClick={handleShareImage} className="flex flex-col items-center justify-center w-14 h-14 bg-zinc-50 rounded-2xl text-zinc-600 active:scale-95 transition-transform border border-zinc-100">
                         <ImgIcon className="w-5 h-5 mb-1"/>
-                        <span className="text-[9px] font-bold">Image</span>
+                        <span className="text-[9px] font-bold"></span>
                     </button>
                     <button onClick={() => window.print()} className="flex flex-col items-center justify-center w-14 h-14 bg-zinc-50 rounded-2xl text-zinc-600 active:scale-95 transition-transform border border-zinc-100">
                         <Printer className="w-5 h-5 mb-1"/>
