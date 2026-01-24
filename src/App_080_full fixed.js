@@ -7,7 +7,7 @@ import {
   Copy, ChevronRight, ChevronDown, ChevronUp, ChevronLeft, Activity, ShieldAlert, FileJson, Calendar,
   ArrowLeft, ArrowRight, ArrowUp, ArrowDown, Layers, Star,
   Trophy, Heart, Link as LinkIcon, Paperclip, PieChart, Clock,
-  Share2, Download, Maximize2, LayoutGrid, Zap, GripHorizontal, ImageIcon as ImgIcon,
+  Share2, Download, Maximize2, LayoutGrid, Zap, GripHorizontal,
   ChevronsUp, Camera, ImagePlus, Sofa, Briefcase, Users, Home as HomeIcon, MapPin,
   Edit3, Grid, MoreVertical, MousePointer2, CheckSquare, XCircle, Printer, List, Eye,
   PlayCircle, BarChart3, CornerUpLeft, Grid3X3, Droplet, Coffee, GraduationCap, ShoppingBag, FileDown, FileUp,
@@ -39,7 +39,6 @@ const YOUR_FIREBASE_CONFIG = {
 // ----------------------------------------------------------------------
 const APP_VERSION = "v0.8.0"; 
 const BUILD_DATE = "2026.01.24";
-const UPDATE_NOTE = "V 0.8.0 Update";
 const ADMIN_PASSWORD = "adminlcg1"; 
 
 // Firebase 초기화
@@ -133,10 +132,6 @@ const TEXTURE_TYPES = [
     { id: 'MATTE', label: 'Matte' }
 ];
 
-
-
-// Awards (New in v0.8.0)
-const DEFAULT_AWARD_TAGS = ['iF', 'reddot', 'IDEA', 'GDA', 'Chicago GD'];
 // Hook for scroll locking
 function useScrollLock() {
   useEffect(() => {
@@ -157,13 +152,7 @@ function useScrollLock() {
 export default function App() {
   const [user, setUser] = useState(null);
   const [products, setProducts] = useState([]);
-  const [swatches, setSwatches] = useState([]);
-  const [awards, setAwards] = useState([]); // Awards objects
-  const [awardTags, setAwardTags] = useState(DEFAULT_AWARD_TAGS);
-  const [selectedAward, setSelectedAward] = useState(null);
-  const [isAwardFormOpen, setIsAwardFormOpen] = useState(false);
-  const [editingAward, setEditingAward] = useState(null);
- 
+  const [swatches, setSwatches] = useState([]); 
   const [activeCategory, setActiveCategory] = useState('DASHBOARD');
   const [previousCategory, setPreviousCategory] = useState('DASHBOARD'); 
   const [activeSpaceTag, setActiveSpaceTag] = useState('ALL'); 
@@ -333,15 +322,7 @@ export default function App() {
         const loadedSwatches = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         setSwatches(loadedSwatches);
       });
-      
-const qAwards = collection(db, 'artifacts', appId, 'public', 'data', 'awards');
-const unsubAwards = onSnapshot(qAwards, (snapshot) => {
-  const loadedAwards = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-  setAwards(loadedAwards);
-});
-const awardTagsRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'award_tags');
-onSnapshot(awardTagsRef, (d) => { if (d.exists()) { const t = d.data().tags || []; setAwardTags(t.length ? t : DEFAULT_AWARD_TAGS); } });
-const bannerDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'banner');
+      const bannerDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'banner');
       onSnapshot(bannerDocRef, (doc) => { if (doc.exists()) setBannerData(prev => ({ ...prev, ...doc.data() })); });
       const appSettingsRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'app');
       onSnapshot(appSettingsRef, (doc) => { if(doc.exists()) setAppSettings(prev => ({...prev, ...doc.data()})); });
@@ -353,9 +334,7 @@ const bannerDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', '
             }
          });
       });
-      return () => { unsubProducts(); unsubSwatches();
-      try { unsubAwards(); } catch(e) {}
- };
+      return () => { unsubProducts(); unsubSwatches(); };
     } else {
       const localBanner = localStorage.getItem('patra_banner_data');
       if (localBanner) setBannerData(JSON.parse(localBanner));
@@ -395,12 +374,6 @@ const bannerDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', '
   const loadFromLocalStorage = () => {
     const saved = localStorage.getItem('patra_products');
     setProducts(saved ? JSON.parse(saved) : []);
-    const savedSwatches = localStorage.getItem('patra_swatches');
-    setSwatches(savedSwatches ? JSON.parse(savedSwatches) : []);
-    const savedAwards = localStorage.getItem('patra_awards');
-    setAwards(savedAwards ? JSON.parse(savedAwards) : []);
-    const savedAwardTags = localStorage.getItem('patra_award_tags');
-    setAwardTags(savedAwardTags ? JSON.parse(savedAwardTags) : DEFAULT_AWARD_TAGS);
     setIsLoading(false);
   };
   const saveToLocalStorage = (newProducts) => {
@@ -430,10 +403,10 @@ const bannerDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', '
     let newFavs;
     if (favorites.includes(itemId)) { 
         newFavs = favorites.filter(id => id !== itemId); 
-        showToast("MY PICK에서 제거되었습니다.", "info"); 
+        showToast("Removed from My Pick.", "info"); 
     } else { 
         newFavs = [...favorites, itemId]; 
-        showToast("MY PICK에 추가되었습니다."); 
+        showToast("Added to My Pick."); 
     }
     setFavorites(newFavs);
     localStorage.setItem('patra_favorites', JSON.stringify(newFavs));
@@ -445,7 +418,7 @@ const bannerDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', '
         setCompareList(compareList.filter(p => p.id !== product.id));
         setHiddenCompareIds(prev => prev.filter(id => id !== product.id));
     } else {
-        if(compareList.length >= 8) { showToast("비교는 최대 8개까지 가능합니다.", "error"); return; }
+        if(compareList.length >= 8) { showToast("You can compare up to 8 items.", "error"); return; }
         setCompareList([...compareList, product]);
     }
   };
@@ -483,8 +456,8 @@ const bannerDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', '
   };
 
   // --- Actions ---
-  const handleBannerUpload = async (e) => { if (!isAdmin) return; const file = e.target.files[0]; if (!file) return; try { const resizedImage = await processImage(file); const newData = { ...bannerData, url: resizedImage }; if (isFirebaseAvailable && db) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'banner'), newData, { merge: true }); else { localStorage.setItem('patra_banner_data', JSON.stringify(newData)); setBannerData(newData); } showToast("메인 배너가 업데이트되었습니다."); } catch (error) { showToast("이미지 처리 실패", "error"); } };
-  const handleLogoUpload = async (e) => { if (!isAdmin) return; const file = e.target.files[0]; if (!file) return; try { const resizedImage = await processImage(file); const newData = { ...bannerData, logoUrl: resizedImage }; if (isFirebaseAvailable && db) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'banner'), newData, { merge: true }); else { localStorage.setItem('patra_banner_data', JSON.stringify(newData)); setBannerData(newData); } showToast("로고가 업데이트되었습니다."); } catch (error) { showToast("이미지 처리 실패", "error"); } };
+  const handleBannerUpload = async (e) => { if (!isAdmin) return; const file = e.target.files[0]; if (!file) return; try { const resizedImage = await processImage(file); const newData = { ...bannerData, url: resizedImage }; if (isFirebaseAvailable && db) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'banner'), newData, { merge: true }); else { localStorage.setItem('patra_banner_data', JSON.stringify(newData)); setBannerData(newData); } showToast("Main banner updated."); } catch (error) { showToast("Image processing failed.", "error"); } };
+  const handleLogoUpload = async (e) => { if (!isAdmin) return; const file = e.target.files[0]; if (!file) return; try { const resizedImage = await processImage(file); const newData = { ...bannerData, logoUrl: resizedImage }; if (isFirebaseAvailable && db) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'banner'), newData, { merge: true }); else { localStorage.setItem('patra_banner_data', JSON.stringify(newData)); setBannerData(newData); } showToast("Logo updated."); } catch (error) { showToast("Image processing failed.", "error"); } };
   const handleBannerTextChange = (key, value) => { if (!isAdmin) return; setBannerData(prev => ({ ...prev, [key]: value })); };
   const saveBannerText = async () => { if (isFirebaseAvailable && db) { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'banner'), bannerData, { merge: true }); showToast("배너 문구가 저장되었습니다."); } };
   
@@ -499,7 +472,7 @@ const bannerDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', '
           if(isFirebaseAvailable && db) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'app'), newData, {merge: true});
           else { localStorage.setItem('patra_app_settings', JSON.stringify(newData)); setAppSettings(newData); }
           showToast("헤더 로고가 변경되었습니다.");
-      } catch(e) { showToast("이미지 처리 실패", "error"); }
+      } catch(e) { showToast("Image processing failed.", "error"); }
   };
   const handleSidebarTitleChange = async () => {
       if(!isAdmin) return;
@@ -520,7 +493,7 @@ const bannerDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', '
       }
   };
 
-  const handleSpaceBannerUpload = async (e, spaceId) => { if (!isAdmin) return; const file = e.target.files[0]; if (!file) return; try { const resizedImage = await processImage(file); const currentContent = spaceContents[spaceId] || {}; const newContent = { ...currentContent, banner: resizedImage }; if (isFirebaseAvailable && db) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'space_contents', spaceId), newContent, { merge: true }); showToast("공간 배너가 업데이트되었습니다."); } catch (error) { showToast("이미지 처리 실패", "error"); } };
+  const handleSpaceBannerUpload = async (e, spaceId) => { if (!isAdmin) return; const file = e.target.files[0]; if (!file) return; try { const resizedImage = await processImage(file); const currentContent = spaceContents[spaceId] || {}; const newContent = { ...currentContent, banner: resizedImage }; if (isFirebaseAvailable && db) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'space_contents', spaceId), newContent, { merge: true }); showToast("공간 배너가 업데이트되었습니다."); } catch (error) { showToast("Image processing failed.", "error"); } };
   const handleSpaceInfoSave = async (spaceId, info) => { const currentContent = spaceContents[spaceId] || {}; const newContent = { ...currentContent, ...info }; if (isFirebaseAvailable && db) { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'space_contents', spaceId), newContent, { merge: true }); } showToast("공간 정보가 저장되었습니다."); };
   
   const handleSceneSave = async (targetSpaceId, sceneData) => { 
@@ -629,129 +602,6 @@ const bannerDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', '
      const newSwatch = { ...swatch, id: Date.now().toString(), name: `${swatch.name} (Copy)`, updatedAt: Date.now() };
      await handleSaveSwatch(newSwatch);
      showToast("스와치가 복제되었습니다.");
-  };
-
-  // --- Awards (v0.8.0) ---
-  const persistAwardsToLocal = (nextAwards) => {
-    localStorage.setItem('patra_awards', JSON.stringify(nextAwards));
-    setAwards(nextAwards);
-  };
-
-  const persistAwardTagsToLocal = (nextTags) => {
-    localStorage.setItem('patra_award_tags', JSON.stringify(nextTags));
-    setAwardTags(nextTags);
-  };
-
-  const handleSaveAwardTags = async (nextTags) => {
-    if (!isAdmin) return;
-    const cleaned = (nextTags || []).map(t => String(t).trim()).filter(Boolean);
-    const current = cleaned.length ? Array.from(new Set(cleaned)) : DEFAULT_AWARD_TAGS;
-    if (isFirebaseAvailable && db) {
-      await setDoc(
-        doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'award_tags'),
-        { tags: current },
-        { merge: true }
-      );
-    } else {
-      persistAwardTagsToLocal(current);
-    }
-    setAwardTags(current);
-    showToast('어워드 태그가 저장되었습니다.');
-  };
-
-  const handleSaveAward = async (awardData) => {
-    if (!isAdmin) return;
-    const docId = awardData.id ? String(awardData.id) : String(Date.now());
-    const payload = {
-      ...awardData,
-      id: docId,
-      updatedAt: Date.now(),
-      createdAt: awardData.createdAt || Date.now(),
-      // Ensure array shapes
-      tags: Array.isArray(awardData.tags) ? awardData.tags : (awardData.tags ? [awardData.tags] : []),
-      products: Array.isArray(awardData.products) ? awardData.products : []
-    };
-
-    if (isFirebaseAvailable && db) {
-      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'awards', docId), payload, { merge: true });
-    } else {
-      const idx = awards.findIndex(a => String(a.id) === docId);
-      const next = [...awards];
-      if (idx >= 0) next[idx] = payload; else next.unshift(payload);
-      persistAwardsToLocal(next);
-    }
-    showToast('어워드가 저장되었습니다.');
-  };
-
-  const syncAwardToProducts = async (awardObj) => {
-    if (!awardObj) return;
-    const awardTitle = awardObj.title;
-    const taggedList = (awardObj.products || []).map(x => ({ productId: String(x.productId), year: x.year || '' }));
-    const taggedIds = new Set(taggedList.map(x => x.productId));
-
-    const nextProducts = products.map(p => {
-      const pid = String(p.id);
-      const has = taggedIds.has(pid);
-      const currentAwards = Array.isArray(p.awards) ? p.awards : [];
-      const currentYears = (p.awardYears && typeof p.awardYears === 'object') ? { ...p.awardYears } : {};
-
-      let nextAwards = currentAwards;
-      if (has && awardTitle) {
-        if (!currentAwards.includes(awardTitle)) nextAwards = [...currentAwards, awardTitle];
-        const yr = taggedList.find(x => x.productId === pid)?.year || '';
-        if (yr) currentYears[awardTitle] = yr; else delete currentYears[awardTitle];
-      } else {
-        if (awardTitle) {
-          nextAwards = currentAwards.filter(a => a !== awardTitle);
-          delete currentYears[awardTitle];
-        }
-      }
-
-      // If nothing changed, return original to reduce re-render
-      const awardsChanged = nextAwards.length !== currentAwards.length || nextAwards.some((v, i) => v !== currentAwards[i]);
-      const yearsChanged = awardTitle ? ((p.awardYears || {})[awardTitle] || '') !== (currentYears[awardTitle] || '') : false;
-      if (!awardsChanged && !yearsChanged) return p;
-      return { ...p, awards: nextAwards, awardYears: currentYears };
-    });
-
-    if (isFirebaseAvailable && db) {
-      // Persist only touched products (cheap diff)
-      for (const p of nextProducts) {
-        const orig = products.find(op => String(op.id) === String(p.id));
-        if (!orig) continue;
-        const origAwards = Array.isArray(orig.awards) ? orig.awards : [];
-        const nextAwards = Array.isArray(p.awards) ? p.awards : [];
-        const sameAwards = origAwards.length === nextAwards.length && origAwards.every((v, i) => v === nextAwards[i]);
-        const origYears = orig.awardYears || {};
-        const nextYears = p.awardYears || {};
-        const sameYears = JSON.stringify(origYears) === JSON.stringify(nextYears);
-        if (sameAwards && sameYears) continue;
-        await setDoc(
-          doc(db, 'artifacts', appId, 'public', 'data', 'products', String(p.id)),
-          { awards: nextAwards, awardYears: nextYears, updatedAt: Date.now() },
-          { merge: true }
-        );
-      }
-    } else {
-      saveToLocalStorage(nextProducts);
-    }
-  };
-
-  const handleDeleteAward = async (awardId) => {
-    if (!isAdmin) return;
-    if (!window.confirm('이 어워드를 삭제하시겠습니까?')) return;
-    const target = awards.find(a => String(a.id) === String(awardId));
-    if (isFirebaseAvailable && db) {
-      await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'awards', String(awardId)));
-    } else {
-      persistAwardsToLocal(awards.filter(a => String(a.id) !== String(awardId)));
-    }
-    // Remove from products
-    if (target?.title) {
-      await syncAwardToProducts({ ...target, products: [] });
-    }
-    setSelectedAward(null);
-    showToast('어워드가 삭제되었습니다.');
   };
 
   // --- Search Tag Logic ---
@@ -898,8 +748,7 @@ const bannerDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', '
                     {sidebarState.collections ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                 </button>
              </div>
-             {sidebarState.collections && (<div className="space-y-0.5 mt-2 pl-2 animate-in slide-in-from-top-2 duration-200">{CATEGORIES.filter(c => !c.isSpecial).map((cat) => (<button key={cat.id} onClick={() => handleCategoryClick(cat.id)} className={`w-full text-left px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center justify-between group ${activeCategory === cat.id ? 'bg-zinc-100 text-zinc-900 font-bold' : 'text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900'}`}>{cat.label}</button>))}
-             </div>)}
+             {sidebarState.collections && (<div className="space-y-0.5 mt-2 pl-2 animate-in slide-in-from-top-2 duration-200">{CATEGORIES.filter(c => !c.isSpecial).map((cat) => (<button key={cat.id} onClick={() => handleCategoryClick(cat.id)} className={`w-full text-left px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center justify-between group ${activeCategory === cat.id ? 'bg-zinc-100 text-zinc-900 font-bold' : 'text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900'}`}>{cat.label}</button>))}</div>)}
           </div>
 
           {/* Materials Group */}
@@ -910,11 +759,7 @@ const bannerDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', '
                     {sidebarState.materials ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                 </button>
              </div>
-             {sidebarState.materials && (<div className="space-y-0.5 mt-2 pl-2 animate-in slide-in-from-top-2 duration-200">{SWATCH_CATEGORIES.map((cat) => (<button key={cat.id} onClick={() => handleCategoryClick(cat.id)} className={`w-full text-left px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center justify-between group ${activeCategory === cat.id ? 'bg-zinc-100 text-zinc-900 font-bold' : 'text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900'}`}>{cat.label}</button>))}
-                <button onClick={() => handleCategoryClick('AWARDS_ROOT')} className={`w-full text-left px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center justify-between group ${activeCategory === 'AWARDS_ROOT' ? 'bg-zinc-100 text-zinc-900 font-bold' : 'text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900'}`}>
-                  <span className="flex items-center"><Trophy className="w-4 h-4 mr-2 text-zinc-400"/>Awards</span>
-                </button>
-             </div>)}
+             {sidebarState.materials && (<div className="space-y-0.5 mt-2 pl-2 animate-in slide-in-from-top-2 duration-200">{SWATCH_CATEGORIES.map((cat) => (<button key={cat.id} onClick={() => handleCategoryClick(cat.id)} className={`w-full text-left px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center justify-between group ${activeCategory === cat.id ? 'bg-zinc-100 text-zinc-900 font-bold' : 'text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900'}`}>{cat.label}</button>))}</div>)}
           </div>
 
           <div className="pt-2"><button onClick={handleMyPickToggle} className={`w-full text-left px-4 py-3 rounded-xl text-sm font-bold transition-all duration-200 flex items-center space-x-3 group border ${activeCategory === 'MY_PICK' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' : 'text-zinc-400 border-transparent hover:bg-zinc-50 hover:text-zinc-600'}`}><Heart className={`w-4 h-4 ${activeCategory === 'MY_PICK' ? 'fill-yellow-500 text-yellow-500' : ''}`} /><span>My Pick ({favorites.length})</span></button></div>
@@ -1010,16 +855,6 @@ const bannerDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', '
                 searchTags={searchTags}
                 filters={filters}
              />
-          ) : activeCategory === 'AWARDS_ROOT' ? (
-             <AwardsHubView
-                awards={awards}
-                products={products}
-                isAdmin={isAdmin}
-                onSelectAward={(a)=>setSelectedAward(a)}
-                onAddAward={()=>{setEditingAward(null); setIsAwardFormOpen(true);}}
-                searchTerm={searchTerm}
-                searchTags={searchTags}
-             />
           ) : activeCategory.endsWith('_ROOT') ? (
              <CategoryRootView 
                 type={activeCategory} 
@@ -1029,9 +864,6 @@ const bannerDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', '
                 materials={SWATCH_CATEGORIES}
                 products={products}
                 swatches={swatches}
-                awards={awards}
-                favorites={favorites}
-                onToggleFavorite={toggleFavorite}
                 onNavigate={handleCategoryClick}
                 onProductClick={(p) => setSelectedProduct(p)}
                 onSwatchClick={(s) => setSelectedSwatch(s)}
@@ -1041,6 +873,8 @@ const bannerDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', '
                 filters={filters}
                 onCompareToggle={(e, p) => toggleCompare(e, p)}
                 compareList={compareList}
+                favorites={favorites}
+                onToggleFavorite={toggleFavorite}
              />
           ) : (
             <>
@@ -1048,7 +882,7 @@ const bannerDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', '
                  <SpaceDetailView space={SPACES.find(s => s.id === activeCategory)} spaceContent={spaceContents[activeCategory] || {}} isAdmin={isAdmin} activeTag={activeSpaceTag} setActiveTag={setActiveSpaceTag} onBannerUpload={(e) => handleSpaceBannerUpload(e, activeCategory)} onEditInfo={() => setEditingSpaceInfoId(activeCategory)} onManageProducts={() => setManagingSpaceProductsId(activeCategory)} onAddScene={() => setEditingScene({ isNew: true, spaceId: activeCategory })} onViewScene={(scene) => setSelectedScene({ ...scene, spaceId: activeCategory })} productCount={processedProducts.length} searchTerm={searchTerm} searchTags={searchTags} />
               )}
               {SWATCH_CATEGORIES.find(s => s.id === activeCategory) && (
-                <SwatchManager category={SWATCH_CATEGORIES.find(s => s.id === activeCategory)} swatches={swatches.filter(s => s.category === activeCategory)} isAdmin={isAdmin} onSave={handleSaveSwatch} onDelete={handleDeleteSwatch} onSelect={(swatch) => setSelectedSwatch(swatch)} onDuplicate={handleDuplicateSwatch} searchTerm={searchTerm} searchTags={searchTags} favorites={favorites} onToggleFavorite={toggleFavorite} />
+                <SwatchManager category={SWATCH_CATEGORIES.find(s => s.id === activeCategory)} swatches={swatches.filter(s => s.category === activeCategory)} isAdmin={isAdmin} onSave={handleSaveSwatch} onDelete={handleDeleteSwatch} onSelect={(swatch) => setSelectedSwatch(swatch)} onDuplicate={handleDuplicateSwatch} searchTerm={searchTerm} searchTags={searchTags} />
               )}
               {!SWATCH_CATEGORIES.find(s => s.id === activeCategory) && (
                 <>
@@ -1130,29 +964,6 @@ const bannerDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', '
         />
       )}
       
-      {selectedAward && (
-        <AwardDetailModal
-          award={selectedAward}
-          products={products}
-          isAdmin={isAdmin}
-          onClose={() => setSelectedAward(null)}
-          onOpenEdit={(a) => { setEditingAward(a); setIsAwardFormOpen(true); }}
-          onSave={handleSaveAward}
-          onDelete={handleDeleteAward}
-          onSync={syncAwardToProducts}
-        />
-      )}
-
-      {isAwardFormOpen && (
-        <AwardFormModal
-          initialData={editingAward}
-          awardTags={awardTags}
-          onClose={() => { setIsAwardFormOpen(false); setEditingAward(null); }}
-          onSave={(data) => { handleSaveAward(data); setIsAwardFormOpen(false); setEditingAward(null); }}
-          onSaveTags={handleSaveAwardTags}
-        />
-      )}
-
       {selectedSwatch && (
         <SwatchDetailModal 
           swatch={selectedSwatch}
@@ -1401,7 +1212,7 @@ function TotalView({ products, categories, spaces, spaceContents, materials, mat
     );
 }
 
-function CategoryRootView({ type, spaces, spaceContents, collections, materials, products, swatches, awards, favorites, onToggleFavorite, onNavigate, onProductClick, onSwatchClick, onSceneClick, searchTerm, searchTags, filters, onCompareToggle, compareList }) {
+function CategoryRootView({ type, spaces, spaceContents, collections, materials, products, swatches, onNavigate, onProductClick, onSwatchClick, onSceneClick, searchTerm, searchTags, filters, onCompareToggle, compareList , favorites, onToggleFavorite }) {
     let title = "";
     let items = [];
     let icon = null;
@@ -1409,7 +1220,7 @@ function CategoryRootView({ type, spaces, spaceContents, collections, materials,
 
     // Filter Logic
     const filterItem = (item, itemType) => {
-        const text = itemType === 'product' ? [item.name, item.category, item.specs, item.designer, item.description, ...(item.features||[]), ...(item.options||[]), ...(item.materials||[]), ...(item.awards||[]), ...(item.spaceTags||[]), ...(item.bodyColors||[]).map(c=>typeof c==='object'?c.name:c), ...(item.upholsteryColors||[]).map(c=>typeof c==='object'?c.name:c) ].join(' ') : 
+        const text = itemType === 'product' ? [item.name, item.category, item.specs].join(' ') : 
                      itemType === 'scene' ? [item.title, item.description].join(' ') :
                      [item.name, item.materialCode].join(' ');
         const fullText = text.toLowerCase();
@@ -1491,15 +1302,7 @@ function CategoryRootView({ type, spaces, spaceContents, collections, materials,
                                             {type === 'SPACES_ROOT' ? (
                                                 <img src={sub.image} className="w-full h-full object-cover group-hover:scale-105 transition-transform"/>
                                             ) : type === 'MATERIALS_ROOT' ? (
-                                                <>
-                                                    <SwatchDisplay color={sub} className="w-full h-full rounded-none scale-100"/>
-                                                    <button
-                                                        onClick={(e) => onToggleFavorite(e, sub.id)}
-                                                        className="absolute top-2 right-2 p-1.5 bg-white/80 rounded-full text-zinc-300 hover:text-yellow-400 hover:scale-110 transition-all z-10"
-                                                    >
-                                                        <Star className={`w-3.5 h-3.5 ${favorites?.includes(sub.id) ? 'fill-yellow-400 text-yellow-400' : ''}`} />
-                                                    </button>
-                                                </>
+                                                <SwatchDisplay color={sub} className="w-full h-full rounded-none scale-100"/>
                                             ) : (
                                                 <img src={sub.images?.[0] ? (typeof sub.images[0] === 'object' ? sub.images[0].url : sub.images[0]) : ''} className="w-full h-full object-contain mix-blend-multiply group-hover:scale-105 transition-transform"/>
                                             )}
@@ -1513,6 +1316,16 @@ function CategoryRootView({ type, spaces, spaceContents, collections, materials,
                                                     <ArrowLeftRight className="w-3.5 h-3.5" />
                                                 </button>
                                             )}
+
+
+                                            {/* My Pick Button */}
+                                            <button
+                                                onClick={(e) => onToggleFavorite(e, sub.id)}
+                                                className={`absolute top-2 left-2 p-1.5 rounded-full transition-all z-10 ${favorites.includes(sub.id) ? 'bg-white/90 text-yellow-500' : 'bg-white/70 text-zinc-400 hover:text-yellow-500'}`}
+                                                title="My Pick"
+                                            >
+                                                <Star className={`w-3.5 h-3.5 ${favorites.includes(sub.id) ? 'fill-current' : ''}`} />
+                                            </button>
                                         </div>
                                         <h4 className="text-sm font-bold text-zinc-900 truncate group-hover:text-blue-600">
                                             {type === 'SPACES_ROOT' ? sub.title : sub.name}
@@ -1782,7 +1595,7 @@ function SwatchDisplay({ color, size = 'medium', className = '', onClick }) {
   );
 }
 
-function SwatchManager({ category, swatches, isAdmin, onSave, onDelete, onSelect, onDuplicate, searchTerm, searchTags, favorites, onToggleFavorite }) {
+function SwatchManager({ category, swatches, isAdmin, onSave, onDelete, onSelect, onDuplicate, searchTerm, searchTags }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingSwatch, setEditingSwatch] = useState(null);
   const [activeTag, setActiveTag] = useState('ALL');
@@ -1833,9 +1646,7 @@ function SwatchManager({ category, swatches, isAdmin, onSave, onDelete, onSelect
                 <div className="aspect-square relative bg-zinc-100 flex items-center justify-center">
                    {/* Fix: removed size prop, passed explicit w-full h-full rounded-none to ensure fill */}
                    <SwatchDisplay color={swatch} className="w-full h-full rounded-none scale-100"/>
-                   
-                   <button onClick={(e) => onToggleFavorite(e, swatch.id)} className="absolute top-2 left-2 p-1.5 bg-white/80 rounded-full text-zinc-300 hover:text-yellow-400 hover:scale-110 transition-all z-20"><Star className={`w-3.5 h-3.5 ${favorites?.includes(swatch.id) ? 'fill-yellow-400 text-yellow-400' : ''}`} /></button>
-{isAdmin && (
+                   {isAdmin && (
                      <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
                         <button onClick={(e) => {e.stopPropagation(); onDuplicate(swatch);}} className="p-1.5 bg-white rounded-full shadow hover:text-green-600"><Layers className="w-3 h-3"/></button>
                         <button onClick={(e) => handleEditClick(e, swatch)} className="p-1.5 bg-white rounded-full shadow hover:text-blue-600"><Edit2 className="w-3 h-3"/></button>
@@ -1951,7 +1762,7 @@ function SwatchDetailModal({ swatch, allProducts, swatches, onClose, onNavigateP
 
                         {/* Share & Print for Mobile Consistency */}
                         <div className="pt-6 border-t border-zinc-100 flex gap-3 print:hidden mb-safe">
-                             <button onClick={handleShareImage} className="flex-1 py-3 bg-zinc-100 text-zinc-600 rounded-xl text-xs font-bold hover:bg-zinc-200 flex items-center justify-center"><ImgIcon className="w-4 h-4 mr-2"/> Share</button>
+                             <button onClick={handleShareImage} className="flex-1 py-3 bg-zinc-100 text-zinc-600 rounded-xl text-xs font-bold hover:bg-zinc-200 flex items-center justify-center"><ImageIcon className="w-4 h-4 mr-2"/> Share</button>
                              <button onClick={() => window.print()} className="flex-1 py-3 bg-zinc-100 text-zinc-600 rounded-xl text-xs font-bold hover:bg-zinc-200 flex items-center justify-center"><Printer className="w-4 h-4 mr-2"/> PDF</button>
                         </div>
                     </div>
@@ -2824,7 +2635,7 @@ function ProductDetailModal({ product, allProducts, swatches, spaceContents, onC
               <div className="md:hidden mt-4 pt-4 border-t border-zinc-100 pb-4 print:hidden mb-safe">
                  <div className="flex justify-center gap-4">
                     <button onClick={handleShareImage} className="flex flex-col items-center justify-center w-14 h-14 bg-zinc-50 rounded-2xl text-zinc-600 active:scale-95 transition-transform border border-zinc-100">
-                        <ImgIcon className="w-5 h-5 mb-1"/>
+                        <ImageIcon className="w-5 h-5 mb-1"/>
                         <span className="text-[9px] font-bold"></span>
                     </button>
                     <button onClick={() => window.print()} className="flex flex-col items-center justify-center w-14 h-14 bg-zinc-50 rounded-2xl text-zinc-600 active:scale-95 transition-transform border border-zinc-100">
@@ -2838,7 +2649,7 @@ function ProductDetailModal({ product, allProducts, swatches, spaceContents, onC
             
             <div className="hidden md:flex mt-12 pt-6 border-t border-zinc-100 justify-between items-center pb-8 print:hidden">
               <div className="flex gap-3">
-                 <button onClick={handleShareImage} className="flex items-center px-5 py-2.5 bg-zinc-100 text-zinc-600 rounded-xl text-sm font-bold hover:bg-zinc-200 transition-colors shadow-sm"><ImgIcon className="w-4 h-4 mr-2" /> Share Image</button>
+                 <button onClick={handleShareImage} className="flex items-center px-5 py-2.5 bg-zinc-100 text-zinc-600 rounded-xl text-sm font-bold hover:bg-zinc-200 transition-colors shadow-sm"><ImageIcon className="w-4 h-4 mr-2" /> Share Image</button>
                  <button onClick={() => window.print()} className="flex items-center px-5 py-2.5 bg-zinc-100 text-zinc-600 rounded-xl text-sm font-bold hover:bg-zinc-200 transition-colors shadow-sm"><Printer className="w-4 h-4 mr-2" /> Print PDF</button>
               </div>
             </div>
@@ -3313,17 +3124,6 @@ function SceneEditModal({ initialData, allProducts, spaceTags = [], spaceOptions
 }
 
 function SpaceSceneModal({ scene, products, allProducts, isAdmin, onClose, onEdit, onProductToggle, onNavigateProduct, isFavorite, onToggleFavorite }) {
-  const getProductThumb = (p) => {
-    const tryArr = (arr) => {
-      if (!arr || arr.length === 0) return null;
-      for (const it of arr) {
-        const url = typeof it === 'object' ? it.url : it;
-        if (typeof url === 'string' && url.trim()) return url;
-      }
-      return null;
-    };
-    return tryArr(p.images) || tryArr(p.contentImages) || null;
-  };
   useScrollLock();
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const images = scene.images ? [scene.image, ...scene.images] : [scene.image];
@@ -3387,7 +3187,7 @@ function SpaceSceneModal({ scene, products, allProducts, isAdmin, onClose, onEdi
                    <p className="text-zinc-500 text-sm leading-relaxed">{scene.description}</p>
                </div>
             </div>
-            <div className="flex-1 p-6 md:p-8 custom-scrollbar bg-zinc-50/50 overflow-y-auto pb-24 pb-safe">
+            <div className="flex-1 p-6 md:p-8 custom-scrollbar bg-zinc-50/50 pb-safe md:overflow-y-auto">
                <div className="flex justify-between items-center mb-4"><h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Tagged Products</h3>{isAdmin && <button onClick={() => setProductManagerOpen(!isProductManagerOpen)} className="text-xs font-bold text-indigo-600 hover:text-indigo-800">+ Add Tag</button>}</div>
                {isAdmin && isProductManagerOpen && (
                  <div className="mb-4 bg-white p-3 rounded-xl border border-indigo-100 shadow-sm animate-in slide-in-from-top-2">
@@ -3395,313 +3195,15 @@ function SpaceSceneModal({ scene, products, allProducts, isAdmin, onClose, onEdi
                     <div className="max-h-32 overflow-y-auto space-y-1 custom-scrollbar">{allProducts.filter(p => p.name.toLowerCase().includes(productFilter.toLowerCase())).map(p => { const isTagged = scene.productIds?.includes(p.id); return (<div key={p.id} onClick={() => onProductToggle(p.id, !isTagged)} className={`flex items-center p-1.5 rounded cursor-pointer ${isTagged ? 'bg-indigo-50 text-indigo-700' : 'hover:bg-zinc-50'}`}><div className={`w-3 h-3 border rounded mr-2 flex items-center justify-center ${isTagged ? 'bg-indigo-500 border-indigo-500' : 'border-zinc-300'}`}>{isTagged && <Check className="w-2 h-2 text-white"/>}</div><span className="text-xs truncate">{p.name}</span></div>) })}</div>
                  </div>
                )}
-               <div className="space-y-3 mb-8">{products.length > 0 ? products.map(product => (<div key={product.id} onClick={() => onNavigateProduct(product)} className="flex items-center p-3 bg-white rounded-xl border border-zinc-100 shadow-sm hover:border-zinc-300 transition-all cursor-pointer group"><div className="w-12 h-12 bg-zinc-50 rounded-lg flex-shrink-0 flex items-center justify-center mr-3 overflow-hidden">{getProductThumb(product) ? <img src={getProductThumb(product)} className="w-full h-full object-cover" /> : <ImageIcon className="w-5 h-5 text-zinc-300"/>}</div><div className="flex-1 min-w-0"><h4 className="text-sm font-bold text-zinc-900 truncate group-hover:text-blue-600">{product.name}</h4><p className="text-xs text-zinc-500">{product.category}</p></div><ChevronRight className="w-4 h-4 text-zinc-300 group-hover:text-zinc-600"/></div>)) : (<div className="text-center py-8 text-zinc-400 text-xs">연관된 제품이 없습니다.</div>)}</div>
+               <div className="space-y-3 mb-8">{products.length > 0 ? products.map(product => (<div key={product.id} onClick={() => onNavigateProduct(product)} className="flex items-center p-3 bg-white rounded-xl border border-zinc-100 shadow-sm hover:border-zinc-300 transition-all cursor-pointer group"><div className="w-12 h-12 bg-zinc-50 rounded-lg flex-shrink-0 flex items-center justify-center mr-3 overflow-hidden">{product.images?.[0] ? <img src={typeof product.images[0] === 'object' ? product.images[0].url : product.images[0]} className="w-full h-full object-cover" /> : <ImageIcon className="w-5 h-5 text-zinc-300"/>}</div><div className="flex-1 min-w-0"><h4 className="text-sm font-bold text-zinc-900 truncate group-hover:text-blue-600">{product.name}</h4><p className="text-xs text-zinc-500">{product.category}</p></div><ChevronRight className="w-4 h-4 text-zinc-300 group-hover:text-zinc-600"/></div>)) : (<div className="text-center py-8 text-zinc-400 text-xs">No related products.</div>)}</div>
             
                {/* Share & Print for Mobile Consistency */}
                <div className="pt-4 border-t border-zinc-100 flex gap-3 print:hidden mb-safe">
-                    <button onClick={handleShareImage} className="flex-1 py-3 bg-white border border-zinc-200 text-zinc-600 rounded-xl text-xs font-bold hover:bg-zinc-50 flex items-center justify-center"><ImgIcon className="w-4 h-4 mr-2"/> Share</button>
+                    <button onClick={handleShareImage} className="flex-1 py-3 bg-white border border-zinc-200 text-zinc-600 rounded-xl text-xs font-bold hover:bg-zinc-50 flex items-center justify-center"><ImageIcon className="w-4 h-4 mr-2"/> Share</button>
                     <button onClick={() => window.print()} className="flex-1 py-3 bg-white border border-zinc-200 text-zinc-600 rounded-xl text-xs font-bold hover:bg-zinc-50 flex items-center justify-center"><Printer className="w-4 h-4 mr-2"/> PDF</button>
                </div>
             </div>
          </div>
-      </div>
-    </div>
-  );
-}
-
-/* ----------------------------------------------------------------------
-   Awards UI (v0.8.0)
----------------------------------------------------------------------- */
-
-function AwardsHubView({ awards, products, isAdmin, onSelectAward, onAddAward, searchTerm, searchTags }) {
-  const filtered = (awards || []).filter(a => {
-    const fullText = [a.title, a.organization, a.description, ...(a.tags||[])].join(' ').toLowerCase();
-    const okText = !searchTerm || fullText.includes(searchTerm.toLowerCase());
-    const okTags = (searchTags||[]).every(t => fullText.includes(t.toLowerCase()));
-    return okText && okTags;
-  });
-
-  return (
-    <div className="animate-in fade-in slide-in-from-bottom-4 pb-32">
-      <div className="mb-8 flex items-center justify-between">
-        <div className="flex items-center">
-          <div className="p-3 bg-zinc-900 text-white rounded-xl mr-4"><Trophy className="w-6 h-6" /></div>
-          <div>
-            <h2 className="text-4xl font-black text-zinc-900 tracking-tight">Awards</h2>
-            <p className="text-sm text-zinc-500 font-medium mt-1">{filtered.length} awards</p>
-          </div>
-        </div>
-        {isAdmin && (
-          <button onClick={onAddAward} className="px-4 py-2 bg-zinc-900 text-white text-sm font-bold rounded-xl hover:bg-black transition-all flex items-center shadow-lg">
-            <Plus className="w-4 h-4 mr-2" /> Add Award
-          </button>
-        )}
-      </div>
-
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
-        {filtered.map(a => (
-          <div key={a.id} onClick={() => onSelectAward(a)} className="bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer group border border-zinc-100 relative">
-            <div className="aspect-[4/3] bg-zinc-50 overflow-hidden relative">
-              <div className="absolute inset-0 bg-zinc-100/30 mix-blend-multiply pointer-events-none z-10"></div>
-              {a.image ? (
-                <img src={a.image} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" alt={a.title} />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center text-zinc-300">
-                  <Trophy className="w-10 h-10" />
-                </div>
-              )}
-            </div>
-            <div className="p-4">
-              <h3 className="text-sm font-extrabold text-zinc-900 leading-tight line-clamp-1 mb-1">{a.title || 'Untitled Award'}</h3>
-              <p className="text-xs text-zinc-500 line-clamp-1">{a.organization || 'Organization'}</p>
-              <div className="mt-3 pt-3 border-t border-zinc-50 flex justify-between items-center">
-                <span className="text-[10px] font-medium text-zinc-400 truncate">{(a.tags||[]).slice(0,2).join(' · ')}</span>
-                <span className="text-[9px] font-bold text-zinc-500 bg-zinc-50 px-1.5 py-0.5 rounded uppercase tracking-wider">{(a.products||[]).length} products</span>
-              </div>
-            </div>
-          </div>
-        ))}
-        {filtered.length === 0 && (
-          <div className="col-span-full py-20 text-center text-zinc-400 border-2 border-dashed border-zinc-100 rounded-xl">
-            <Trophy className="w-10 h-10 mx-auto mb-2 opacity-20" />
-            No awards found.
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function AwardDetailModal({ award, products, isAdmin, onClose, onOpenEdit, onSave, onDelete, onSync }) {
-  useScrollLock();
-  const [localAward, setLocalAward] = useState(award);
-
-  useEffect(() => setLocalAward(award), [award]);
-
-  if (!award) return null;
-
-  const related = (localAward.products || [])
-    .map(({ productId, year }) => {
-      const p = products.find(pp => pp.id === productId);
-      return p ? { product: p, year } : null;
-    })
-    .filter(Boolean);
-
-  const toggleProduct = (productId) => {
-    setLocalAward(prev => {
-      const exists = (prev.products || []).some(x => x.productId === productId);
-      const next = exists ? (prev.products||[]).filter(x => x.productId !== productId) : [...(prev.products||[]), { productId, year: '' }];
-      return { ...prev, products: next };
-    });
-  };
-
-  const setYear = (productId, year) => {
-    setLocalAward(prev => ({
-      ...prev,
-      products: (prev.products||[]).map(x => x.productId === productId ? { ...x, year } : x)
-    }));
-  };
-
-  const saveAndSync = async () => {
-    if (onSave) await onSave(localAward);
-    if (onSync) await onSync(localAward);
-    onClose();
-  };
-
-  return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[170] flex items-center justify-center p-4">
-      <div className="bg-white w-full max-w-4xl rounded-2xl overflow-hidden shadow-2xl flex flex-col max-h-[95vh]">
-        <div className="px-6 py-4 border-b border-zinc-100 flex justify-between items-center bg-white">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-zinc-900 text-white rounded-xl"><Trophy className="w-5 h-5" /></div>
-            <div>
-              <h3 className="text-lg font-bold text-zinc-900">{award.title}</h3>
-              <p className="text-xs text-zinc-500">{award.organization}</p>
-            </div>
-          </div>
-          <div className="flex gap-2">
-            {isAdmin && (
-              <>
-                <button onClick={() => onOpenEdit(award)} className="p-2 hover:bg-zinc-100 rounded-full"><Edit2 className="w-5 h-5 text-zinc-500"/></button>
-                <button onClick={() => onDelete(award.id)} className="p-2 hover:bg-red-50 rounded-full"><Trash2 className="w-5 h-5 text-red-500"/></button>
-              </>
-            )}
-            <button onClick={onClose} className="p-2 hover:bg-zinc-100 rounded-full"><X className="w-5 h-5 text-zinc-400"/></button>
-          </div>
-        </div>
-
-        <div className="flex-1 overflow-y-auto p-6 bg-zinc-50 space-y-6 pb-24 pb-safe">
-          {award.image && (
-            <div className="rounded-2xl overflow-hidden bg-white border border-zinc-100">
-              <img src={award.image} className="w-full h-64 object-cover" alt={award.title} />
-            </div>
-          )}
-
-          <div className="bg-white rounded-2xl border border-zinc-100 p-5">
-            <div className="grid md:grid-cols-2 gap-4">
-              <div>
-                <div className="text-xs font-bold text-zinc-400 uppercase mb-1">Title</div>
-                <div className="font-extrabold text-zinc-900">{award.title}</div>
-              </div>
-              <div>
-                <div className="text-xs font-bold text-zinc-400 uppercase mb-1">Organization</div>
-                <div className="font-bold text-zinc-700">{award.organization || '-'}</div>
-              </div>
-            </div>
-            <div className="mt-4">
-              <div className="text-xs font-bold text-zinc-400 uppercase mb-1">Description</div>
-              <div className="text-sm text-zinc-700 whitespace-pre-wrap leading-relaxed">{award.description || '-'}</div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-2xl border border-zinc-100 p-5">
-            <div className="flex items-center justify-between mb-3">
-              <h4 className="text-sm font-extrabold text-zinc-900 flex items-center"><Tag className="w-4 h-4 mr-2 text-zinc-400" /> Awarded Products</h4>
-              {isAdmin && <span className="text-xs text-zinc-400">Click to toggle · Year editable</span>}
-            </div>
-
-            {isAdmin && (
-              <div className="mb-4 max-h-44 overflow-y-auto custom-scrollbar border border-zinc-100 rounded-xl p-2 bg-zinc-50">
-                {products.map(p => {
-                  const tagged = (localAward.products||[]).some(x => x.productId === p.id);
-                  return (
-                    <div key={p.id} className={`flex items-center justify-between p-2 rounded-lg cursor-pointer ${tagged ? 'bg-indigo-50' : 'hover:bg-white'}`}>
-                      <div className="flex items-center gap-2 min-w-0" onClick={() => toggleProduct(p.id)}>
-                        <div className={`w-4 h-4 rounded border flex items-center justify-center ${tagged ? 'bg-indigo-500 border-indigo-500' : 'border-zinc-300'}`}>
-                          {tagged && <Check className="w-3 h-3 text-white" />}
-                        </div>
-                        <span className="text-xs font-bold truncate">{p.name}</span>
-                      </div>
-                      {tagged && (
-                        <input
-                          value={(localAward.products||[]).find(x => x.productId === p.id)?.year || ''}
-                          onChange={(e) => setYear(p.id, e.target.value)}
-                          placeholder="Year"
-                          className="w-20 text-xs p-1.5 border border-zinc-200 rounded-lg bg-white"
-                        />
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-
-            <div className="space-y-3">
-              {related.length > 0 ? related.map(({ product, year }) => (
-                <div key={product.id} className="flex items-center justify-between p-3 bg-zinc-50 rounded-xl border border-zinc-100">
-                  <div className="min-w-0">
-                    <div className="text-sm font-bold text-zinc-900 truncate">{product.name}</div>
-                    <div className="text-xs text-zinc-500">{product.category}</div>
-                  </div>
-                  <div className="text-xs font-bold text-zinc-600 bg-white border border-zinc-200 px-2 py-1 rounded-lg">{year || '-'}</div>
-                </div>
-              )) : (
-                <div className="text-center py-8 text-zinc-400 text-xs">No products tagged.</div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {isAdmin && (
-          <div className="border-t border-zinc-100 bg-white p-4 flex justify-end gap-2">
-            <button onClick={saveAndSync} className="px-4 py-2 bg-zinc-900 text-white rounded-xl text-sm font-bold hover:bg-black">Save</button>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function AwardFormModal({ initialData, awardTags, onClose, onSave, onSaveTags }) {
-  useScrollLock();
-  const [data, setData] = useState(() => ({
-    id: initialData?.id || null,
-    title: initialData?.title || '',
-    organization: initialData?.organization || '',
-    description: initialData?.description || '',
-    image: initialData?.image || null,
-    tagsString: (initialData?.tags || []).join(', '),
-    products: initialData?.products || []
-  }));
-  const inputRef = useRef(null);
-
-  const processImage = (file) => new Promise((resolve) => {
-    const reader = new FileReader();
-    reader.onload = (e) => resolve(e.target.result);
-    reader.readAsDataURL(file);
-  });
-
-  const handleImage = async (e) => {
-    const f = e.target.files?.[0];
-    if (!f) return;
-    const url = await processImage(f);
-    setData(prev => ({ ...prev, image: url }));
-  };
-
-  const save = () => {
-    const tags = data.tagsString.split(',').map(s => s.trim()).filter(Boolean);
-    onSave({ ...data, tags });
-  };
-
-  const editTags = () => {
-    const next = window.prompt("Award tags (comma separated):", (awardTags||[]).join(', '));
-    if (next == null) return;
-    onSaveTags(next.split(',').map(s => s.trim()));
-  };
-
-  return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[180] flex items-center justify-center p-4">
-      <div className="bg-white w-full max-w-2xl rounded-2xl overflow-hidden shadow-2xl flex flex-col max-h-[95vh]">
-        <div className="px-6 py-4 border-b border-zinc-100 flex justify-between items-center bg-white">
-          <h3 className="text-lg font-bold text-zinc-900">{data.id ? 'Edit Award' : 'New Award'}</h3>
-          <div className="flex gap-2">
-            <button onClick={editTags} className="p-2 hover:bg-zinc-100 rounded-full" title="Manage tags"><Tag className="w-5 h-5 text-zinc-500"/></button>
-            <button onClick={onClose} className="p-2 hover:bg-zinc-100 rounded-full"><X className="w-5 h-5 text-zinc-400"/></button>
-          </div>
-        </div>
-
-        <div className="flex-1 overflow-y-auto p-6 bg-zinc-50 space-y-6 pb-24 pb-safe">
-          <div>
-            <div className="text-xs font-bold text-zinc-500 uppercase mb-2">Representative Image</div>
-            <div onClick={() => inputRef.current?.click()} className="w-full h-48 bg-white rounded-xl flex items-center justify-center cursor-pointer border border-dashed border-zinc-300 overflow-hidden relative hover:border-zinc-400 transition-colors shadow-sm">
-              {data.image ? <img src={data.image} className="w-full h-full object-cover" alt="Award" /> : <div className="flex flex-col items-center text-zinc-400"><ImagePlus className="w-8 h-8 mb-2"/><span className="text-xs">Upload Image</span></div>}
-            </div>
-            <input type="file" ref={inputRef} className="hidden" accept="image/*" onChange={handleImage} />
-          </div>
-
-          <div className="grid md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-bold text-zinc-500 uppercase mb-2">Title</label>
-              <input className="w-full border border-zinc-300 rounded-lg p-2.5 text-sm bg-white" value={data.title} onChange={(e)=>setData(p=>({...p,title:e.target.value}))}/>
-            </div>
-            <div>
-              <label className="block text-xs font-bold text-zinc-500 uppercase mb-2">Organization</label>
-              <input className="w-full border border-zinc-300 rounded-lg p-2.5 text-sm bg-white" value={data.organization} onChange={(e)=>setData(p=>({...p,organization:e.target.value}))}/>
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-xs font-bold text-zinc-500 uppercase mb-2">Description</label>
-            <textarea className="w-full border border-zinc-300 rounded-lg p-2.5 text-sm bg-white min-h-[120px]" value={data.description} onChange={(e)=>setData(p=>({...p,description:e.target.value}))}/>
-          </div>
-
-          <div>
-            <label className="block text-xs font-bold text-zinc-500 uppercase mb-2">Tags (comma)</label>
-            <input className="w-full border border-zinc-300 rounded-lg p-2.5 text-sm bg-white" value={data.tagsString} onChange={(e)=>setData(p=>({...p,tagsString:e.target.value}))}/>
-            <div className="mt-2 flex flex-wrap gap-2">
-              {(awardTags||[]).map(t => (
-                <button key={t} onClick={() => setData(p => ({ ...p, tagsString: Array.from(new Set([...(p.tagsString.split(',').map(s=>s.trim()).filter(Boolean)), t])).join(', ') }))} className="px-3 py-1.5 rounded-full text-xs font-bold border bg-white text-zinc-600 hover:bg-zinc-100">
-                  {t}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        <div className="border-t border-zinc-100 bg-white p-4 flex justify-end gap-2">
-          <button onClick={onClose} className="px-4 py-2 bg-white border border-zinc-200 rounded-xl text-sm font-bold hover:bg-zinc-50">Cancel</button>
-          <button onClick={save} className="px-4 py-2 bg-zinc-900 text-white rounded-xl text-sm font-bold hover:bg-black">Save</button>
-        </div>
       </div>
     </div>
   );

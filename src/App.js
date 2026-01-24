@@ -7,7 +7,7 @@ import {
   Copy, ChevronRight, ChevronDown, ChevronUp, ChevronLeft, Activity, ShieldAlert, FileJson, Calendar,
   ArrowLeft, ArrowRight, ArrowUp, ArrowDown, Layers, Star,
   Trophy, Heart, Link as LinkIcon, Paperclip, PieChart, Clock,
-  Share2, Download, Maximize2, LayoutGrid, Zap, GripHorizontal, ImageIcon as ImgIcon,
+  Share2, Download, Maximize2, LayoutGrid, Zap, GripHorizontal,
   ChevronsUp, Camera, ImagePlus, Sofa, Briefcase, Users, Home as HomeIcon, MapPin,
   Edit3, Grid, MoreVertical, MousePointer2, CheckSquare, XCircle, Printer, List, Eye,
   PlayCircle, BarChart3, CornerUpLeft, Grid3X3, Droplet, Coffee, GraduationCap, ShoppingBag, FileDown, FileUp,
@@ -37,7 +37,7 @@ const YOUR_FIREBASE_CONFIG = {
 // ----------------------------------------------------------------------
 // 상수 및 설정
 // ----------------------------------------------------------------------
-const APP_VERSION = "v0.7.9"; 
+const APP_VERSION = "v0.8.0"; 
 const BUILD_DATE = "2026.01.24";
 const ADMIN_PASSWORD = "adminlcg1"; 
 
@@ -403,10 +403,10 @@ export default function App() {
     let newFavs;
     if (favorites.includes(itemId)) { 
         newFavs = favorites.filter(id => id !== itemId); 
-        showToast("MY PICK에서 제거되었습니다.", "info"); 
+        showToast("Removed from My Pick.", "info"); 
     } else { 
         newFavs = [...favorites, itemId]; 
-        showToast("MY PICK에 추가되었습니다."); 
+        showToast("Added to My Pick."); 
     }
     setFavorites(newFavs);
     localStorage.setItem('patra_favorites', JSON.stringify(newFavs));
@@ -418,7 +418,7 @@ export default function App() {
         setCompareList(compareList.filter(p => p.id !== product.id));
         setHiddenCompareIds(prev => prev.filter(id => id !== product.id));
     } else {
-        if(compareList.length >= 8) { showToast("비교는 최대 8개까지 가능합니다.", "error"); return; }
+        if(compareList.length >= 8) { showToast("You can compare up to 8 items.", "error"); return; }
         setCompareList([...compareList, product]);
     }
   };
@@ -456,8 +456,8 @@ export default function App() {
   };
 
   // --- Actions ---
-  const handleBannerUpload = async (e) => { if (!isAdmin) return; const file = e.target.files[0]; if (!file) return; try { const resizedImage = await processImage(file); const newData = { ...bannerData, url: resizedImage }; if (isFirebaseAvailable && db) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'banner'), newData, { merge: true }); else { localStorage.setItem('patra_banner_data', JSON.stringify(newData)); setBannerData(newData); } showToast("메인 배너가 업데이트되었습니다."); } catch (error) { showToast("이미지 처리 실패", "error"); } };
-  const handleLogoUpload = async (e) => { if (!isAdmin) return; const file = e.target.files[0]; if (!file) return; try { const resizedImage = await processImage(file); const newData = { ...bannerData, logoUrl: resizedImage }; if (isFirebaseAvailable && db) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'banner'), newData, { merge: true }); else { localStorage.setItem('patra_banner_data', JSON.stringify(newData)); setBannerData(newData); } showToast("로고가 업데이트되었습니다."); } catch (error) { showToast("이미지 처리 실패", "error"); } };
+  const handleBannerUpload = async (e) => { if (!isAdmin) return; const file = e.target.files[0]; if (!file) return; try { const resizedImage = await processImage(file); const newData = { ...bannerData, url: resizedImage }; if (isFirebaseAvailable && db) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'banner'), newData, { merge: true }); else { localStorage.setItem('patra_banner_data', JSON.stringify(newData)); setBannerData(newData); } showToast("Main banner updated."); } catch (error) { showToast("Image processing failed.", "error"); } };
+  const handleLogoUpload = async (e) => { if (!isAdmin) return; const file = e.target.files[0]; if (!file) return; try { const resizedImage = await processImage(file); const newData = { ...bannerData, logoUrl: resizedImage }; if (isFirebaseAvailable && db) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'banner'), newData, { merge: true }); else { localStorage.setItem('patra_banner_data', JSON.stringify(newData)); setBannerData(newData); } showToast("Logo updated."); } catch (error) { showToast("Image processing failed.", "error"); } };
   const handleBannerTextChange = (key, value) => { if (!isAdmin) return; setBannerData(prev => ({ ...prev, [key]: value })); };
   const saveBannerText = async () => { if (isFirebaseAvailable && db) { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'banner'), bannerData, { merge: true }); showToast("배너 문구가 저장되었습니다."); } };
   
@@ -472,7 +472,7 @@ export default function App() {
           if(isFirebaseAvailable && db) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'app'), newData, {merge: true});
           else { localStorage.setItem('patra_app_settings', JSON.stringify(newData)); setAppSettings(newData); }
           showToast("헤더 로고가 변경되었습니다.");
-      } catch(e) { showToast("이미지 처리 실패", "error"); }
+      } catch(e) { showToast("Image processing failed.", "error"); }
   };
   const handleSidebarTitleChange = async () => {
       if(!isAdmin) return;
@@ -493,7 +493,7 @@ export default function App() {
       }
   };
 
-  const handleSpaceBannerUpload = async (e, spaceId) => { if (!isAdmin) return; const file = e.target.files[0]; if (!file) return; try { const resizedImage = await processImage(file); const currentContent = spaceContents[spaceId] || {}; const newContent = { ...currentContent, banner: resizedImage }; if (isFirebaseAvailable && db) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'space_contents', spaceId), newContent, { merge: true }); showToast("공간 배너가 업데이트되었습니다."); } catch (error) { showToast("이미지 처리 실패", "error"); } };
+  const handleSpaceBannerUpload = async (e, spaceId) => { if (!isAdmin) return; const file = e.target.files[0]; if (!file) return; try { const resizedImage = await processImage(file); const currentContent = spaceContents[spaceId] || {}; const newContent = { ...currentContent, banner: resizedImage }; if (isFirebaseAvailable && db) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'space_contents', spaceId), newContent, { merge: true }); showToast("공간 배너가 업데이트되었습니다."); } catch (error) { showToast("Image processing failed.", "error"); } };
   const handleSpaceInfoSave = async (spaceId, info) => { const currentContent = spaceContents[spaceId] || {}; const newContent = { ...currentContent, ...info }; if (isFirebaseAvailable && db) { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'space_contents', spaceId), newContent, { merge: true }); } showToast("공간 정보가 저장되었습니다."); };
   
   const handleSceneSave = async (targetSpaceId, sceneData) => { 
@@ -873,6 +873,8 @@ export default function App() {
                 filters={filters}
                 onCompareToggle={(e, p) => toggleCompare(e, p)}
                 compareList={compareList}
+                favorites={favorites}
+                onToggleFavorite={toggleFavorite}
              />
           ) : (
             <>
@@ -1210,7 +1212,7 @@ function TotalView({ products, categories, spaces, spaceContents, materials, mat
     );
 }
 
-function CategoryRootView({ type, spaces, spaceContents, collections, materials, products, swatches, onNavigate, onProductClick, onSwatchClick, onSceneClick, searchTerm, searchTags, filters, onCompareToggle, compareList }) {
+function CategoryRootView({ type, spaces, spaceContents, collections, materials, products, swatches, onNavigate, onProductClick, onSwatchClick, onSceneClick, searchTerm, searchTags, filters, onCompareToggle, compareList , favorites, onToggleFavorite }) {
     let title = "";
     let items = [];
     let icon = null;
@@ -1314,6 +1316,16 @@ function CategoryRootView({ type, spaces, spaceContents, collections, materials,
                                                     <ArrowLeftRight className="w-3.5 h-3.5" />
                                                 </button>
                                             )}
+
+
+                                            {/* My Pick Button */}
+                                            <button
+                                                onClick={(e) => onToggleFavorite(e, sub.id)}
+                                                className={`absolute top-2 left-2 p-1.5 rounded-full transition-all z-10 ${favorites.includes(sub.id) ? 'bg-white/90 text-yellow-500' : 'bg-white/70 text-zinc-400 hover:text-yellow-500'}`}
+                                                title="My Pick"
+                                            >
+                                                <Star className={`w-3.5 h-3.5 ${favorites.includes(sub.id) ? 'fill-current' : ''}`} />
+                                            </button>
                                         </div>
                                         <h4 className="text-sm font-bold text-zinc-900 truncate group-hover:text-blue-600">
                                             {type === 'SPACES_ROOT' ? sub.title : sub.name}
@@ -1750,7 +1762,7 @@ function SwatchDetailModal({ swatch, allProducts, swatches, onClose, onNavigateP
 
                         {/* Share & Print for Mobile Consistency */}
                         <div className="pt-6 border-t border-zinc-100 flex gap-3 print:hidden mb-safe">
-                             <button onClick={handleShareImage} className="flex-1 py-3 bg-zinc-100 text-zinc-600 rounded-xl text-xs font-bold hover:bg-zinc-200 flex items-center justify-center"><ImgIcon className="w-4 h-4 mr-2"/> Share</button>
+                             <button onClick={handleShareImage} className="flex-1 py-3 bg-zinc-100 text-zinc-600 rounded-xl text-xs font-bold hover:bg-zinc-200 flex items-center justify-center"><ImageIcon className="w-4 h-4 mr-2"/> Share</button>
                              <button onClick={() => window.print()} className="flex-1 py-3 bg-zinc-100 text-zinc-600 rounded-xl text-xs font-bold hover:bg-zinc-200 flex items-center justify-center"><Printer className="w-4 h-4 mr-2"/> PDF</button>
                         </div>
                     </div>
@@ -2623,7 +2635,7 @@ function ProductDetailModal({ product, allProducts, swatches, spaceContents, onC
               <div className="md:hidden mt-4 pt-4 border-t border-zinc-100 pb-4 print:hidden mb-safe">
                  <div className="flex justify-center gap-4">
                     <button onClick={handleShareImage} className="flex flex-col items-center justify-center w-14 h-14 bg-zinc-50 rounded-2xl text-zinc-600 active:scale-95 transition-transform border border-zinc-100">
-                        <ImgIcon className="w-5 h-5 mb-1"/>
+                        <ImageIcon className="w-5 h-5 mb-1"/>
                         <span className="text-[9px] font-bold"></span>
                     </button>
                     <button onClick={() => window.print()} className="flex flex-col items-center justify-center w-14 h-14 bg-zinc-50 rounded-2xl text-zinc-600 active:scale-95 transition-transform border border-zinc-100">
@@ -2637,7 +2649,7 @@ function ProductDetailModal({ product, allProducts, swatches, spaceContents, onC
             
             <div className="hidden md:flex mt-12 pt-6 border-t border-zinc-100 justify-between items-center pb-8 print:hidden">
               <div className="flex gap-3">
-                 <button onClick={handleShareImage} className="flex items-center px-5 py-2.5 bg-zinc-100 text-zinc-600 rounded-xl text-sm font-bold hover:bg-zinc-200 transition-colors shadow-sm"><ImgIcon className="w-4 h-4 mr-2" /> Share Image</button>
+                 <button onClick={handleShareImage} className="flex items-center px-5 py-2.5 bg-zinc-100 text-zinc-600 rounded-xl text-sm font-bold hover:bg-zinc-200 transition-colors shadow-sm"><ImageIcon className="w-4 h-4 mr-2" /> Share Image</button>
                  <button onClick={() => window.print()} className="flex items-center px-5 py-2.5 bg-zinc-100 text-zinc-600 rounded-xl text-sm font-bold hover:bg-zinc-200 transition-colors shadow-sm"><Printer className="w-4 h-4 mr-2" /> Print PDF</button>
               </div>
             </div>
@@ -3183,11 +3195,11 @@ function SpaceSceneModal({ scene, products, allProducts, isAdmin, onClose, onEdi
                     <div className="max-h-32 overflow-y-auto space-y-1 custom-scrollbar">{allProducts.filter(p => p.name.toLowerCase().includes(productFilter.toLowerCase())).map(p => { const isTagged = scene.productIds?.includes(p.id); return (<div key={p.id} onClick={() => onProductToggle(p.id, !isTagged)} className={`flex items-center p-1.5 rounded cursor-pointer ${isTagged ? 'bg-indigo-50 text-indigo-700' : 'hover:bg-zinc-50'}`}><div className={`w-3 h-3 border rounded mr-2 flex items-center justify-center ${isTagged ? 'bg-indigo-500 border-indigo-500' : 'border-zinc-300'}`}>{isTagged && <Check className="w-2 h-2 text-white"/>}</div><span className="text-xs truncate">{p.name}</span></div>) })}</div>
                  </div>
                )}
-               <div className="space-y-3 mb-8">{products.length > 0 ? products.map(product => (<div key={product.id} onClick={() => onNavigateProduct(product)} className="flex items-center p-3 bg-white rounded-xl border border-zinc-100 shadow-sm hover:border-zinc-300 transition-all cursor-pointer group"><div className="w-12 h-12 bg-zinc-50 rounded-lg flex-shrink-0 flex items-center justify-center mr-3 overflow-hidden">{product.images?.[0] ? <img src={typeof product.images[0] === 'object' ? product.images[0].url : product.images[0]} className="w-full h-full object-cover" /> : <ImageIcon className="w-5 h-5 text-zinc-300"/>}</div><div className="flex-1 min-w-0"><h4 className="text-sm font-bold text-zinc-900 truncate group-hover:text-blue-600">{product.name}</h4><p className="text-xs text-zinc-500">{product.category}</p></div><ChevronRight className="w-4 h-4 text-zinc-300 group-hover:text-zinc-600"/></div>)) : (<div className="text-center py-8 text-zinc-400 text-xs">연관된 제품이 없습니다.</div>)}</div>
+               <div className="space-y-3 mb-8">{products.length > 0 ? products.map(product => (<div key={product.id} onClick={() => onNavigateProduct(product)} className="flex items-center p-3 bg-white rounded-xl border border-zinc-100 shadow-sm hover:border-zinc-300 transition-all cursor-pointer group"><div className="w-12 h-12 bg-zinc-50 rounded-lg flex-shrink-0 flex items-center justify-center mr-3 overflow-hidden">{product.images?.[0] ? <img src={typeof product.images[0] === 'object' ? product.images[0].url : product.images[0]} className="w-full h-full object-cover" /> : <ImageIcon className="w-5 h-5 text-zinc-300"/>}</div><div className="flex-1 min-w-0"><h4 className="text-sm font-bold text-zinc-900 truncate group-hover:text-blue-600">{product.name}</h4><p className="text-xs text-zinc-500">{product.category}</p></div><ChevronRight className="w-4 h-4 text-zinc-300 group-hover:text-zinc-600"/></div>)) : (<div className="text-center py-8 text-zinc-400 text-xs">No related products.</div>)}</div>
             
                {/* Share & Print for Mobile Consistency */}
                <div className="pt-4 border-t border-zinc-100 flex gap-3 print:hidden mb-safe">
-                    <button onClick={handleShareImage} className="flex-1 py-3 bg-white border border-zinc-200 text-zinc-600 rounded-xl text-xs font-bold hover:bg-zinc-50 flex items-center justify-center"><ImgIcon className="w-4 h-4 mr-2"/> Share</button>
+                    <button onClick={handleShareImage} className="flex-1 py-3 bg-white border border-zinc-200 text-zinc-600 rounded-xl text-xs font-bold hover:bg-zinc-50 flex items-center justify-center"><ImageIcon className="w-4 h-4 mr-2"/> Share</button>
                     <button onClick={() => window.print()} className="flex-1 py-3 bg-white border border-zinc-200 text-zinc-600 rounded-xl text-xs font-bold hover:bg-zinc-50 flex items-center justify-center"><Printer className="w-4 h-4 mr-2"/> PDF</button>
                </div>
             </div>
