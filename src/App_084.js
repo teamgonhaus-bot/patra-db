@@ -37,7 +37,7 @@ const YOUR_FIREBASE_CONFIG = {
 // ----------------------------------------------------------------------
 // 상수 및 설정
 // ----------------------------------------------------------------------
-const APP_VERSION = "v0.8.5"; 
+const APP_VERSION = "v0.8.4"; 
 const BUILD_DATE = "2026.01.25";
 const ADMIN_PASSWORD = "adminlcg1"; 
 
@@ -215,6 +215,7 @@ export default function App() {
   useEffect(() => {
     const handleEsc = (e) => {
         if (e.key === 'Escape') {
+            // V 0.8.4: Priority 1 - Close Edit Forms (Return to previous state)
             if (editingSwatchFromModal) { setEditingSwatchFromModal(null); return; }
             if (editingAwardFromModal) { setEditingAwardFromModal(null); return; }
             if (isFormOpen) { setIsFormOpen(false); setEditingProduct(null); return; }
@@ -223,7 +224,8 @@ export default function App() {
             if (editingSpaceInfoId) { setEditingSpaceInfoId(null); return; }
             if (showAdminDashboard) { setShowAdminDashboard(false); return; }
 
-            // Stacked Modals
+            // V 0.8.4: Priority 2 - Close Detail Modals (Stacking Logic)
+            // Product Modal is usually on top (z-index 200)
             if (selectedProduct) { setSelectedProduct(null); return; }
             if (selectedSwatch) { setSelectedSwatch(null); return; }
             if (selectedScene) { setSelectedScene(null); return; }
@@ -945,8 +947,6 @@ export default function App() {
                 products={products} 
                 favorites={favorites} 
                 awards={awards} 
-                swatches={swatches} // V 0.8.5: Pass swatches for count
-                spaceContents={spaceContents} // V 0.8.5: Pass spaceContents for count
                 setActiveCategory={setActiveCategory} 
                 setSelectedProduct={setSelectedProduct} 
                 isAdmin={isAdmin} 
@@ -1086,7 +1086,7 @@ export default function App() {
                             {processedProducts.map((product, idx) => (
                                <div key={product.id} draggable={isAdmin && sortOption === 'manual'} onDragStart={(e) => handleDragStart(e, idx)} onDragEnter={(e) => handleDragEnter(e, idx)} onDragEnd={handleDragEnd} className={isAdmin && sortOption === 'manual' ? 'cursor-move active:opacity-50 transition-all' : ''}>
                                   <ProductCard product={product} onClick={() => setSelectedProduct(product)} isAdmin={isAdmin} isFavorite={favorites.includes(product.id)} onToggleFavorite={(e) => toggleFavorite(e, product.id)} onCompareToggle={(e) => toggleCompare(e, product)} onDuplicate={(e) => { e.stopPropagation(); handleDuplicateProduct(product); }} isCompared={!!compareList.find(p=>p.id===product.id)} />
-                               </div>
+                                </div>
                             ))}
                             {isAdmin && activeCategory !== 'MY_PICK' && !SPACES.find(s => s.id === activeCategory) && (<button onClick={() => { setEditingProduct(null); setIsFormOpen(true); }} className="border-2 border-dashed border-zinc-200 rounded-2xl flex flex-col items-center justify-center min-h-[250px] md:min-h-[300px] text-zinc-400 hover:border-zinc-400 hover:text-zinc-600 hover:bg-zinc-50 transition-all group print:hidden"><div className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-zinc-100 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform"><Plus className="w-6 h-6" /></div><span className="text-xs md:text-sm font-bold">Add Product</span></button>)}
                         </div>
@@ -1125,11 +1125,6 @@ export default function App() {
           onNavigateProduct={(product) => setSelectedProduct(product)}
           onNavigateSwatch={(swatch) => { setSelectedSwatch(swatch); /* Stacks on top */ }}
           onSaveProduct={handleSaveProduct} 
-          // V 0.8.5: Navigate to Award Modal from Product
-          onNavigateAward={(awardTitle) => {
-              const foundAward = awards.find(a => a.title === awardTitle);
-              if (foundAward) setSelectedAward(foundAward);
-          }}
         />
       )}
       
@@ -1507,13 +1502,8 @@ function CategoryRootView({ type, spaces, spaceContents, collections, materials,
 
                     return (
                         <CollapsibleSection key={item.id} title={item.label} count={subItems.length}>
-                            {/* V 0.8.5: Grid Layout Optimization */}
-                            {/* SPACES_ROOT uses 4-col (Total View style), others use standard logic */}
-                            <div className={`grid gap-4 ${
-                                type === 'MATERIALS_ROOT' ? 'grid-cols-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6' : 
-                                type === 'SPACES_ROOT' ? 'grid-cols-2 md:grid-cols-3 lg:grid-cols-4' : // V 0.8.5: 4-col for Spaces Root
-                                'grid-cols-2 md:grid-cols-4 lg:grid-cols-5'
-                            }`}>
+                            {/* Grid Layout for all types */}
+                            <div className={`grid gap-4 ${type === 'MATERIALS_ROOT' ? 'grid-cols-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6' : 'grid-cols-2 md:grid-cols-4 lg:grid-cols-5'}`}>
                                 {subItems.map(sub => {
                                     // V 0.8.1: Use ProductCard for Collections
                                     if (type === 'COLLECTIONS_ROOT') {
@@ -2308,7 +2298,7 @@ function PieChartComponent({ data, total, selectedIndex, onSelect }) {
   );
 }
 
-function DashboardView({ products, favorites, awards, swatches, spaceContents, setActiveCategory, setSelectedProduct, isAdmin, bannerData, onBannerUpload, onLogoUpload, onBannerTextChange, onSaveBannerText }) {
+function DashboardView({ products, favorites, awards, setActiveCategory, setSelectedProduct, isAdmin, bannerData, onBannerUpload, onLogoUpload, onBannerTextChange, onSaveBannerText }) {
   const totalCount = products.length; const newCount = products.filter(p => p.isNew).length; const pickCount = favorites.length;
   const categoryCounts = []; let totalStandardProducts = 0;
   CATEGORIES.filter(c => !c.isSpecial).forEach(c => { const count = products.filter(p => p.category === c.id).length; if (count > 0) { categoryCounts.push({ ...c, count }); totalStandardProducts += count; } });
@@ -2324,12 +2314,6 @@ function DashboardView({ products, favorites, awards, swatches, spaceContents, s
   const [isListExpanded, setIsListExpanded] = useState(false); // For Dropdown
   const [isLaunchExpanded, setIsLaunchExpanded] = useState(false); // For Launching Dropdown
   const [expandedAwardId, setExpandedAwardId] = useState(null); // V 0.8.2
-
-  // V 0.8.5: Calculate Counts for Compact Stats
-  const spaceCount = Object.values(spaceContents).reduce((acc, curr) => acc + (curr.scenes?.length || 0), 0);
-  const materialCount = swatches.length;
-  // Count products that have any award tag or history
-  const awardedProductCount = products.filter(p => (p.awards && p.awards.length > 0) || (p.awardHistory && p.awardHistory.length > 0)).length;
 
   // Helper for Selected Slice Data
   const getSelectedSliceDetails = () => {
@@ -2381,15 +2365,14 @@ function DashboardView({ products, favorites, awards, swatches, spaceContents, s
                     ) : (
                         <button onClick={()=>logoInputRef.current.click()} className="text-xs text-white bg-white/20 px-3 py-1 rounded hover:bg-white/40">+ Upload Logo</button>
                     )}
-                    {/* V 0.8.5: Font Weight Adjustment */}
-                    <input type="text" value={bannerData.title} onChange={(e) => onBannerTextChange('title', e.target.value)} onBlur={onSaveBannerText} className="bg-transparent text-3xl md:text-5xl font-bold tracking-tight text-white w-full outline-none placeholder-zinc-500 border-b border-transparent hover:border-zinc-500 transition-colors" placeholder="Main Title" />
+                    <input type="text" value={bannerData.title} onChange={(e) => onBannerTextChange('title', e.target.value)} onBlur={onSaveBannerText} className="bg-transparent text-3xl md:text-5xl font-black text-white tracking-tighter w-full outline-none placeholder-zinc-500 border-b border-transparent hover:border-zinc-500 transition-colors" placeholder="Main Title" />
                  </div>
                 <input type="text" value={bannerData.subtitle} onChange={(e) => onBannerTextChange('subtitle', e.target.value)} onBlur={onSaveBannerText} className="bg-transparent text-zinc-300 font-medium text-sm md:text-xl w-full outline-none placeholder-zinc-500 border-b border-transparent hover:border-zinc-500 transition-colors" placeholder="Subtitle" />
                 <input type="file" ref={logoInputRef} className="hidden" accept="image/*" onChange={onLogoUpload} />
               </div>
             ) : (
               <>
-                {bannerData.logoUrl ? <img src={bannerData.logoUrl} className="h-16 md:h-24 w-auto object-contain mb-4" alt="Logo" /> : <h2 className="text-3xl md:text-6xl font-bold tracking-tight text-white mb-2">{bannerData.title}</h2>}
+                {bannerData.logoUrl ? <img src={bannerData.logoUrl} className="h-16 md:h-24 w-auto object-contain mb-4" alt="Logo" /> : <h2 className="text-3xl md:text-6xl font-black text-white tracking-tighter mb-2">{bannerData.title}</h2>}
                 <p className="text-zinc-300 font-medium text-sm md:text-xl opacity-90">{bannerData.subtitle}</p>
               </>
             )}
@@ -2397,37 +2380,77 @@ function DashboardView({ products, favorites, awards, swatches, spaceContents, s
          {isAdmin && (<><button onClick={() => fileInputRef.current.click()} className="absolute top-4 right-4 z-30 p-2 bg-white/20 backdrop-blur rounded-full text-white hover:bg-white hover:text-black transition-all opacity-0 group-hover:opacity-100" title="Change Banner Image"><Camera className="w-5 h-5" /></button><input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={onBannerUpload} /></>)}
       </div>
 
-      {/* V 0.8.5: Compact Stats Bar (Replaces Big Cards) */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <div onClick={() => setActiveCategory('SPACES_ROOT')} className="bg-white p-4 rounded-xl border border-zinc-100 shadow-sm hover:shadow-md cursor-pointer transition-all flex items-center justify-between group">
-              <div>
-                  <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide block mb-1">Spaces</span>
-                  <span className="text-2xl font-black text-zinc-900">{spaceCount}</span>
-              </div>
-              <Briefcase className="w-6 h-6 text-zinc-200 group-hover:text-zinc-800 transition-colors"/>
+      <div className="grid grid-cols-2 gap-2 md:gap-4">
+        <div onClick={() => setActiveCategory('ALL')} className="bg-white p-3 md:p-5 rounded-xl md:rounded-2xl border border-zinc-100 shadow-sm hover:shadow-md cursor-pointer group flex flex-col md:flex-row items-center md:justify-between transition-all text-center md:text-left">
+          <div className="flex flex-col md:flex-row items-center md:space-x-4 w-full justify-center md:justify-start">
+             <div className="p-2 md:p-3 bg-zinc-100 rounded-xl group-hover:bg-zinc-900 group-hover:text-white transition-colors text-zinc-500 mb-1 md:mb-0"><LayoutGrid className="w-4 h-4 md:w-6 md:h-6" /></div>
+             <div className="flex flex-col">
+                <span className="text-[10px] md:text-xs font-bold text-zinc-400 uppercase tracking-wide">Total</span>
+                <span className="text-base md:text-2xl font-black text-zinc-900 leading-tight">{totalCount}</span>
+             </div>
           </div>
-          <div onClick={() => setActiveCategory('ALL')} className="bg-white p-4 rounded-xl border border-zinc-100 shadow-sm hover:shadow-md cursor-pointer transition-all flex items-center justify-between group">
-              <div>
-                  <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide block mb-1">Products</span>
-                  <span className="text-2xl font-black text-zinc-900">{totalCount}</span>
-              </div>
-              <LayoutGrid className="w-6 h-6 text-zinc-200 group-hover:text-zinc-800 transition-colors"/>
+          <ChevronRight className="w-5 h-5 text-zinc-300 group-hover:text-zinc-600 hidden md:block" />
+        </div>
+        <div onClick={() => setActiveCategory('MY_PICK')} className="bg-white p-3 md:p-5 rounded-xl md:rounded-2xl border border-zinc-100 shadow-sm hover:shadow-md cursor-pointer group flex flex-col md:flex-row items-center md:justify-between transition-all text-center md:text-left">
+          <div className="flex flex-col md:flex-row items-center md:space-x-4 w-full justify-center md:justify-start">
+             <div className="p-2 md:p-3 bg-yellow-50 rounded-xl text-yellow-500 group-hover:bg-yellow-400 group-hover:text-white transition-colors mb-1 md:mb-0"><Heart className="w-4 h-4 md:w-6 md:h-6 fill-current" /></div>
+             <div className="flex flex-col">
+                <span className="text-[10px] md:text-xs font-bold text-yellow-500 uppercase tracking-wide">Pick</span>
+                <span className="text-base md:text-2xl font-black text-zinc-900 leading-tight">{pickCount}</span>
+             </div>
           </div>
-          <div onClick={() => setActiveCategory('MATERIALS_ROOT')} className="bg-white p-4 rounded-xl border border-zinc-100 shadow-sm hover:shadow-md cursor-pointer transition-all flex items-center justify-between group">
-              <div>
-                  <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide block mb-1">Materials</span>
-                  <span className="text-2xl font-black text-zinc-900">{materialCount}</span>
-              </div>
-              <Palette className="w-6 h-6 text-zinc-200 group-hover:text-zinc-800 transition-colors"/>
-          </div>
-          <div onClick={() => setActiveCategory('AWARDS_ROOT')} className="bg-white p-4 rounded-xl border border-zinc-100 shadow-sm hover:shadow-md cursor-pointer transition-all flex items-center justify-between group">
-              <div>
-                  <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide block mb-1">Awards</span>
-                  <span className="text-2xl font-black text-zinc-900">{awardedProductCount}</span>
-              </div>
-              <Trophy className="w-6 h-6 text-zinc-200 group-hover:text-yellow-500 transition-colors"/>
-          </div>
+          <ChevronRight className="w-5 h-5 text-zinc-300 group-hover:text-zinc-600 hidden md:block" />
+        </div>
       </div>
+
+      {/* V 0.8.2: Awards Section in Dashboard */}
+      {awardStats.length > 0 && (
+          <div className="bg-white p-6 md:p-8 rounded-3xl border border-zinc-100 shadow-sm">
+              <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-xl font-bold text-zinc-900 flex items-center"><Trophy className="w-6 h-6 mr-3 text-yellow-500" /> Award Achievements</h3>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {awardStats.map(stat => (
+                      <div key={stat.id} className="bg-zinc-50 rounded-xl border border-zinc-200 p-4">
+                          <div className="flex items-center justify-between mb-3">
+                              <div className="flex items-center">
+                                  {stat.image ? <img src={stat.image} className="w-8 h-8 object-contain mr-3"/> : <Trophy className="w-8 h-8 text-zinc-300 mr-3"/>}
+                                  <div>
+                                      <h4 className="text-sm font-bold text-zinc-900">{stat.title}</h4>
+                                      <span className="text-[10px] text-zinc-500">{stat.organization}</span>
+                                  </div>
+                              </div>
+                              <span className="text-lg font-black text-zinc-900">{stat.winners.length}</span>
+                          </div>
+                          
+                          {/* Dropdown for Winners */}
+                          <div className="border-t border-zinc-200 pt-2">
+                              <button 
+                                  onClick={(e) => { e.stopPropagation(); setExpandedAwardId(expandedAwardId === stat.id ? null : stat.id); }}
+                                  className="w-full flex justify-between items-center text-[10px] font-bold text-zinc-500 hover:text-zinc-800"
+                              >
+                                  <span>View Winners</span>
+                                  <ChevronDown className={`w-3 h-3 transition-transform ${expandedAwardId === stat.id ? 'rotate-180' : ''}`}/>
+                              </button>
+                              
+                              {expandedAwardId === stat.id && (
+                                  <div className="mt-2 space-y-1 max-h-40 overflow-y-auto custom-scrollbar">
+                                      {stat.winners.map(winner => (
+                                          <div key={winner.id} onClick={() => setSelectedProduct(winner)} className="flex items-center p-1.5 hover:bg-white rounded cursor-pointer transition-colors group">
+                                              <div className="w-6 h-6 rounded bg-zinc-200 overflow-hidden mr-2 flex-shrink-0">
+                                                  {winner.images?.[0] && <img src={typeof winner.images[0] === 'object' ? winner.images[0].url : winner.images[0]} className="w-full h-full object-cover"/>}
+                                              </div>
+                                              <span className="text-[10px] font-medium text-zinc-600 group-hover:text-blue-600 truncate">{winner.name}</span>
+                                          </div>
+                                      ))}
+                                  </div>
+                              )}
+                          </div>
+                      </div>
+                  ))}
+              </div>
+          </div>
+      )}
 
       <div className="bg-white p-6 md:p-8 rounded-3xl border border-zinc-100 shadow-sm">
          <div className="flex items-center justify-between mb-8">
@@ -2529,56 +2552,6 @@ function DashboardView({ products, favorites, awards, swatches, spaceContents, s
          ) : <div className="text-center py-20 text-zinc-300">No category data available</div>}
       </div>
 
-      {/* V 0.8.5: Awards Section Moved Up */}
-      {awardStats.length > 0 && (
-          <div className="bg-white p-6 md:p-8 rounded-3xl border border-zinc-100 shadow-sm">
-              <div className="flex items-center justify-between mb-6">
-                  <h3 className="text-xl font-bold text-zinc-900 flex items-center"><Trophy className="w-6 h-6 mr-3 text-yellow-500" /> Award Achievements</h3>
-              </div>
-              {/* V 0.8.5: Mobile Optimized Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {awardStats.map(stat => (
-                      <div key={stat.id} className="bg-zinc-50 rounded-xl border border-zinc-200 p-4">
-                          <div className="flex items-center justify-between mb-3">
-                              <div className="flex items-center">
-                                  {stat.image ? <img src={stat.image} className="w-8 h-8 object-contain mr-3"/> : <Trophy className="w-8 h-8 text-zinc-300 mr-3"/>}
-                                  <div>
-                                      <h4 className="text-sm font-bold text-zinc-900">{stat.title}</h4>
-                                      <span className="text-[10px] text-zinc-500">{stat.organization}</span>
-                                  </div>
-                              </div>
-                              <span className="text-lg font-black text-zinc-900">{stat.winners.length}</span>
-                          </div>
-                          
-                          {/* Dropdown for Winners */}
-                          <div className="border-t border-zinc-200 pt-2">
-                              <button 
-                                  onClick={(e) => { e.stopPropagation(); setExpandedAwardId(expandedAwardId === stat.id ? null : stat.id); }}
-                                  className="w-full flex justify-between items-center text-[10px] font-bold text-zinc-500 hover:text-zinc-800"
-                              >
-                                  <span>View Winners</span>
-                                  <ChevronDown className={`w-3 h-3 transition-transform ${expandedAwardId === stat.id ? 'rotate-180' : ''}`}/>
-                              </button>
-                              
-                              {expandedAwardId === stat.id && (
-                                  <div className="mt-2 space-y-1 max-h-40 overflow-y-auto custom-scrollbar">
-                                      {stat.winners.map(winner => (
-                                          <div key={winner.id} onClick={() => setSelectedProduct(winner)} className="flex items-center p-1.5 hover:bg-white rounded cursor-pointer transition-colors group">
-                                              <div className="w-6 h-6 rounded bg-zinc-200 overflow-hidden mr-2 flex-shrink-0">
-                                                  {winner.images?.[0] && <img src={typeof winner.images[0] === 'object' ? winner.images[0].url : winner.images[0]} className="w-full h-full object-cover"/>}
-                                              </div>
-                                              <span className="text-[10px] font-medium text-zinc-600 group-hover:text-blue-600 truncate">{winner.name}</span>
-                                          </div>
-                                      ))}
-                                  </div>
-                              )}
-                          </div>
-                      </div>
-                  ))}
-              </div>
-          </div>
-      )}
-
       <div className="bg-white p-6 md:p-8 rounded-3xl border border-zinc-100 shadow-sm">
          <div className="flex items-center justify-between mb-6">
             <h3 className="text-xl font-bold text-zinc-900 flex items-center"><Clock className="w-6 h-6 mr-3 text-zinc-400" /> Recent Updates</h3>
@@ -2629,8 +2602,7 @@ function SpaceDetailView({ space, spaceContent, activeTag, setActiveTag, isAdmin
         {banner ? <img src={banner} className="w-full h-full object-cover transition-transform duration-1000" alt="Space Banner" /> : <div className="w-full h-full flex items-center justify-center opacity-30"><span className="text-white text-4xl font-bold uppercase">{space.label}</span></div>}
         <div className="absolute bottom-8 left-8 md:bottom-12 md:left-12 z-20 text-white max-w-3xl">
            <div className="flex items-center space-x-3 mb-3"><div className="p-2 bg-white/20 backdrop-blur-md rounded-xl">{React.createElement(space.icon, { className: "w-6 h-6" })}</div></div>
-           {/* V 0.8.5: Font Weight Adjustment */}
-           <h2 className="text-4xl md:text-6xl font-bold tracking-tight mb-4 leading-tight">{space.label}</h2>
+           <h2 className="text-4xl md:text-6xl font-black mb-4 tracking-tight leading-tight">{space.label}</h2>
            <p className="text-zinc-200 text-sm md:text-lg leading-relaxed font-light">{description}</p>
            {trend && (<div className="mt-6 pl-4 border-l-2 border-indigo-500"><p className="text-indigo-300 text-xs font-bold uppercase mb-1">Design Trend</p><p className="text-zinc-300 text-sm italic">"{trend}"</p></div>)}
         </div>
@@ -2650,8 +2622,8 @@ function SpaceDetailView({ space, spaceContent, activeTag, setActiveTag, isAdmin
       <div className={`${filteredScenes.length === 0 ? '' : 'mb-12'} print:hidden`}>
         <div className="flex items-center justify-between mb-6"><h3 className="text-2xl font-extrabold text-zinc-900 flex items-center"><ImageIcon className="w-6 h-6 mr-2 text-indigo-500" /> Space Scenes ({filteredScenes.length})</h3>{isAdmin && (<button onClick={onAddScene} className="flex items-center text-sm font-bold bg-zinc-900 text-white px-4 py-2 rounded-lg hover:bg-black transition-colors shadow-lg"><Plus className="w-4 h-4 mr-2" /> Add Scene</button>)}</div>
         {filteredScenes.length > 0 ? (
-          // V 0.8.5: Use 3-col Grid for Sub-categories (Wide Design)
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          // V 0.8.4: Ensure Scene Card Size matches Total View (4-col)
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
             {filteredScenes.map((scene) => (
               <div key={scene.id} onClick={() => onViewScene(scene)} className="group cursor-pointer relative">
                 <div className="aspect-[4/3] bg-zinc-50 rounded-xl mb-2 overflow-hidden border border-zinc-100 relative">
@@ -2751,7 +2723,7 @@ function ProductCard({ product, onClick, showMoveControls, onMove, isFavorite, o
   );
 }
 
-function ProductDetailModal({ product, allProducts, swatches, spaceContents, awards, onClose, onEdit, isAdmin, showToast, isFavorite, onToggleFavorite, onNavigateSpace, onNavigateScene, onNavigateNext, onNavigatePrev, onNavigateProduct, onNavigateSwatch, onSaveProduct, onNavigateAward }) {
+function ProductDetailModal({ product, allProducts, swatches, spaceContents, awards, onClose, onEdit, isAdmin, showToast, isFavorite, onToggleFavorite, onNavigateSpace, onNavigateScene, onNavigateNext, onNavigatePrev, onNavigateProduct, onNavigateSwatch, onSaveProduct }) {
   useScrollLock();
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [isZoomed, setIsZoomed] = useState(false);
@@ -2983,19 +2955,14 @@ function ProductDetailModal({ product, allProducts, swatches, spaceContents, awa
               <div className="flex flex-wrap gap-2 mb-3 items-center">
                  {product.awardHistory && product.awardHistory.length > 0 ? (
                      product.awardHistory.map((h, i) => (
-                         // V 0.8.5: Navigate to Award Modal on click
-                         <button key={i} onClick={() => onNavigateAward && onNavigateAward(h.title)} className="inline-flex items-center px-2.5 py-0.5 bg-yellow-400/20 text-yellow-700 border border-yellow-400/30 text-[10px] font-bold rounded uppercase tracking-wide group relative hover:bg-yellow-400/40 transition-colors">
+                         <span key={i} className="inline-flex items-center px-2.5 py-0.5 bg-yellow-400/20 text-yellow-700 border border-yellow-400/30 text-[10px] font-bold rounded uppercase tracking-wide group relative">
                              <Trophy className="w-3 h-3 mr-1" /> {h.title} <span className="ml-1 text-yellow-800/70">'{h.year.slice(2)}</span>
-                             {isAdmin && <span onClick={(e) => { e.stopPropagation(); handleRemoveAward(h.awardId, h.title); }} className="ml-1.5 hover:text-red-600 hidden group-hover:inline-block"><X className="w-3 h-3"/></span>}
-                         </button>
+                             {isAdmin && <button onClick={() => handleRemoveAward(h.awardId, h.title)} className="ml-1.5 hover:text-red-600 hidden group-hover:inline-block"><X className="w-3 h-3"/></button>}
+                         </span>
                      ))
                  ) : (
                      // Fallback for old string tags
-                     product.awards?.map(award => (
-                         <button key={award} onClick={() => onNavigateAward && onNavigateAward(award)} className="inline-flex items-center px-2.5 py-0.5 bg-yellow-400/20 text-yellow-700 border border-yellow-400/30 text-[10px] font-bold rounded uppercase tracking-wide hover:bg-yellow-400/40 transition-colors">
-                             <Trophy className="w-3 h-3 mr-1" /> {award}
-                         </button>
-                     ))
+                     product.awards?.map(award => (<span key={award} className="inline-flex items-center px-2.5 py-0.5 bg-yellow-400/20 text-yellow-700 border border-yellow-400/30 text-[10px] font-bold rounded uppercase tracking-wide"><Trophy className="w-3 h-3 mr-1" /> {award}</span>))
                  )}
                  
                  {isAdmin && (
@@ -3164,6 +3131,38 @@ function ProductDetailModal({ product, allProducts, swatches, spaceContents, awa
     </div>
   );
 }
+
+function SpaceInfoEditModal({ spaceId, currentData = {}, defaultTags, onClose, onSave }) {
+  const [data, setData] = useState({ description: '', trend: '', tagsString: '' });
+  useEffect(() => { 
+     const tags = currentData.tags || defaultTags || [];
+     setData({ 
+        description: currentData.description || '', 
+        trend: currentData.trend || '',
+        tagsString: tags.join(', ')
+     }); 
+  }, [currentData, defaultTags]);
+
+  const handleSave = () => {
+     const tags = data.tagsString.split(',').map(t => t.trim()).filter(Boolean);
+     onSave({ ...data, tags });
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[80] flex items-center justify-center p-4">
+      <div className="bg-white w-full max-w-lg rounded-2xl overflow-hidden shadow-2xl">
+        <div className="px-6 py-4 border-b border-zinc-100 flex justify-between items-center"><h3 className="text-lg font-bold text-zinc-900">Edit Space Info</h3><button onClick={onClose}><X className="w-5 h-5 text-zinc-400" /></button></div>
+        <div className="p-6 space-y-4">
+           <div><label className="block text-xs font-bold text-zinc-500 uppercase mb-2">Description</label><textarea className="w-full border border-zinc-300 rounded-xl p-3 text-sm focus:ring-2 focus:ring-zinc-900 outline-none" rows={4} value={data.description} onChange={(e) => setData({...data, description: e.target.value})} /></div>
+           <div><label className="block text-xs font-bold text-zinc-500 uppercase mb-2">Design Trend Keywords</label><input type="text" className="w-full border border-zinc-300 rounded-xl p-3 text-sm focus:ring-2 focus:ring-zinc-900 outline-none" value={data.trend} onChange={(e) => setData({...data, trend: e.target.value})} placeholder="e.g. Minimalist, Eco-friendly, Open Plan" /></div>
+           <div><label className="block text-xs font-bold text-zinc-500 uppercase mb-2">Space Tags (comma separated)</label><input type="text" className="w-full border border-zinc-300 rounded-xl p-3 text-sm focus:ring-2 focus:ring-zinc-900 outline-none" value={data.tagsString} onChange={(e) => setData({...data, tagsString: e.target.value})} placeholder="Task, Executive, Meeting..." /></div>
+        </div>
+        <div className="px-6 py-4 border-t border-zinc-100 bg-zinc-50 flex justify-end"><button onClick={handleSave} className="px-6 py-2 bg-zinc-900 text-white rounded-xl text-sm font-bold hover:bg-black shadow-lg">Save Changes</button></div>
+      </div>
+    </div>
+  );
+}
+
 function ProductFormModal({ categories, swatches = [], allProducts = [], awards = [], existingData, onClose, onSave, onDelete, isFirebaseAvailable, initialCategory, spaceTags = [] }) {
   const isEditMode = !!existingData;
   const fileInputRef = useRef(null);
