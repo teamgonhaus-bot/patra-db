@@ -37,7 +37,7 @@ const YOUR_FIREBASE_CONFIG = {
 // ----------------------------------------------------------------------
 // 상수 및 설정
 // ----------------------------------------------------------------------
-const APP_VERSION = "v0.8.1"; 
+const APP_VERSION = "v0.8.0"; 
 const BUILD_DATE = "2026.01.25";
 const ADMIN_PASSWORD = "adminlcg1"; 
 
@@ -112,6 +112,9 @@ const SWATCH_CATEGORIES = [
   { id: 'ETC', label: 'Etc', color: '#9ca3af' },
 ];
 
+// 기본 어워드 태그
+const DEFAULT_AWARD_TAGS = ['iF', 'Reddot', 'IDEA', 'GDA', 'Chicago GD'];
+
 const PATTERN_TYPES = [
     { id: 'NONE', label: 'None' },
     { id: 'KNIT', label: 'Knit' },
@@ -153,7 +156,7 @@ export default function App() {
   const [user, setUser] = useState(null);
   const [products, setProducts] = useState([]);
   const [swatches, setSwatches] = useState([]); 
-  const [awards, setAwards] = useState([]); 
+  const [awards, setAwards] = useState([]); // New Awards State
   const [activeCategory, setActiveCategory] = useState('DASHBOARD');
   const [previousCategory, setPreviousCategory] = useState('DASHBOARD'); 
   const [activeSpaceTag, setActiveSpaceTag] = useState('ALL'); 
@@ -171,7 +174,7 @@ export default function App() {
   // Selection & Compare (Stacked Modals)
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [selectedSwatch, setSelectedSwatch] = useState(null); 
-  const [selectedAward, setSelectedAward] = useState(null); 
+  const [selectedAward, setSelectedAward] = useState(null); // New Award Selection
   const [compareList, setCompareList] = useState([]);
   const [hiddenCompareIds, setHiddenCompareIds] = useState([]); 
   const [isCompareModalOpen, setIsCompareModalOpen] = useState(false);
@@ -188,7 +191,7 @@ export default function App() {
   const [showAdminDashboard, setShowAdminDashboard] = useState(false);
   const [activityLogs, setActivityLogs] = useState([]);
   const [toast, setToast] = useState(null);
-  const [favorites, setFavorites] = useState([]); 
+  const [favorites, setFavorites] = useState([]); // Stores IDs of Products, Scenes, Swatches
   
   // UI State
   const [sidebarState, setSidebarState] = useState({ spaces: true, collections: true, materials: true, awards: true });
@@ -569,6 +572,12 @@ export default function App() {
       const docId = awardData.id ? String(awardData.id) : String(Date.now());
       const payload = { ...awardData, id: docId, updatedAt: Date.now() };
       
+      // Two-way binding: Update products if needed
+      // Note: This is complex. If we add products here, we should update those products' awards array.
+      // However, usually we filter products by award tag. 
+      // V 0.8.0 Requirement: "Product card -> Tag registration -> Auto link".
+      // We will implement logic where products are filtered by award name/tag.
+      
       if (isFirebaseAvailable && db) {
           await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'awards', docId), payload, { merge: true });
       } else {
@@ -679,17 +688,17 @@ export default function App() {
       else if (SWATCH_CATEGORIES.find(s => s.id === activeCategory)) matchesCategory = false; 
       else matchesCategory = product.category === activeCategory;
       
-      // Search Logic (Tags + Text) - Enhanced for V 0.8.1 (Color Code/Name)
+      // Search Logic (Tags + Text) - Enhanced for V 0.8.0
       const searchFields = [ 
           product.name, 
           product.specs, 
           product.designer, 
           ...(product.features || []), 
           ...(product.options || []), 
-          ...(product.awards || []).map(a => typeof a === 'object' ? a.label : a), 
+          ...(product.awards || []), 
           ...(product.materials || []), 
-          ...(product.bodyColors || []).map(c => typeof c === 'object' ? `${c.name} ${c.materialCode} ${c.hex}` : c), 
-          ...(product.upholsteryColors || []).map(c => typeof c === 'object' ? `${c.name} ${c.materialCode} ${c.hex}` : c) 
+          ...(product.bodyColors || []).map(c => typeof c === 'object' ? c.name : c), 
+          ...(product.upholsteryColors || []).map(c => typeof c === 'object' ? c.name : c) 
       ];
       const fullText = searchFields.join(' ').toLowerCase();
       
@@ -815,7 +824,7 @@ export default function App() {
              {sidebarState.materials && (<div className="space-y-0.5 mt-2 pl-2 animate-in slide-in-from-top-2 duration-200">{SWATCH_CATEGORIES.map((cat) => (<button key={cat.id} onClick={() => handleCategoryClick(cat.id)} className={`w-full text-left px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center justify-between group ${activeCategory === cat.id ? 'bg-zinc-100 text-zinc-900 font-bold' : 'text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900'}`}>{cat.label}</button>))}</div>)}
           </div>
 
-          {/* Awards Group (New V 0.8.1) */}
+          {/* Awards Group (New V 0.8.0) */}
           <div className="py-2">
              <div className={`w-full flex items-center rounded-xl border mb-1 shadow-sm transition-all ${activeCategory === 'AWARDS_ROOT' ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-600 border-zinc-100 hover:border-zinc-300'}`}>
                 <button onClick={() => handleCategoryClick('AWARDS_ROOT')} className="flex-1 text-left px-4 py-3 text-sm font-bold tracking-tight flex items-center">AWARDS</button>
@@ -931,8 +940,6 @@ export default function App() {
                 onSelect={(award) => setSelectedAward(award)}
                 searchTerm={searchTerm}
                 searchTags={searchTags}
-                favorites={favorites}
-                onToggleFavorite={toggleFavorite}
              />
           ) : activeCategory.endsWith('_ROOT') ? (
              <CategoryRootView 
@@ -952,33 +959,11 @@ export default function App() {
                 filters={filters}
                 onCompareToggle={(e, p) => toggleCompare(e, p)}
                 compareList={compareList}
-                favorites={favorites}
-                onToggleFavorite={toggleFavorite}
              />
           ) : (
             <>
               {SPACES.find(s => s.id === activeCategory) && (
-                 <SpaceDetailView 
-                    space={SPACES.find(s => s.id === activeCategory)} 
-                    spaceContent={spaceContents[activeCategory] || {}} 
-                    isAdmin={isAdmin} 
-                    activeTag={activeSpaceTag} 
-                    setActiveTag={setActiveSpaceTag} 
-                    onBannerUpload={(e) => handleSpaceBannerUpload(e, activeCategory)} 
-                    onEditInfo={() => setEditingSpaceInfoId(activeCategory)} 
-                    onManageProducts={() => setManagingSpaceProductsId(activeCategory)} 
-                    onAddScene={() => setEditingScene({ isNew: true, spaceId: activeCategory })} 
-                    onViewScene={(scene) => setSelectedScene({ ...scene, spaceId: activeCategory })} 
-                    productCount={processedProducts.length} 
-                    searchTerm={searchTerm} 
-                    searchTags={searchTags}
-                    products={processedProducts} // Pass filtered products for the bottom list
-                    onProductClick={(p) => setSelectedProduct(p)}
-                    favorites={favorites}
-                    onToggleFavorite={toggleFavorite}
-                    onCompareToggle={toggleCompare}
-                    compareList={compareList}
-                 />
+                 <SpaceDetailView space={SPACES.find(s => s.id === activeCategory)} spaceContent={spaceContents[activeCategory] || {}} isAdmin={isAdmin} activeTag={activeSpaceTag} setActiveTag={setActiveSpaceTag} onBannerUpload={(e) => handleSpaceBannerUpload(e, activeCategory)} onEditInfo={() => setEditingSpaceInfoId(activeCategory)} onManageProducts={() => setManagingSpaceProductsId(activeCategory)} onAddScene={() => setEditingScene({ isNew: true, spaceId: activeCategory })} onViewScene={(scene) => setSelectedScene({ ...scene, spaceId: activeCategory })} productCount={processedProducts.length} searchTerm={searchTerm} searchTags={searchTags} />
               )}
               {SWATCH_CATEGORIES.find(s => s.id === activeCategory) && (
                 <SwatchManager category={SWATCH_CATEGORIES.find(s => s.id === activeCategory)} swatches={swatches.filter(s => s.category === activeCategory)} isAdmin={isAdmin} onSave={handleSaveSwatch} onDelete={handleDeleteSwatch} onSelect={(swatch) => setSelectedSwatch(swatch)} onDuplicate={handleDuplicateSwatch} searchTerm={searchTerm} searchTags={searchTags} favorites={favorites} onToggleFavorite={toggleFavorite} />
@@ -1032,7 +1017,6 @@ export default function App() {
           product={selectedProduct} 
           allProducts={products}
           swatches={swatches}
-          awards={awards} // V 0.8.1: Pass awards to product modal
           spaceContents={spaceContents} 
           onClose={() => setSelectedProduct(null)} 
           onEdit={() => { setEditingProduct(selectedProduct); setIsFormOpen(true); }} 
@@ -1046,7 +1030,7 @@ export default function App() {
           onNavigateScene={(scene) => { setSelectedProduct(null); setActiveCategory(scene.spaceId || scene.id); setSelectedScene({...scene, spaceId: scene.spaceId || 'UNKNOWN'}); }}
           onNavigateProduct={(product) => setSelectedProduct(product)}
           onNavigateSwatch={(swatch) => { setSelectedSwatch(swatch); /* Stacks on top */ }}
-          onSaveProduct={handleSaveProduct} // For tag/award updates
+          onSaveProduct={handleSaveProduct} // For tag updates
         />
       )}
       
@@ -1055,7 +1039,6 @@ export default function App() {
           categories={CATEGORIES.filter(c => !c.isSpecial)} 
           swatches={swatches} 
           allProducts={products}
-          awards={awards} // V 0.8.1: Pass awards to form
           initialCategory={activeCategory} 
           existingData={editingProduct} 
           onClose={() => { setIsFormOpen(false); setEditingProduct(null); }} 
@@ -1094,7 +1077,6 @@ export default function App() {
            products={products}
            onClose={() => setSelectedAward(null)}
            onNavigateProduct={(p) => { setSelectedAward(null); setSelectedProduct(p); }}
-           onSaveProduct={handleSaveProduct} // For adding products to award
         />
       )}
 
@@ -1253,13 +1235,9 @@ function TotalView({ products, categories, spaces, spaceContents, materials, mat
                             <CollapsibleSection key={space.id} title={space.label} count={scenes.length}>
                                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                                     {scenes.map(scene => (
-                                        <div key={scene.id} onClick={() => onSceneClick({...scene, spaceId: space.id})} className="group cursor-pointer relative">
+                                        <div key={scene.id} onClick={() => onSceneClick({...scene, spaceId: space.id})} className="group cursor-pointer">
                                             <div className="aspect-[4/3] bg-zinc-50 rounded-xl mb-2 overflow-hidden border border-zinc-100 relative">
                                                 <img src={scene.image} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
-                                                {/* V 0.8.1: Unified Star Button for Spaces */}
-                                                <button onClick={(e) => onToggleFavorite(e, scene.id)} className="absolute top-2 right-2 p-1.5 bg-white/80 rounded-full text-zinc-300 hover:text-yellow-400 hover:scale-110 transition-all z-10">
-                                                    <Star className={`w-3.5 h-3.5 ${favorites.includes(scene.id) ? 'fill-yellow-400 text-yellow-400' : ''}`}/>
-                                                </button>
                                             </div>
                                             <h4 className="text-xs font-bold text-zinc-900 truncate group-hover:text-blue-600">{scene.title}</h4>
                                         </div>
@@ -1271,7 +1249,7 @@ function TotalView({ products, categories, spaces, spaceContents, materials, mat
                 </div>
             </div>
 
-            {/* COLLECTIONS SECTION - V 0.8.1 Updated to use ProductCard style */}
+            {/* COLLECTIONS SECTION - V 0.8.0 Updated to use ProductCard style */}
             <div className="mb-16">
                 <h3 className="text-2xl font-black text-zinc-900 mb-6 flex items-center"><Cloud className="w-6 h-6 mr-2"/> COLLECTIONS</h3>
                 <div className="space-y-4">
@@ -1316,7 +1294,7 @@ function TotalView({ products, categories, spaces, spaceContents, materials, mat
                                         <div key={swatch.id} onClick={() => onSwatchClick(swatch)} className="group cursor-pointer relative">
                                             <div className="aspect-square bg-zinc-50 rounded-xl mb-2 overflow-hidden border border-zinc-100 relative">
                                                 <SwatchDisplay color={swatch} className="w-full h-full rounded-none scale-100"/>
-                                                {/* V 0.8.1: Add Favorite Button to Material Cards in Total View */}
+                                                {/* V 0.8.0: Add Favorite Button to Material Cards in Total View */}
                                                 <button onClick={(e) => onToggleFavorite(e, swatch.id)} className="absolute top-2 right-2 p-1.5 bg-white/80 rounded-full text-zinc-300 hover:text-yellow-400 hover:scale-110 transition-all z-10">
                                                     <Star className={`w-3.5 h-3.5 ${favorites.includes(swatch.id) ? 'fill-yellow-400 text-yellow-400' : ''}`}/>
                                                 </button>
@@ -1335,7 +1313,7 @@ function TotalView({ products, categories, spaces, spaceContents, materials, mat
     );
 }
 
-function CategoryRootView({ type, spaces, spaceContents, collections, materials, products, swatches, onNavigate, onProductClick, onSwatchClick, onSceneClick, searchTerm, searchTags, filters, onCompareToggle, compareList, favorites, onToggleFavorite }) {
+function CategoryRootView({ type, spaces, spaceContents, collections, materials, products, swatches, onNavigate, onProductClick, onSwatchClick, onSceneClick, searchTerm, searchTags, filters, onCompareToggle, compareList }) {
     let title = "";
     let items = [];
     let icon = null;
@@ -1411,52 +1389,41 @@ function CategoryRootView({ type, spaces, spaceContents, collections, materials,
                         <CollapsibleSection key={item.id} title={item.label} count={subItems.length}>
                             {/* Grid Layout for all types */}
                             <div className={`grid gap-4 ${type === 'MATERIALS_ROOT' ? 'grid-cols-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6' : 'grid-cols-2 md:grid-cols-4 lg:grid-cols-5'}`}>
-                                {subItems.map(sub => {
-                                    // V 0.8.1: Use ProductCard for Collections
-                                    if (type === 'COLLECTIONS_ROOT') {
-                                        return (
-                                            <div key={sub.id}>
-                                                <ProductCard 
-                                                    product={sub} 
-                                                    onClick={() => onProductClick(sub)}
-                                                    isFavorite={favorites.includes(sub.id)}
-                                                    onToggleFavorite={(e) => onToggleFavorite(e, sub.id)}
-                                                    onCompareToggle={(e) => onCompareToggle(e, sub)}
-                                                    isCompared={!!compareList.find(p=>p.id===sub.id)}
-                                                />
-                                            </div>
-                                        );
-                                    }
-
-                                    // For Spaces and Materials, keep custom cards but unify styles
-                                    return (
-                                        <div 
-                                            key={sub.id} 
-                                            onClick={() => {
-                                                if (type === 'SPACES_ROOT') onSceneClick({...sub, spaceId: item.id});
-                                                else onSwatchClick(sub);
-                                            }}
-                                            className="group cursor-pointer relative"
-                                        >
-                                            <div className={`aspect-square ${isMaterial ? 'rounded-xl' : 'rounded-xl'} bg-zinc-50 overflow-hidden border border-zinc-100 relative mb-2 p-0`}>
-                                                {type === 'SPACES_ROOT' ? (
-                                                    <img src={sub.image} className="w-full h-full object-cover group-hover:scale-105 transition-transform"/>
-                                                ) : (
-                                                    <SwatchDisplay color={sub} className="w-full h-full rounded-none scale-100"/>
-                                                )}
-                                                
-                                                {/* V 0.8.1: Unified Star Button for Spaces & Materials */}
-                                                <button onClick={(e) => onToggleFavorite(e, sub.id)} className="absolute top-2 right-2 p-1.5 bg-white/80 rounded-full text-zinc-300 hover:text-yellow-400 hover:scale-110 transition-all z-10">
-                                                    <Star className={`w-3.5 h-3.5 ${favorites.includes(sub.id) ? 'fill-yellow-400 text-yellow-400' : ''}`}/>
+                                {subItems.map(sub => (
+                                    <div 
+                                        key={sub.id} 
+                                        onClick={() => {
+                                            if (type === 'SPACES_ROOT') onSceneClick({...sub, spaceId: item.id});
+                                            else if (type === 'COLLECTIONS_ROOT') onProductClick(sub);
+                                            else onSwatchClick(sub);
+                                        }}
+                                        className="group cursor-pointer relative"
+                                    >
+                                        <div className={`aspect-square ${isMaterial ? 'rounded-xl' : 'rounded-xl'} bg-zinc-50 overflow-hidden border border-zinc-100 relative mb-2 p-0`}>
+                                            {type === 'SPACES_ROOT' ? (
+                                                <img src={sub.image} className="w-full h-full object-cover group-hover:scale-105 transition-transform"/>
+                                            ) : type === 'MATERIALS_ROOT' ? (
+                                                <SwatchDisplay color={sub} className="w-full h-full rounded-none scale-100"/>
+                                            ) : (
+                                                <img src={sub.images?.[0] ? (typeof sub.images[0] === 'object' ? sub.images[0].url : sub.images[0]) : ''} className="w-full h-full object-contain mix-blend-multiply group-hover:scale-105 transition-transform"/>
+                                            )}
+                                            
+                                            {/* Compare Button for Collections */}
+                                            {type === 'COLLECTIONS_ROOT' && (
+                                                <button 
+                                                    onClick={(e) => onCompareToggle(e, sub)} 
+                                                    className={`absolute top-2 right-2 p-1.5 rounded-full transition-all z-10 ${compareList.find(p=>p.id===sub.id) ? 'bg-zinc-900 text-white' : 'bg-white/80 text-zinc-400 hover:text-zinc-900'}`}
+                                                >
+                                                    <ArrowLeftRight className="w-3.5 h-3.5" />
                                                 </button>
-                                            </div>
-                                            <h4 className="text-sm font-bold text-zinc-900 truncate group-hover:text-blue-600">
-                                                {type === 'SPACES_ROOT' ? sub.title : sub.name}
-                                            </h4>
-                                            {type !== 'MATERIALS_ROOT' && <p className="text-xs text-zinc-400 truncate">{type === 'SPACES_ROOT' ? sub.description : (sub.designer || item.label)}</p>}
+                                            )}
                                         </div>
-                                    );
-                                })}
+                                        <h4 className="text-sm font-bold text-zinc-900 truncate group-hover:text-blue-600">
+                                            {type === 'SPACES_ROOT' ? sub.title : sub.name}
+                                        </h4>
+                                        {type !== 'MATERIALS_ROOT' && <p className="text-xs text-zinc-400 truncate">{type === 'SPACES_ROOT' ? sub.description : (sub.designer || item.label)}</p>}
+                                    </div>
+                                ))}
                             </div>
                         </CollapsibleSection>
                     );
@@ -1789,7 +1756,7 @@ function SwatchManager({ category, swatches, isAdmin, onSave, onDelete, onSelect
                    {/* Fix: removed size prop, passed explicit w-full h-full rounded-none to ensure fill */}
                    <SwatchDisplay color={swatch} className="w-full h-full rounded-none scale-100"/>
                    
-                   {/* V 0.8.1: My Pick Button for Materials */}
+                   {/* V 0.8.0: My Pick Button for Materials */}
                    <button onClick={(e) => onToggleFavorite(e, swatch.id)} className="absolute top-2 right-2 p-1.5 bg-white/80 rounded-full text-zinc-300 hover:text-yellow-400 hover:scale-110 transition-all z-10">
                        <Star className={`w-3.5 h-3.5 ${favorites.includes(swatch.id) ? 'fill-yellow-400 text-yellow-400' : ''}`}/>
                    </button>
@@ -2416,7 +2383,7 @@ function DashboardView({ products, favorites, setActiveCategory, setSelectedProd
   );
 }
 
-function SpaceDetailView({ space, spaceContent, activeTag, setActiveTag, isAdmin, onBannerUpload, onEditInfo, onManageProducts, onAddScene, onViewScene, productCount, searchTerm, searchTags, products, onProductClick, favorites, onToggleFavorite, onCompareToggle, compareList }) {
+function SpaceDetailView({ space, spaceContent, activeTag, setActiveTag, isAdmin, onBannerUpload, onEditInfo, onManageProducts, onAddScene, onViewScene, productCount, searchTerm, searchTags }) {
   const banner = spaceContent.banner;
   const description = spaceContent.description || "이 공간에 대한 설명이 없습니다.";
   const trend = spaceContent.trend || "";
@@ -2467,12 +2434,6 @@ function SpaceDetailView({ space, spaceContent, activeTag, setActiveTag, isAdmin
                 <img src={scene.image} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" alt={scene.title} />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-80 group-hover:opacity-100 transition-opacity"></div>
                 {scene.productIds && scene.productIds.length > 0 && <div className="absolute top-4 right-4 bg-black/60 backdrop-blur text-white text-[10px] font-bold px-2 py-1 rounded-lg flex items-center"><Tag className="w-3 h-3 mr-1" /> {scene.productIds.length} Products</div>}
-                
-                {/* V 0.8.1: Unified Star Button for Space Scenes */}
-                <button onClick={(e) => onToggleFavorite(e, scene.id)} className="absolute top-4 right-4 p-2 bg-black/40 backdrop-blur rounded-full text-white hover:text-yellow-400 z-30">
-                    <Star className={`w-5 h-5 ${favorites.includes(scene.id) ? 'fill-yellow-400 text-yellow-400' : ''}`}/>
-                </button>
-
                 <div className="absolute bottom-5 left-5 right-5 text-white transform translate-y-2 group-hover:translate-y-0 transition-transform">
                   <h4 className="text-xl font-bold mb-1 truncate">{scene.title}</h4>
                   <p className="text-xs text-zinc-300 line-clamp-1">{scene.description}</p>
@@ -2483,31 +2444,11 @@ function SpaceDetailView({ space, spaceContent, activeTag, setActiveTag, isAdmin
         ) : (<div className="text-center py-12 bg-zinc-50 rounded-2xl border border-dashed border-zinc-200 text-zinc-400"><ImageIcon className="w-12 h-12 mx-auto mb-3 opacity-20" /><p className="text-sm">등록된 공간 장면이 없습니다.</p></div>)}
       </div>
       
-      {/* V 0.8.1: Remove extra margin if no products */}
-      {products.length > 0 && (
-          <div className="flex items-center justify-between mb-6 border-t border-zinc-100 pt-12 print:border-none print:pt-0">
-             <h3 className="text-xl font-bold text-zinc-900 flex items-center"><Tag className="w-5 h-5 mr-2 text-zinc-400" /> All Curated Products <span className="ml-2 text-sm font-medium text-zinc-400 bg-zinc-100 px-2 py-0.5 rounded-full">{productCount}</span></h3>
-             {isAdmin && (<button onClick={onManageProducts} className="flex items-center text-sm font-bold text-zinc-500 hover:text-zinc-900 bg-white border border-zinc-200 px-4 py-2 rounded-lg hover:border-zinc-400 transition-colors"><Settings className="w-4 h-4 mr-2" /> Manage List</button>)}
-          </div>
-      )}
-
-      {/* V 0.8.1: Use ProductCard for Curated Products List */}
-      {products.length > 0 && (
-          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-6 pb-32 print:grid-cols-3 print:gap-4">
-              {products.map((product) => (
-                  <div key={product.id}>
-                      <ProductCard 
-                          product={product} 
-                          onClick={() => onProductClick(product)}
-                          isFavorite={favorites.includes(product.id)}
-                          onToggleFavorite={(e) => onToggleFavorite(e, product.id)}
-                          onCompareToggle={(e) => onCompareToggle(e, product)}
-                          isCompared={!!compareList.find(p=>p.id===product.id)}
-                      />
-                  </div>
-              ))}
-          </div>
-      )}
+      {/* V 0.8.0: Remove extra margin if no products */}
+      <div className="flex items-center justify-between mb-6 border-t border-zinc-100 pt-12 print:border-none print:pt-0">
+         <h3 className="text-xl font-bold text-zinc-900 flex items-center"><Tag className="w-5 h-5 mr-2 text-zinc-400" /> All Curated Products <span className="ml-2 text-sm font-medium text-zinc-400 bg-zinc-100 px-2 py-0.5 rounded-full">{productCount}</span></h3>
+         {isAdmin && (<button onClick={onManageProducts} className="flex items-center text-sm font-bold text-zinc-500 hover:text-zinc-900 bg-white border border-zinc-200 px-4 py-2 rounded-lg hover:border-zinc-400 transition-colors"><Settings className="w-4 h-4 mr-2" /> Manage List</button>)}
+      </div>
     </div>
   );
 }
@@ -2527,7 +2468,7 @@ function ProductCard({ product, onClick, showMoveControls, onMove, isFavorite, o
            {product.isNew && <span className="bg-black text-white text-[8px] font-extrabold px-1.5 py-0.5 rounded shadow-sm tracking-wide">NEW</span>}
         </div>
         
-        {/* Top Right Controls - V 0.8.1 Unified My Pick Button Style */}
+        {/* Top Right Controls - V 0.8.0 Unified My Pick Button Style */}
         <div className="absolute top-2 right-2 flex gap-1 z-20">
            {isAdmin && (
               <button onClick={onDuplicate} className="p-1.5 bg-white/80 rounded-full text-zinc-400 hover:text-green-600 hover:scale-110 transition-all" title="Duplicate">
@@ -2565,21 +2506,16 @@ function ProductCard({ product, onClick, showMoveControls, onMove, isFavorite, o
   );
 }
 
-function ProductDetailModal({ product, allProducts, swatches, spaceContents, awards, onClose, onEdit, isAdmin, showToast, isFavorite, onToggleFavorite, onNavigateSpace, onNavigateScene, onNavigateNext, onNavigatePrev, onNavigateProduct, onNavigateSwatch, onSaveProduct }) {
+function ProductDetailModal({ product, allProducts, swatches, spaceContents, onClose, onEdit, isAdmin, showToast, isFavorite, onToggleFavorite, onNavigateSpace, onNavigateScene, onNavigateNext, onNavigatePrev, onNavigateProduct, onNavigateSwatch, onSaveProduct }) {
   useScrollLock();
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [isZoomed, setIsZoomed] = useState(false);
   const canvasRef = useRef(null);
   const [swatchPopup, setSwatchPopup] = useState(null); 
   
-  // V 0.8.1 Admin Tag Management
+  // V 0.8.0 Admin Tag Management
   const [isTagManagerOpen, setIsTagManagerOpen] = useState(false);
   const [tagFilter, setTagFilter] = useState('');
-
-  // V 0.8.1 Award Management in Product Modal
-  const [isAwardManagerOpen, setIsAwardManagerOpen] = useState(false);
-  const [selectedAwardId, setSelectedAwardId] = useState('');
-  const [awardYear, setAwardYear] = useState(new Date().getFullYear().toString());
 
   useEffect(() => {
       const closePopup = () => setSwatchPopup(null);
@@ -2603,7 +2539,7 @@ function ProductDetailModal({ product, allProducts, swatches, spaceContents, awa
        const content = spaceContents[spaceId];
        if (content && content.scenes) {
           content.scenes.forEach(scene => {
-             // V 0.8.1 Fix: Ensure ID comparison handles string/number mismatch
+             // V 0.8.0 Fix: Ensure ID comparison handles string/number mismatch
              if (scene.productIds && scene.productIds.some(id => String(id) === String(product.id))) {
                  relatedScenes.push({ ...scene, spaceId });
              }
@@ -2662,7 +2598,7 @@ function ProductDetailModal({ product, allProducts, swatches, spaceContents, awa
 
   const handleShareImage = async () => { /* ... */ };
 
-  // V 0.8.1 Tag Toggle Handler
+  // V 0.8.0 Tag Toggle Handler
   const toggleRelatedProduct = async (pid) => {
       const currentIds = product.relatedProductIds || [];
       let newIds;
@@ -2670,34 +2606,7 @@ function ProductDetailModal({ product, allProducts, swatches, spaceContents, awa
       else newIds = [...currentIds, pid];
       
       const updatedProduct = { ...product, relatedProductIds: newIds };
-      await onSaveProduct(updatedProduct); 
-  };
-
-  // V 0.8.1 Add Award to Product
-  const handleAddAward = async () => {
-      if (!selectedAwardId) return;
-      const awardObj = awards.find(a => a.id === selectedAwardId);
-      if (!awardObj) return;
-
-      // Structure: We store award title as tag in 'awards' array (backward compat)
-      // AND we can store detailed info if needed. For now, following prompt:
-      // "Awards card name becomes tag".
-      const currentAwards = product.awards || [];
-      // Avoid duplicates
-      if (!currentAwards.includes(awardObj.title)) {
-          const updatedProduct = { 
-              ...product, 
-              awards: [...currentAwards, awardObj.title] 
-              // Note: Year is not stored in simple string array. 
-              // If year is critical for display on product card, we need object structure.
-              // Assuming 'awards' is string array for now based on existing code.
-              // To support "Year Selection", we might need a separate field or object array.
-              // Let's stick to string array for tags, but maybe append year to string? "iF (2024)"?
-              // Or better, just add the tag. The prompt says "Select tag and year".
-          };
-          await onSaveProduct(updatedProduct);
-      }
-      setIsAwardManagerOpen(false);
+      await onSaveProduct(updatedProduct); // This updates the parent state and DB
   };
 
   return (
@@ -2766,26 +2675,10 @@ function ProductDetailModal({ product, allProducts, swatches, spaceContents, awa
               <div className="mb-2">
                  <span className="inline-block px-2.5 py-0.5 bg-zinc-900 text-white text-[10px] font-extrabold rounded uppercase tracking-widest">{product.category}</span>
               </div>
-              
-              {/* V 0.8.1: Awards Display & Management */}
-              <div className="flex flex-wrap gap-2 mb-3 items-center">
-                 {product.awards && product.awards.map(award => (<span key={award} className="inline-flex items-center px-2.5 py-0.5 bg-yellow-400/20 text-yellow-700 border border-yellow-400/30 text-[10px] font-bold rounded uppercase tracking-wide"><Trophy className="w-3 h-3 mr-1" /> {award}</span>))}
-                 {isAdmin && (
-                     <button onClick={() => setIsAwardManagerOpen(!isAwardManagerOpen)} className="text-[10px] font-bold text-zinc-400 hover:text-zinc-600 border border-dashed border-zinc-300 px-2 py-0.5 rounded hover:border-zinc-400">+ Add Award</button>
-                 )}
-              </div>
-              
-              {isAdmin && isAwardManagerOpen && (
-                  <div className="mb-4 bg-zinc-50 p-3 rounded-xl border border-zinc-200 animate-in slide-in-from-top-2">
-                      <div className="flex gap-2 mb-2">
-                          <select className="flex-1 text-xs p-2 rounded border" value={selectedAwardId} onChange={e => setSelectedAwardId(e.target.value)}>
-                              <option value="">Select Award...</option>
-                              {awards?.map(a => <option key={a.id} value={a.id}>{a.title}</option>)}
-                          </select>
-                          <input type="number" className="w-20 text-xs p-2 rounded border" value={awardYear} onChange={e => setAwardYear(e.target.value)} placeholder="Year" />
-                          <button onClick={handleAddAward} className="bg-zinc-900 text-white text-xs px-3 rounded font-bold">Add</button>
-                      </div>
-                  </div>
+              {product.awards && product.awards.length > 0 && (
+                 <div className="flex flex-wrap gap-2 mb-3">
+                    {product.awards.map(award => (<span key={award} className="inline-flex items-center px-2.5 py-0.5 bg-yellow-400/20 text-yellow-700 border border-yellow-400/30 text-[10px] font-bold rounded uppercase tracking-wide"><Trophy className="w-3 h-3 mr-1" /> {award}</span>))}
+                 </div>
               )}
               
               <h2 className="text-3xl md:text-5xl font-black text-zinc-900 mb-1 tracking-tight">{product.name}</h2>
@@ -2847,7 +2740,7 @@ function ProductDetailModal({ product, allProducts, swatches, spaceContents, awa
                 )}
               </div>
 
-              {/* Related Products with Admin Edit Capability (V 0.8.1) */}
+              {/* Related Products with Admin Edit Capability (V 0.8.0) */}
               <div className="pt-8 border-t border-zinc-100">
                  <div className="flex justify-between items-center mb-3">
                      <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Related Products</h3>
@@ -2968,7 +2861,7 @@ function SpaceInfoEditModal({ spaceId, currentData = {}, defaultTags, onClose, o
   );
 }
 
-function ProductFormModal({ categories, swatches = [], allProducts = [], awards = [], existingData, onClose, onSave, onDelete, isFirebaseAvailable, initialCategory, spaceTags = [] }) {
+function ProductFormModal({ categories, swatches = [], allProducts = [], existingData, onClose, onSave, onDelete, isFirebaseAvailable, initialCategory, spaceTags = [] }) {
   const isEditMode = !!existingData;
   const fileInputRef = useRef(null);
   const contentInputRef = useRef(null);
@@ -3052,7 +2945,7 @@ function ProductFormModal({ categories, swatches = [], allProducts = [], awards 
       });
   };
 
-  // V 0.8.1: Awards Tag Management
+  // V 0.8.0: Awards Tag Management
   const toggleAwardTag = (tag) => {
       setFormData(prev => {
           const currentAwards = prev.awardsString.split(',').map(s=>s.trim()).filter(Boolean);
@@ -3141,11 +3034,10 @@ function ProductFormModal({ categories, swatches = [], allProducts = [], awards 
               <div>
                   <label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Awards (comma)</label>
                   <input className="w-full border p-2 rounded-lg mb-2" value={formData.awardsString} onChange={e=>setFormData({...formData, awardsString: e.target.value})}/>
-                  {/* V 0.8.1: Show available awards as tags */}
                   <div className="flex flex-wrap gap-1">
-                      {awards.map(award => (
-                          <button key={award.id} type="button" onClick={() => toggleAwardTag(award.title)} className={`px-2 py-1 rounded text-[10px] font-bold border ${formData.awardsString.includes(award.title) ? 'bg-yellow-100 text-yellow-700 border-yellow-300' : 'bg-white text-zinc-500 border-zinc-200'}`}>
-                              {award.title}
+                      {DEFAULT_AWARD_TAGS.map(tag => (
+                          <button key={tag} type="button" onClick={() => toggleAwardTag(tag)} className={`px-2 py-1 rounded text-[10px] font-bold border ${formData.awardsString.includes(tag) ? 'bg-yellow-100 text-yellow-700 border-yellow-300' : 'bg-white text-zinc-500 border-zinc-200'}`}>
+                              {tag}
                           </button>
                       ))}
                   </div>
@@ -3512,9 +3404,9 @@ function SpaceSceneModal({ scene, products, allProducts, isAdmin, onClose, onEdi
   );
 }
 
-// --- V 0.8.1 New Components: Awards ---
+// --- V 0.8.0 New Components: Awards ---
 
-function AwardsManager({ awards, products, isAdmin, onSave, onDelete, onSelect, searchTerm, searchTags, favorites, onToggleFavorite }) {
+function AwardsManager({ awards, products, isAdmin, onSave, onDelete, onSelect, searchTerm, searchTags }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingAward, setEditingAward] = useState(null);
   const [activeTag, setActiveTag] = useState('ALL');
@@ -3562,14 +3454,8 @@ function AwardsManager({ awards, products, isAdmin, onSave, onDelete, onSelect, 
              <div key={award.id} onClick={() => handleCardClick(award)} className="bg-white rounded-xl border border-zinc-200 overflow-hidden group hover:shadow-lg transition-all relative cursor-pointer">
                 <div className="aspect-square relative bg-zinc-50 flex items-center justify-center p-6">
                    {award.image ? <img src={award.image} className="w-full h-full object-contain" /> : <Trophy className="w-12 h-12 text-zinc-300"/>}
-                   
-                   {/* V 0.8.1: My Pick Button for Awards */}
-                   <button onClick={(e) => onToggleFavorite(e, award.id)} className="absolute top-2 right-2 p-1.5 bg-white/80 rounded-full text-zinc-300 hover:text-yellow-400 hover:scale-110 transition-all z-10">
-                       <Star className={`w-3.5 h-3.5 ${favorites.includes(award.id) ? 'fill-yellow-400 text-yellow-400' : ''}`}/>
-                   </button>
-
                    {isAdmin && (
-                     <div className="absolute bottom-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                     <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
                         <button onClick={(e) => handleEditClick(e, award)} className="p-1.5 bg-white rounded-full shadow hover:text-blue-600"><Edit2 className="w-3 h-3"/></button>
                         <button onClick={(e) => { e.stopPropagation(); onDelete(award.id); }} className="p-1.5 bg-white rounded-full shadow hover:text-red-600"><Trash2 className="w-3 h-3"/></button>
                      </div>
@@ -3603,25 +3489,17 @@ function AwardsManager({ awards, products, isAdmin, onSave, onDelete, onSelect, 
   );
 }
 
-function AwardDetailModal({ award, products, onClose, onNavigateProduct, onSaveProduct }) {
+function AwardDetailModal({ award, products, onClose, onNavigateProduct }) {
     useScrollLock();
-    const [isAddingProduct, setIsAddingProduct] = useState(false);
-    const [productFilter, setProductFilter] = useState('');
     
-    // V 0.8.1: Filter products that have this award tag
+    // Filter products that have this award tag
+    // Logic: Product 'awards' array contains strings like "iF", "Reddot"
+    // Award object has tags like ["iF", "2024"]
+    // We match if product has ANY of the award's tags (usually the award name)
     const relatedProducts = products.filter(p => {
         if (!p.awards) return false;
-        return p.awards.some(pAward => award.tags?.includes(pAward) || award.title === pAward);
+        return p.awards.some(pAward => award.tags?.includes(pAward) || award.title.includes(pAward));
     });
-
-    // V 0.8.1: Add product to award (by adding award tag to product)
-    const addProductToAward = async (product) => {
-        const currentAwards = product.awards || [];
-        if (!currentAwards.includes(award.title)) {
-            const updatedProduct = { ...product, awards: [...currentAwards, award.title] };
-            await onSaveProduct(updatedProduct);
-        }
-    };
 
     return (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[150] flex items-center justify-center p-0 md:p-4 animate-in zoom-in-95 duration-200">
@@ -3654,41 +3532,10 @@ function AwardDetailModal({ award, products, onClose, onNavigateProduct, onSaveP
                         </div>
 
                         <div className="pt-6 border-t border-zinc-100">
-                             <div className="flex justify-between items-center mb-3">
-                                 <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest flex items-center">
-                                     Awarded Products 
-                                     <span className="bg-zinc-100 text-zinc-600 px-2 py-0.5 rounded-full text-[10px] ml-2">{relatedProducts.length}</span>
-                                 </h3>
-                                 <button onClick={() => setIsAddingProduct(!isAddingProduct)} className="text-[10px] font-bold text-indigo-600 border border-indigo-200 px-2 py-1 rounded hover:bg-indigo-50">
-                                     {isAddingProduct ? 'Done' : '+ Add Product'}
-                                 </button>
-                             </div>
-
-                             {isAddingProduct && (
-                                 <div className="mb-4 bg-zinc-50 p-3 rounded-xl border border-zinc-200 animate-in slide-in-from-top-2">
-                                     <input 
-                                         type="text" 
-                                         placeholder="Search products..." 
-                                         className="w-full text-xs p-2 bg-white rounded-lg border border-zinc-200 mb-2 outline-none" 
-                                         value={productFilter} 
-                                         onChange={(e) => setProductFilter(e.target.value)} 
-                                     />
-                                     <div className="max-h-32 overflow-y-auto space-y-1 custom-scrollbar">
-                                         {products.filter(p => p.name.toLowerCase().includes(productFilter.toLowerCase())).map(p => {
-                                             const isAdded = p.awards?.includes(award.title);
-                                             return (
-                                                 <div key={p.id} onClick={() => !isAdded && addProductToAward(p)} className={`flex items-center p-1.5 rounded cursor-pointer ${isAdded ? 'opacity-50 cursor-default' : 'hover:bg-white'}`}>
-                                                     <div className={`w-3 h-3 border rounded mr-2 flex items-center justify-center ${isAdded ? 'bg-zinc-300 border-zinc-300' : 'border-zinc-300 bg-white'}`}>
-                                                         {isAdded && <Check className="w-2 h-2 text-white"/>}
-                                                     </div>
-                                                     <span className="text-xs truncate">{p.name}</span>
-                                                 </div>
-                                             );
-                                         })}
-                                     </div>
-                                 </div>
-                             )}
-
+                             <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-3 flex justify-between items-center">
+                                 Awarded Products 
+                                 <span className="bg-zinc-100 text-zinc-600 px-2 py-0.5 rounded-full text-[10px]">{relatedProducts.length}</span>
+                             </h3>
                              <div className="grid grid-cols-2 gap-3 max-h-60 overflow-y-auto custom-scrollbar p-1">
                                  {relatedProducts.length > 0 ? relatedProducts.map(p => (
                                      <button key={p.id} onClick={() => onNavigateProduct(p)} className="flex items-center p-2 rounded-lg border border-zinc-100 hover:border-zinc-300 hover:bg-zinc-50 transition-all text-left group">
@@ -3697,7 +3544,7 @@ function AwardDetailModal({ award, products, onClose, onNavigateProduct, onSaveP
                                          </div>
                                          <div className="min-w-0">
                                              <div className="text-xs font-bold text-zinc-900 truncate group-hover:text-blue-600">{p.name}</div>
-                                             <div className="text-[10px] text-zinc-500 truncate">{p.launchDate?.substring(0,4)}</div>
+                                             <div className="text-[10px] text-zinc-500 truncate">{p.category}</div>
                                          </div>
                                      </button>
                                  )) : (
@@ -3780,8 +3627,8 @@ function AwardFormModal({ existingData, onClose, onSave }) {
              </div>
 
              <div>
-                <label className="text-xs font-bold text-zinc-500 uppercase block mb-1">Award Title (Will be used as Tag)</label>
-                <input value={data.title} onChange={e=>setData({...data, title: e.target.value})} className="w-full border rounded-lg p-2 text-sm outline-none" placeholder="e.g. Red Dot Design Award" />
+                <label className="text-xs font-bold text-zinc-500 uppercase block mb-1">Award Title</label>
+                <input value={data.title} onChange={e=>setData({...data, title: e.target.value})} className="w-full border rounded-lg p-2 text-sm outline-none" placeholder="e.g. Red Dot Design Award 2024" />
              </div>
              
              <div>
@@ -3795,9 +3642,16 @@ function AwardFormModal({ existingData, onClose, onSave }) {
              </div>
 
              <div>
-                <label className="text-xs font-bold text-zinc-500 uppercase block mb-1">Additional Tags (e.g. Year)</label>
+                <label className="text-xs font-bold text-zinc-500 uppercase block mb-1">Tags (Default + Custom)</label>
+                <div className="flex flex-wrap gap-1 mb-2">
+                    {DEFAULT_AWARD_TAGS.map(tag => (
+                        <button key={tag} onClick={() => { if(!data.tags?.includes(tag)) setData(p => ({...p, tags: [...(p.tags||[]), tag]})) }} className="text-[10px] bg-zinc-100 border px-2 py-1 rounded hover:bg-zinc-200">
+                            + {tag}
+                        </button>
+                    ))}
+                </div>
                 <div className="flex gap-2 mb-2">
-                    <input value={tagInput} onChange={e=>setTagInput(e.target.value)} className="flex-1 border rounded p-1.5 text-xs" placeholder="Add custom tag (e.g. 2024)" onKeyDown={e => e.key === 'Enter' && addTag()} />
+                    <input value={tagInput} onChange={e=>setTagInput(e.target.value)} className="flex-1 border rounded p-1.5 text-xs" placeholder="Add custom tag (e.g. Year)" onKeyDown={e => e.key === 'Enter' && addTag()} />
                     <button onClick={addTag} className="bg-zinc-900 text-white px-3 rounded text-xs font-bold">Add</button>
                 </div>
                 <div className="flex flex-wrap gap-1">
