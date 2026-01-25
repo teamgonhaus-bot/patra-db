@@ -38,7 +38,7 @@ const YOUR_FIREBASE_CONFIG = {
 // ----------------------------------------------------------------------
 // 상수 및 설정
 // ----------------------------------------------------------------------
-const APP_VERSION = "v0.8.6"; 
+const APP_VERSION = "v0.8.5"; 
 const BUILD_DATE = "2026.01.25";
 const ADMIN_PASSWORD = "adminlcg1"; 
 
@@ -819,8 +819,6 @@ export default function App() {
         }
         .pb-safe { padding-bottom: env(safe-area-inset-bottom, 20px); }
         .mb-safe { margin-bottom: env(safe-area-inset-bottom, 20px); }
-        .no-scrollbar::-webkit-scrollbar { display: none; }
-        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
       `}</style>
       {isMobileMenuOpen && <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 md:hidden animate-in fade-in" onClick={() => setIsMobileMenuOpen(false)} />}
       
@@ -926,8 +924,8 @@ export default function App() {
                 </div>
             </div>
           </div>
-          {/* V 0.8.6: Mobile Header Overflow Fix - Ensure buttons are clickable and visible */}
-          <div className="flex items-center space-x-2 flex-shrink-0 overflow-x-auto md:overflow-visible no-scrollbar max-w-[40%] md:max-w-none justify-end mask-image-scroll">
+          {/* V 0.8.5: Mobile Header Overflow Fix */}
+          <div className="flex items-center space-x-2 flex-shrink-0 overflow-x-auto md:overflow-visible no-scrollbar max-w-[40%] md:max-w-none justify-end">
              {compareList.length > 0 && <button onClick={handleCompareButtonClick} className={`flex items-center px-3 py-1.5 rounded-full text-xs font-bold animate-in fade-in transition-all mr-2 shadow-lg whitespace-nowrap ${activeCategory === 'COMPARE_PAGE' ? 'bg-black text-white ring-2 ring-zinc-200' : 'bg-zinc-900 text-white hover:bg-black'}`}><ArrowLeftRight className="w-3 h-3 mr-1.5"/> <span className="hidden md:inline">Compare</span> ({compareList.length})</button>}
              <button onClick={() => setIsFilterOpen(!isFilterOpen)} className={`p-2 rounded-full transition-all flex-shrink-0 ${isFilterOpen ? 'bg-zinc-200 text-black' : 'hover:bg-zinc-100 text-zinc-500'}`} title="Filters"><SlidersHorizontal className="w-5 h-5" /></button>
              <button onClick={handleMyPickToggle} className={`p-2 rounded-full transition-all items-center space-x-1 flex-shrink-0 ${activeCategory === 'MY_PICK' ? 'bg-yellow-100 text-yellow-600' : 'hover:bg-zinc-100 text-zinc-400 hover:text-zinc-600'}`} title="My Pick"><Heart className={`w-5 h-5 ${activeCategory === 'MY_PICK' ? 'fill-yellow-500 text-yellow-500' : ''}`} /></button>
@@ -3776,29 +3774,7 @@ function SpaceSceneModal({ scene, products, allProducts, isAdmin, onClose, onEdi
                     <div className="max-h-32 overflow-y-auto space-y-1 custom-scrollbar">{allProducts.filter(p => p.name.toLowerCase().includes(productFilter.toLowerCase())).map(p => { const isTagged = scene.productIds?.some(id => String(id) === String(p.id)); return (<div key={p.id} onClick={() => onProductToggle(p.id, !isTagged)} className={`flex items-center p-1.5 rounded cursor-pointer ${isTagged ? 'bg-indigo-50 text-indigo-700' : 'hover:bg-zinc-50'}`}><div className={`w-3 h-3 border rounded mr-2 flex items-center justify-center ${isTagged ? 'bg-indigo-500 border-indigo-500' : 'border-zinc-300'}`}>{isTagged && <Check className="w-2 h-2 text-white"/>}</div><span className="text-xs truncate">{p.name}</span></div>) })}</div>
                  </div>
                )}
-               
-               {/* V 0.8.6: Prevent Duplicates & Remove Extra Margin if Empty */}
-               <div className={`space-y-3 ${products.length > 0 ? 'mb-8' : 'mb-0'}`}>
-                   {products.length > 0 ? (
-                       // Filter out duplicates just in case
-                       Array.from(new Set(products.map(p => p.id)))
-                           .map(id => products.find(p => p.id === id))
-                           .map(product => (
-                               <div key={product.id} onClick={() => onNavigateProduct(product)} className="flex items-center p-3 bg-white rounded-xl border border-zinc-100 shadow-sm hover:border-zinc-300 transition-all cursor-pointer group">
-                                   <div className="w-12 h-12 bg-zinc-50 rounded-lg flex-shrink-0 flex items-center justify-center mr-3 overflow-hidden">
-                                       {product.images?.[0] ? <img src={typeof product.images[0] === 'object' ? product.images[0].url : product.images[0]} className="w-full h-full object-cover" /> : <ImageIcon className="w-5 h-5 text-zinc-300"/>}
-                                   </div>
-                                   <div className="flex-1 min-w-0">
-                                       <h4 className="text-sm font-bold text-zinc-900 truncate group-hover:text-blue-600">{product.name}</h4>
-                                       <p className="text-xs text-zinc-500">{product.category}</p>
-                                   </div>
-                                   <ChevronRight className="w-4 h-4 text-zinc-300 group-hover:text-zinc-600"/>
-                               </div>
-                           ))
-                   ) : (
-                       <div className="text-center py-8 text-zinc-400 text-xs">연관된 제품이 없습니다.</div>
-                   )}
-               </div>
+               <div className="space-y-3 mb-8">{products.length > 0 ? products.map(product => (<div key={product.id} onClick={() => onNavigateProduct(product)} className="flex items-center p-3 bg-white rounded-xl border border-zinc-100 shadow-sm hover:border-zinc-300 transition-all cursor-pointer group"><div className="w-12 h-12 bg-zinc-50 rounded-lg flex-shrink-0 flex items-center justify-center mr-3 overflow-hidden">{product.images?.[0] ? <img src={typeof product.images[0] === 'object' ? product.images[0].url : product.images[0]} className="w-full h-full object-cover" /> : <ImageIcon className="w-5 h-5 text-zinc-300"/>}</div><div className="flex-1 min-w-0"><h4 className="text-sm font-bold text-zinc-900 truncate group-hover:text-blue-600">{product.name}</h4><p className="text-xs text-zinc-500">{product.category}</p></div><ChevronRight className="w-4 h-4 text-zinc-300 group-hover:text-zinc-600"/></div>)) : (<div className="text-center py-8 text-zinc-400 text-xs">연관된 제품이 없습니다.</div>)}</div>
             
                {/* Share & Print for Mobile Consistency */}
                <div className="pt-4 border-t border-zinc-100 flex gap-3 print:hidden mb-safe">
@@ -3853,11 +3829,10 @@ function AwardsManager({ awards, products, isAdmin, onSave, onDelete, onSelect, 
          </div>
        )}
 
-       {/* V 0.8.6: Mobile Optimized Grid (2 cols) & Square Image Ratio */}
+       {/* V 0.8.5: Mobile Optimized Grid & Card Height */}
        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
           {filteredAwards.map(award => (
-             <div key={award.id} onClick={() => handleCardClick(award)} className="bg-white rounded-xl border border-zinc-200 overflow-hidden group hover:shadow-lg transition-all relative cursor-pointer flex flex-col">
-                {/* V 0.8.6: Square Aspect Ratio for Image Container */}
+             <div key={award.id} onClick={() => handleCardClick(award)} className="bg-white rounded-xl border border-zinc-200 overflow-hidden group hover:shadow-lg transition-all relative cursor-pointer">
                 <div className="aspect-square relative bg-zinc-50 flex items-center justify-center p-6">
                    {award.image ? <img src={award.image} className="w-full h-full object-contain" /> : <Trophy className="w-12 h-12 text-zinc-300"/>}
                    
@@ -3866,10 +3841,12 @@ function AwardsManager({ awards, products, isAdmin, onSave, onDelete, onSelect, 
                        <Star className={`w-3.5 h-3.5 ${favorites.includes(award.id) ? 'fill-yellow-400 text-yellow-400' : ''}`}/>
                    </button>
                 </div>
-                {/* V 0.8.6: Compact Info Area */}
-                <div className="p-3 border-t border-zinc-100 flex-1 flex flex-col justify-center">
-                   <h4 className="font-bold text-xs md:text-sm truncate mb-0.5">{award.title}</h4>
+                <div className="p-3 md:p-4 border-t border-zinc-100">
+                   <h4 className="font-bold text-xs md:text-sm truncate mb-0.5 md:mb-1">{award.title}</h4>
                    <p className="text-[10px] md:text-xs text-zinc-500 truncate">{award.organization}</p>
+                   <div className="flex flex-wrap gap-1 mt-1 md:mt-2">
+                       {award.tags?.slice(0, 2).map(t => <span key={t} className="text-[9px] bg-zinc-100 px-1.5 py-0.5 rounded text-zinc-600">{t}</span>)}
+                   </div>
                 </div>
              </div>
           ))}
