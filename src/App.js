@@ -1,5 +1,5 @@
 /* global __firebase_config, __app_id, __initial_auth_token */
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { 
   Plus, Search, X, Check, Tag, Palette, Settings, Image as ImageIcon,
   Upload, Trash2, Edit2, RefreshCw, Cloud, CloudOff, Lock, Unlock,
@@ -11,7 +11,7 @@ import {
   ChevronsUp, Camera, ImagePlus, Sofa, Briefcase, Users, Home as HomeIcon, MapPin,
   Edit3, Grid, MoreVertical, MousePointer2, CheckSquare, XCircle, Printer, List, Eye,
   PlayCircle, BarChart3, CornerUpLeft, Grid3X3, Droplet, Coffee, GraduationCap, ShoppingBag, FileDown, FileUp,
-  ArrowLeftRight, SlidersHorizontal, Move, Monitor, Maximize, EyeOff, Type, ExternalLink, Circle
+  ArrowLeftRight, SlidersHorizontal, Move, Monitor, Maximize, EyeOff, Type, ExternalLink, Circle, Award
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { 
@@ -37,8 +37,8 @@ const YOUR_FIREBASE_CONFIG = {
 // ----------------------------------------------------------------------
 // 상수 및 설정
 // ----------------------------------------------------------------------
-const APP_VERSION = "v0.7.9"; 
-const BUILD_DATE = "2026.01.24";
+const APP_VERSION = "v0.8.0"; 
+const BUILD_DATE = "2026.01.25";
 const ADMIN_PASSWORD = "adminlcg1"; 
 
 // Firebase 초기화
@@ -112,6 +112,9 @@ const SWATCH_CATEGORIES = [
   { id: 'ETC', label: 'Etc', color: '#9ca3af' },
 ];
 
+// 기본 어워드 태그
+const DEFAULT_AWARD_TAGS = ['iF', 'Reddot', 'IDEA', 'GDA', 'Chicago GD'];
+
 const PATTERN_TYPES = [
     { id: 'NONE', label: 'None' },
     { id: 'KNIT', label: 'Knit' },
@@ -153,6 +156,7 @@ export default function App() {
   const [user, setUser] = useState(null);
   const [products, setProducts] = useState([]);
   const [swatches, setSwatches] = useState([]); 
+  const [awards, setAwards] = useState([]); // New Awards State
   const [activeCategory, setActiveCategory] = useState('DASHBOARD');
   const [previousCategory, setPreviousCategory] = useState('DASHBOARD'); 
   const [activeSpaceTag, setActiveSpaceTag] = useState('ALL'); 
@@ -170,6 +174,7 @@ export default function App() {
   // Selection & Compare (Stacked Modals)
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [selectedSwatch, setSelectedSwatch] = useState(null); 
+  const [selectedAward, setSelectedAward] = useState(null); // New Award Selection
   const [compareList, setCompareList] = useState([]);
   const [hiddenCompareIds, setHiddenCompareIds] = useState([]); 
   const [isCompareModalOpen, setIsCompareModalOpen] = useState(false);
@@ -189,7 +194,7 @@ export default function App() {
   const [favorites, setFavorites] = useState([]); // Stores IDs of Products, Scenes, Swatches
   
   // UI State
-  const [sidebarState, setSidebarState] = useState({ spaces: true, collections: true, materials: true });
+  const [sidebarState, setSidebarState] = useState({ spaces: true, collections: true, materials: true, awards: true });
   const [myPickViewMode, setMyPickViewMode] = useState('grid'); 
   const [bannerData, setBannerData] = useState({ url: null, logoUrl: null, title: 'Design Lab DB', subtitle: 'Integrated Product Database & Archives' });
   const [appSettings, setAppSettings] = useState({ logo: null, title: 'PATRA', subtitle: 'Design Lab DB' });
@@ -216,6 +221,7 @@ export default function App() {
             else if (selectedSwatch) setSelectedSwatch(null);
             else if (selectedProduct) setSelectedProduct(null);
             else if (selectedScene) setSelectedScene(null);
+            else if (selectedAward) setSelectedAward(null);
             else if (editingScene) setEditingScene(null);
             else if (isFormOpen) setIsFormOpen(false);
             else if (managingSpaceProductsId) setManagingSpaceProductsId(null);
@@ -225,7 +231,7 @@ export default function App() {
     };
     window.addEventListener('keydown', handleEsc);
     return () => window.removeEventListener('keydown', handleEsc);
-  }, [editingSwatchFromModal, selectedSwatch, selectedProduct, selectedScene, editingScene, isFormOpen, managingSpaceProductsId, editingSpaceInfoId, showAdminDashboard]);
+  }, [editingSwatchFromModal, selectedSwatch, selectedProduct, selectedScene, selectedAward, editingScene, isFormOpen, managingSpaceProductsId, editingSpaceInfoId, showAdminDashboard]);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -306,6 +312,8 @@ export default function App() {
     if (!isFirebaseAvailable) {
        const localSwatches = localStorage.getItem('patra_swatches');
        setSwatches(localSwatches ? JSON.parse(localSwatches) : []);
+       const localAwards = localStorage.getItem('patra_awards');
+       setAwards(localAwards ? JSON.parse(localAwards) : []);
     }
   }, []);
 
@@ -322,6 +330,12 @@ export default function App() {
         const loadedSwatches = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         setSwatches(loadedSwatches);
       });
+      const qAwards = collection(db, 'artifacts', appId, 'public', 'data', 'awards');
+      const unsubAwards = onSnapshot(qAwards, (snapshot) => {
+        const loadedAwards = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        setAwards(loadedAwards);
+      });
+
       const bannerDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'banner');
       onSnapshot(bannerDocRef, (doc) => { if (doc.exists()) setBannerData(prev => ({ ...prev, ...doc.data() })); });
       const appSettingsRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'app');
@@ -334,7 +348,7 @@ export default function App() {
             }
          });
       });
-      return () => { unsubProducts(); unsubSwatches(); };
+      return () => { unsubProducts(); unsubSwatches(); unsubAwards(); };
     } else {
       const localBanner = localStorage.getItem('patra_banner_data');
       if (localBanner) setBannerData(JSON.parse(localBanner));
@@ -384,6 +398,11 @@ export default function App() {
     localStorage.setItem('patra_swatches', JSON.stringify(newSwatches));
     setSwatches(newSwatches);
   };
+  const saveAwardsToLocal = (newAwards) => {
+    localStorage.setItem('patra_awards', JSON.stringify(newAwards));
+    setAwards(newAwards);
+  };
+
   const showToast = (message, type = 'success') => {
     setToast({ message, type });
     setTimeout(() => setToast(null), 3000);
@@ -397,7 +416,7 @@ export default function App() {
     }
   };
   
-  // Enhanced Toggle Favorite to support Scenes and Swatches
+  // Enhanced Toggle Favorite to support Scenes, Swatches, and Awards
   const toggleFavorite = (e, itemId) => {
     if(e) e.stopPropagation();
     let newFavs;
@@ -547,6 +566,39 @@ export default function App() {
   const fetchLogs = async () => { if (!isFirebaseAvailable || !db) return; const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'logs'), orderBy('timestamp', 'desc'), limit(100)); onSnapshot(q, (snapshot) => { setActivityLogs(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))); }); };
   const handleSaveSwatch = async (swatchData) => { const docId = swatchData.id ? String(swatchData.id) : String(Date.now()); const payload = { ...swatchData, id: docId, updatedAt: Date.now() }; if (isFirebaseAvailable && db) { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'swatches', docId), payload, { merge: true }); } else { const idx = swatches.findIndex(s => s.id === docId); let newSwatches = [...swatches]; if (idx >= 0) newSwatches[idx] = payload; else newSwatches = [payload, ...newSwatches]; saveSwatchesToLocal(newSwatches); } showToast("마감재가 저장되었습니다."); };
   const handleDeleteSwatch = async (swatchId) => { if (!window.confirm("정말 삭제하시겠습니까?")) return; if (isFirebaseAvailable && db) { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'swatches', String(swatchId))); } else { saveSwatchesToLocal(swatches.filter(s => s.id !== swatchId)); } showToast("마감재가 삭제되었습니다."); };
+  
+  // Awards Actions
+  const handleSaveAward = async (awardData) => {
+      const docId = awardData.id ? String(awardData.id) : String(Date.now());
+      const payload = { ...awardData, id: docId, updatedAt: Date.now() };
+      
+      // Two-way binding: Update products if needed
+      // Note: This is complex. If we add products here, we should update those products' awards array.
+      // However, usually we filter products by award tag. 
+      // V 0.8.0 Requirement: "Product card -> Tag registration -> Auto link".
+      // We will implement logic where products are filtered by award name/tag.
+      
+      if (isFirebaseAvailable && db) {
+          await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'awards', docId), payload, { merge: true });
+      } else {
+          const idx = awards.findIndex(a => a.id === docId);
+          let newAwards = [...awards];
+          if (idx >= 0) newAwards[idx] = payload; else newAwards = [payload, ...newAwards];
+          saveAwardsToLocal(newAwards);
+      }
+      showToast("어워드가 저장되었습니다.");
+  };
+
+  const handleDeleteAward = async (awardId) => {
+      if (!window.confirm("정말 삭제하시겠습니까?")) return;
+      if (isFirebaseAvailable && db) {
+          await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'awards', String(awardId)));
+      } else {
+          saveAwardsToLocal(awards.filter(a => a.id !== awardId));
+      }
+      showToast("어워드가 삭제되었습니다.");
+  };
+
   const handleSaveProduct = async (productData) => { 
       const docId = productData.id ? String(productData.id) : String(Date.now()); 
       const isEdit = !!productData.id && products.some(p => String(p.id) === docId); 
@@ -628,7 +680,7 @@ export default function App() {
       if (activeCategory === 'DASHBOARD' || activeCategory === 'COMPARE_PAGE') matchesCategory = false; 
       else if (activeCategory === 'MY_PICK') matchesCategory = favorites.includes(product.id);
       else if (activeCategory === 'ALL') matchesCategory = true; // ALL now means Total View (Master List)
-      else if (activeCategory === 'SPACES_ROOT' || activeCategory === 'COLLECTIONS_ROOT' || activeCategory === 'MATERIALS_ROOT') matchesCategory = false; 
+      else if (activeCategory === 'SPACES_ROOT' || activeCategory === 'COLLECTIONS_ROOT' || activeCategory === 'MATERIALS_ROOT' || activeCategory === 'AWARDS_ROOT') matchesCategory = false; 
       else if (SPACES.find(s => s.id === activeCategory)) {
          matchesCategory = product.spaces && product.spaces.includes(activeCategory);
          if (matchesCategory && activeSpaceTag !== 'ALL') { matchesCategory = product.spaceTags && product.spaceTags.includes(activeSpaceTag); }
@@ -636,8 +688,18 @@ export default function App() {
       else if (SWATCH_CATEGORIES.find(s => s.id === activeCategory)) matchesCategory = false; 
       else matchesCategory = product.category === activeCategory;
       
-      // Search Logic (Tags + Text)
-      const searchFields = [ product.name, product.specs, product.designer, ...(product.features || []), ...(product.options || []), ...(product.awards || []), ...(product.materials || []), ...(product.bodyColors || []).map(c => typeof c === 'object' ? c.name : c), ...(product.upholsteryColors || []).map(c => typeof c === 'object' ? c.name : c) ];
+      // Search Logic (Tags + Text) - Enhanced for V 0.8.0
+      const searchFields = [ 
+          product.name, 
+          product.specs, 
+          product.designer, 
+          ...(product.features || []), 
+          ...(product.options || []), 
+          ...(product.awards || []), 
+          ...(product.materials || []), 
+          ...(product.bodyColors || []).map(c => typeof c === 'object' ? c.name : c), 
+          ...(product.upholsteryColors || []).map(c => typeof c === 'object' ? c.name : c) 
+      ];
       const fullText = searchFields.join(' ').toLowerCase();
       
       const matchesSearchText = !searchTerm || fullText.includes(searchTerm.toLowerCase());
@@ -681,8 +743,8 @@ export default function App() {
   const handleNavigatePrev = () => { if(!selectedProduct) return; const currentIndex = processedProducts.findIndex(p => p.id === selectedProduct.id); if(currentIndex > 0) { setSelectedProduct(processedProducts[currentIndex - 1]); } };
 
   // Import/Export
-  const handleExportData = () => { const dataStr = JSON.stringify({ products, swatches, spaces: spaceContents, version: APP_VERSION }, null, 2); const blob = new Blob([dataStr], { type: "application/json" }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `patra_db_backup_${new Date().toISOString().slice(0,10)}.json`; a.click(); showToast("데이터 백업이 완료되었습니다."); };
-  const handleImportData = (e) => { const file = e.target.files[0]; if (!file) return; const reader = new FileReader(); reader.onload = async (event) => { try { const imported = JSON.parse(event.target.result); if (window.confirm(`총 ${imported.products?.length || 0}개 제품, ${imported.swatches?.length || 0}개 스와치를 불러오시겠습니까?`)) { if (!isFirebaseAvailable) { saveToLocalStorage(imported.products || []); saveSwatchesToLocal(imported.swatches || []); window.location.reload(); } else { setProducts(imported.products || []); setSwatches(imported.swatches || []); } showToast("데이터 복원 완료 (메모리 로드)"); } } catch (err) { showToast("파일 형식이 올바르지 않습니다.", "error"); } }; reader.readAsText(file); };
+  const handleExportData = () => { const dataStr = JSON.stringify({ products, swatches, awards, spaces: spaceContents, version: APP_VERSION }, null, 2); const blob = new Blob([dataStr], { type: "application/json" }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `patra_db_backup_${new Date().toISOString().slice(0,10)}.json`; a.click(); showToast("데이터 백업이 완료되었습니다."); };
+  const handleImportData = (e) => { const file = e.target.files[0]; if (!file) return; const reader = new FileReader(); reader.onload = async (event) => { try { const imported = JSON.parse(event.target.result); if (window.confirm(`총 ${imported.products?.length || 0}개 제품, ${imported.swatches?.length || 0}개 스와치, ${imported.awards?.length || 0}개 어워드를 불러오시겠습니까?`)) { if (!isFirebaseAvailable) { saveToLocalStorage(imported.products || []); saveSwatchesToLocal(imported.swatches || []); saveAwardsToLocal(imported.awards || []); window.location.reload(); } else { setProducts(imported.products || []); setSwatches(imported.swatches || []); setAwards(imported.awards || []); } showToast("데이터 복원 완료 (메모리 로드)"); } } catch (err) { showToast("파일 형식이 올바르지 않습니다.", "error"); } }; reader.readAsText(file); };
 
   return (
     <div className="flex h-screen bg-zinc-50 font-sans text-zinc-900 overflow-hidden relative selection:bg-black selection:text-white print:overflow-visible print:h-auto print:bg-white">
@@ -762,6 +824,13 @@ export default function App() {
              {sidebarState.materials && (<div className="space-y-0.5 mt-2 pl-2 animate-in slide-in-from-top-2 duration-200">{SWATCH_CATEGORIES.map((cat) => (<button key={cat.id} onClick={() => handleCategoryClick(cat.id)} className={`w-full text-left px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center justify-between group ${activeCategory === cat.id ? 'bg-zinc-100 text-zinc-900 font-bold' : 'text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900'}`}>{cat.label}</button>))}</div>)}
           </div>
 
+          {/* Awards Group (New V 0.8.0) */}
+          <div className="py-2">
+             <div className={`w-full flex items-center rounded-xl border mb-1 shadow-sm transition-all ${activeCategory === 'AWARDS_ROOT' ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-600 border-zinc-100 hover:border-zinc-300'}`}>
+                <button onClick={() => handleCategoryClick('AWARDS_ROOT')} className="flex-1 text-left px-4 py-3 text-sm font-bold tracking-tight flex items-center">AWARDS</button>
+             </div>
+          </div>
+
           <div className="pt-2"><button onClick={handleMyPickToggle} className={`w-full text-left px-4 py-3 rounded-xl text-sm font-bold transition-all duration-200 flex items-center space-x-3 group border ${activeCategory === 'MY_PICK' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' : 'text-zinc-400 border-transparent hover:bg-zinc-50 hover:text-zinc-600'}`}><Heart className={`w-4 h-4 ${activeCategory === 'MY_PICK' ? 'fill-yellow-500 text-yellow-500' : ''}`} /><span>My Pick ({favorites.length})</span></button></div>
         </nav>
         <div className="p-4 border-t border-zinc-100 bg-zinc-50/50 space-y-3">
@@ -835,9 +904,11 @@ export default function App() {
                 spaces={SPACES}
                 spaceContents={spaceContents}
                 swatches={swatches}
+                awards={awards}
                 onProductClick={(p) => setSelectedProduct(p)}
                 onSceneClick={(s) => setSelectedScene(s)}
                 onSwatchClick={(s) => setSelectedSwatch(s)}
+                onAwardClick={(a) => setSelectedAward(a)}
                 onToggleFavorite={toggleFavorite}
              />
           ) : activeCategory === 'ALL' ? (
@@ -854,6 +925,21 @@ export default function App() {
                 searchTerm={searchTerm}
                 searchTags={searchTags}
                 filters={filters}
+                favorites={favorites}
+                onToggleFavorite={toggleFavorite}
+                onCompareToggle={toggleCompare}
+                compareList={compareList}
+             />
+          ) : activeCategory === 'AWARDS_ROOT' ? (
+             <AwardsManager 
+                awards={awards} 
+                products={products} 
+                isAdmin={isAdmin} 
+                onSave={handleSaveAward} 
+                onDelete={handleDeleteAward} 
+                onSelect={(award) => setSelectedAward(award)}
+                searchTerm={searchTerm}
+                searchTags={searchTags}
              />
           ) : activeCategory.endsWith('_ROOT') ? (
              <CategoryRootView 
@@ -880,7 +966,7 @@ export default function App() {
                  <SpaceDetailView space={SPACES.find(s => s.id === activeCategory)} spaceContent={spaceContents[activeCategory] || {}} isAdmin={isAdmin} activeTag={activeSpaceTag} setActiveTag={setActiveSpaceTag} onBannerUpload={(e) => handleSpaceBannerUpload(e, activeCategory)} onEditInfo={() => setEditingSpaceInfoId(activeCategory)} onManageProducts={() => setManagingSpaceProductsId(activeCategory)} onAddScene={() => setEditingScene({ isNew: true, spaceId: activeCategory })} onViewScene={(scene) => setSelectedScene({ ...scene, spaceId: activeCategory })} productCount={processedProducts.length} searchTerm={searchTerm} searchTags={searchTags} />
               )}
               {SWATCH_CATEGORIES.find(s => s.id === activeCategory) && (
-                <SwatchManager category={SWATCH_CATEGORIES.find(s => s.id === activeCategory)} swatches={swatches.filter(s => s.category === activeCategory)} isAdmin={isAdmin} onSave={handleSaveSwatch} onDelete={handleDeleteSwatch} onSelect={(swatch) => setSelectedSwatch(swatch)} onDuplicate={handleDuplicateSwatch} searchTerm={searchTerm} searchTags={searchTags} />
+                <SwatchManager category={SWATCH_CATEGORIES.find(s => s.id === activeCategory)} swatches={swatches.filter(s => s.category === activeCategory)} isAdmin={isAdmin} onSave={handleSaveSwatch} onDelete={handleDeleteSwatch} onSelect={(swatch) => setSelectedSwatch(swatch)} onDuplicate={handleDuplicateSwatch} searchTerm={searchTerm} searchTags={searchTags} favorites={favorites} onToggleFavorite={toggleFavorite} />
               )}
               {!SWATCH_CATEGORIES.find(s => s.id === activeCategory) && (
                 <>
@@ -944,6 +1030,7 @@ export default function App() {
           onNavigateScene={(scene) => { setSelectedProduct(null); setActiveCategory(scene.spaceId || scene.id); setSelectedScene({...scene, spaceId: scene.spaceId || 'UNKNOWN'}); }}
           onNavigateProduct={(product) => setSelectedProduct(product)}
           onNavigateSwatch={(swatch) => { setSelectedSwatch(swatch); /* Stacks on top */ }}
+          onSaveProduct={handleSaveProduct} // For tag updates
         />
       )}
       
@@ -984,6 +1071,15 @@ export default function App() {
         />
       )}
 
+      {selectedAward && (
+        <AwardDetailModal 
+           award={selectedAward}
+           products={products}
+           onClose={() => setSelectedAward(null)}
+           onNavigateProduct={(p) => { setSelectedAward(null); setSelectedProduct(p); }}
+        />
+      )}
+
       {editingSpaceInfoId && (
         <SpaceInfoEditModal 
           spaceId={editingSpaceInfoId} 
@@ -1018,7 +1114,7 @@ export default function App() {
       {selectedScene && (
         <SpaceSceneModal 
            scene={selectedScene} 
-           products={products.filter(p => selectedScene.productIds && selectedScene.productIds.includes(p.id))} 
+           products={products.filter(p => selectedScene.productIds && selectedScene.productIds.some(id => String(id) === String(p.id)))} 
            allProducts={products}
            isAdmin={isAdmin} 
            onClose={() => setSelectedScene(null)} 
@@ -1095,10 +1191,10 @@ function CollapsibleSection({ title, count, children, defaultExpanded = true }) 
     );
 }
 
-function TotalView({ products, categories, spaces, spaceContents, materials, materialCategories, onProductClick, onSceneClick, onSwatchClick, searchTerm, searchTags, filters }) {
+function TotalView({ products, categories, spaces, spaceContents, materials, materialCategories, onProductClick, onSceneClick, onSwatchClick, searchTerm, searchTags, filters, favorites, onToggleFavorite, onCompareToggle, compareList }) {
     // Filter Logic
     const filterItem = (item, type) => {
-        const text = type === 'product' ? [item.name, item.category, item.specs].join(' ') : 
+        const text = type === 'product' ? [item.name, item.category, item.specs, ...(item.features||[]), ...(item.options||[])].join(' ') : 
                      type === 'scene' ? [item.title, item.description].join(' ') :
                      [item.name, item.materialCode].join(' ');
         const fullText = text.toLowerCase();
@@ -1153,7 +1249,7 @@ function TotalView({ products, categories, spaces, spaceContents, materials, mat
                 </div>
             </div>
 
-            {/* COLLECTIONS SECTION */}
+            {/* COLLECTIONS SECTION - V 0.8.0 Updated to use ProductCard style */}
             <div className="mb-16">
                 <h3 className="text-2xl font-black text-zinc-900 mb-6 flex items-center"><Cloud className="w-6 h-6 mr-2"/> COLLECTIONS</h3>
                 <div className="space-y-4">
@@ -1165,12 +1261,15 @@ function TotalView({ products, categories, spaces, spaceContents, materials, mat
                             <CollapsibleSection key={cat.id} title={cat.label} count={catProducts.length}>
                                 <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
                                     {catProducts.map(product => (
-                                        <div key={product.id} onClick={() => onProductClick(product)} className="group cursor-pointer">
-                                            <div className="aspect-square bg-zinc-50 rounded-xl mb-2 overflow-hidden border border-zinc-100 relative p-0">
-                                                {product.images?.[0] ? <img src={typeof product.images[0] === 'object' ? product.images[0].url : product.images[0]} className="w-full h-full object-contain mix-blend-multiply group-hover:scale-105 transition-transform" /> : <ImageIcon className="w-8 h-8 text-zinc-300 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"/>}
-                                            </div>
-                                            <h4 className="text-xs font-bold text-zinc-900 truncate group-hover:text-blue-600">{product.name}</h4>
-                                            <p className="text-[10px] text-zinc-400 truncate">{product.designer || 'Patra Design'}</p>
+                                        <div key={product.id}>
+                                            <ProductCard 
+                                                product={product} 
+                                                onClick={() => onProductClick(product)}
+                                                isFavorite={favorites.includes(product.id)}
+                                                onToggleFavorite={(e) => onToggleFavorite(e, product.id)}
+                                                onCompareToggle={(e) => onCompareToggle(e, product)}
+                                                isCompared={!!compareList.find(p=>p.id===product.id)}
+                                            />
                                         </div>
                                     ))}
                                 </div>
@@ -1192,9 +1291,13 @@ function TotalView({ products, categories, spaces, spaceContents, materials, mat
                             <CollapsibleSection key={cat.id} title={cat.label} count={catSwatches.length}>
                                 <div className="grid grid-cols-2 md:grid-cols-5 lg:grid-cols-6 gap-4">
                                     {catSwatches.map(swatch => (
-                                        <div key={swatch.id} onClick={() => onSwatchClick(swatch)} className="group cursor-pointer">
+                                        <div key={swatch.id} onClick={() => onSwatchClick(swatch)} className="group cursor-pointer relative">
                                             <div className="aspect-square bg-zinc-50 rounded-xl mb-2 overflow-hidden border border-zinc-100 relative">
                                                 <SwatchDisplay color={swatch} className="w-full h-full rounded-none scale-100"/>
+                                                {/* V 0.8.0: Add Favorite Button to Material Cards in Total View */}
+                                                <button onClick={(e) => onToggleFavorite(e, swatch.id)} className="absolute top-2 right-2 p-1.5 bg-white/80 rounded-full text-zinc-300 hover:text-yellow-400 hover:scale-110 transition-all z-10">
+                                                    <Star className={`w-3.5 h-3.5 ${favorites.includes(swatch.id) ? 'fill-yellow-400 text-yellow-400' : ''}`}/>
+                                                </button>
                                             </div>
                                             <h4 className="text-xs font-bold text-zinc-900 truncate group-hover:text-blue-600">{swatch.name}</h4>
                                             <p className="text-[10px] text-zinc-400 truncate">{swatch.materialCode}</p>
@@ -1218,7 +1321,7 @@ function CategoryRootView({ type, spaces, spaceContents, collections, materials,
 
     // Filter Logic
     const filterItem = (item, itemType) => {
-        const text = itemType === 'product' ? [item.name, item.category, item.specs].join(' ') : 
+        const text = itemType === 'product' ? [item.name, item.category, item.specs, ...(item.features||[]), ...(item.options||[])].join(' ') : 
                      itemType === 'scene' ? [item.title, item.description].join(' ') :
                      [item.name, item.materialCode].join(' ');
         const fullText = text.toLowerCase();
@@ -1431,7 +1534,7 @@ function CompareView({ products, hiddenIds, onToggleVisibility, onRemove, onEdit
     );
 }
 
-function MyPickView({ favorites, products, spaces, spaceContents, swatches, onProductClick, onSceneClick, onSwatchClick, onToggleFavorite }) {
+function MyPickView({ favorites, products, spaces, spaceContents, swatches, awards, onProductClick, onSceneClick, onSwatchClick, onAwardClick, onToggleFavorite }) {
     // Group favorites
     const favProducts = products.filter(p => favorites.includes(p.id));
     const favScenes = [];
@@ -1442,6 +1545,7 @@ function MyPickView({ favorites, products, spaces, spaceContents, swatches, onPr
         });
     });
     const favSwatches = swatches.filter(s => favorites.includes(s.id));
+    const favAwards = awards ? awards.filter(a => favorites.includes(a.id)) : [];
 
     return (
         <div className="animate-in fade-in slide-in-from-bottom-4 pb-32">
@@ -1501,8 +1605,25 @@ function MyPickView({ favorites, products, spaces, spaceContents, swatches, onPr
                     </div>
                 </CollapsibleSection>
             )}
+
+            {favAwards.length > 0 && (
+                <CollapsibleSection title="Awards" count={favAwards.length}>
+                    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                        {favAwards.map(award => (
+                            <div key={award.id} onClick={() => onAwardClick(award)} className="group cursor-pointer relative">
+                                <div className="aspect-square bg-zinc-50 rounded-xl mb-2 overflow-hidden border border-zinc-100 relative p-4 flex items-center justify-center">
+                                    {award.image ? <img src={award.image} className="w-full h-full object-contain" /> : <Trophy className="w-12 h-12 text-zinc-300"/>}
+                                    <button onClick={(e) => onToggleFavorite(e, award.id)} className="absolute top-2 right-2 p-1.5 bg-white/80 rounded-full text-yellow-400 hover:scale-110 transition-all z-10"><Star className="w-3.5 h-3.5 fill-current"/></button>
+                                </div>
+                                <h4 className="text-xs font-bold text-zinc-900 truncate group-hover:text-blue-600">{award.title}</h4>
+                                <p className="text-[10px] text-zinc-400 truncate">{award.organization}</p>
+                            </div>
+                        ))}
+                    </div>
+                </CollapsibleSection>
+            )}
             
-            {favProducts.length === 0 && favScenes.length === 0 && favSwatches.length === 0 && (
+            {favProducts.length === 0 && favScenes.length === 0 && favSwatches.length === 0 && favAwards.length === 0 && (
                 <div className="text-center py-20 text-zinc-400">
                     <Heart className="w-12 h-12 mx-auto mb-4 opacity-20"/>
                     <p>No favorites added yet.</p>
@@ -1583,7 +1704,7 @@ function SwatchDisplay({ color, size = 'medium', className = '', onClick }) {
   );
 }
 
-function SwatchManager({ category, swatches, isAdmin, onSave, onDelete, onSelect, onDuplicate, searchTerm, searchTags }) {
+function SwatchManager({ category, swatches, isAdmin, onSave, onDelete, onSelect, onDuplicate, searchTerm, searchTags, favorites, onToggleFavorite }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingSwatch, setEditingSwatch] = useState(null);
   const [activeTag, setActiveTag] = useState('ALL');
@@ -1634,8 +1755,14 @@ function SwatchManager({ category, swatches, isAdmin, onSave, onDelete, onSelect
                 <div className="aspect-square relative bg-zinc-100 flex items-center justify-center">
                    {/* Fix: removed size prop, passed explicit w-full h-full rounded-none to ensure fill */}
                    <SwatchDisplay color={swatch} className="w-full h-full rounded-none scale-100"/>
+                   
+                   {/* V 0.8.0: My Pick Button for Materials */}
+                   <button onClick={(e) => onToggleFavorite(e, swatch.id)} className="absolute top-2 right-2 p-1.5 bg-white/80 rounded-full text-zinc-300 hover:text-yellow-400 hover:scale-110 transition-all z-10">
+                       <Star className={`w-3.5 h-3.5 ${favorites.includes(swatch.id) ? 'fill-yellow-400 text-yellow-400' : ''}`}/>
+                   </button>
+
                    {isAdmin && (
-                     <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                     <div className="absolute bottom-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
                         <button onClick={(e) => {e.stopPropagation(); onDuplicate(swatch);}} className="p-1.5 bg-white rounded-full shadow hover:text-green-600"><Layers className="w-3 h-3"/></button>
                         <button onClick={(e) => handleEditClick(e, swatch)} className="p-1.5 bg-white rounded-full shadow hover:text-blue-600"><Edit2 className="w-3 h-3"/></button>
                         <button onClick={(e) => { e.stopPropagation(); onDelete(swatch.id); }} className="p-1.5 bg-white rounded-full shadow hover:text-red-600"><Trash2 className="w-3 h-3"/></button>
@@ -2298,7 +2425,7 @@ function SpaceDetailView({ space, spaceContent, activeTag, setActiveTag, isAdmin
          ))}
       </div>
 
-      <div className="mb-12 print:hidden">
+      <div className={`${filteredScenes.length === 0 ? '' : 'mb-12'} print:hidden`}>
         <div className="flex items-center justify-between mb-6"><h3 className="text-2xl font-extrabold text-zinc-900 flex items-center"><ImageIcon className="w-6 h-6 mr-2 text-indigo-500" /> Space Scenes ({filteredScenes.length})</h3>{isAdmin && (<button onClick={onAddScene} className="flex items-center text-sm font-bold bg-zinc-900 text-white px-4 py-2 rounded-lg hover:bg-black transition-colors shadow-lg"><Plus className="w-4 h-4 mr-2" /> Add Scene</button>)}</div>
         {filteredScenes.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -2316,6 +2443,8 @@ function SpaceDetailView({ space, spaceContent, activeTag, setActiveTag, isAdmin
           </div>
         ) : (<div className="text-center py-12 bg-zinc-50 rounded-2xl border border-dashed border-zinc-200 text-zinc-400"><ImageIcon className="w-12 h-12 mx-auto mb-3 opacity-20" /><p className="text-sm">등록된 공간 장면이 없습니다.</p></div>)}
       </div>
+      
+      {/* V 0.8.0: Remove extra margin if no products */}
       <div className="flex items-center justify-between mb-6 border-t border-zinc-100 pt-12 print:border-none print:pt-0">
          <h3 className="text-xl font-bold text-zinc-900 flex items-center"><Tag className="w-5 h-5 mr-2 text-zinc-400" /> All Curated Products <span className="ml-2 text-sm font-medium text-zinc-400 bg-zinc-100 px-2 py-0.5 rounded-full">{productCount}</span></h3>
          {isAdmin && (<button onClick={onManageProducts} className="flex items-center text-sm font-bold text-zinc-500 hover:text-zinc-900 bg-white border border-zinc-200 px-4 py-2 rounded-lg hover:border-zinc-400 transition-colors"><Settings className="w-4 h-4 mr-2" /> Manage List</button>)}
@@ -2328,7 +2457,6 @@ function ProductCard({ product, onClick, showMoveControls, onMove, isFavorite, o
   const mainImageEntry = product.images && product.images.length > 0 ? product.images[0] : null;
   // Handle both string URL and object {url, caption}
   const mainImageUrl = mainImageEntry ? (typeof mainImageEntry === 'object' ? mainImageEntry.url : mainImageEntry) : null;
-  const awardCount = product.awards?.length || 0;
   
   return (
     <div onClick={onClick} className="bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer group border border-zinc-100 relative flex flex-col h-full print:break-inside-avoid print:shadow-none print:border-zinc-200">
@@ -2340,7 +2468,7 @@ function ProductCard({ product, onClick, showMoveControls, onMove, isFavorite, o
            {product.isNew && <span className="bg-black text-white text-[8px] font-extrabold px-1.5 py-0.5 rounded shadow-sm tracking-wide">NEW</span>}
         </div>
         
-        {/* Top Right Controls */}
+        {/* Top Right Controls - V 0.8.0 Unified My Pick Button Style */}
         <div className="absolute top-2 right-2 flex gap-1 z-20">
            {isAdmin && (
               <button onClick={onDuplicate} className="p-1.5 bg-white/80 rounded-full text-zinc-400 hover:text-green-600 hover:scale-110 transition-all" title="Duplicate">
@@ -2378,12 +2506,16 @@ function ProductCard({ product, onClick, showMoveControls, onMove, isFavorite, o
   );
 }
 
-function ProductDetailModal({ product, allProducts, swatches, spaceContents, onClose, onEdit, isAdmin, showToast, isFavorite, onToggleFavorite, onNavigateSpace, onNavigateScene, onNavigateNext, onNavigatePrev, onNavigateProduct, onNavigateSwatch }) {
+function ProductDetailModal({ product, allProducts, swatches, spaceContents, onClose, onEdit, isAdmin, showToast, isFavorite, onToggleFavorite, onNavigateSpace, onNavigateScene, onNavigateNext, onNavigatePrev, onNavigateProduct, onNavigateSwatch, onSaveProduct }) {
   useScrollLock();
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [isZoomed, setIsZoomed] = useState(false);
   const canvasRef = useRef(null);
   const [swatchPopup, setSwatchPopup] = useState(null); 
+  
+  // V 0.8.0 Admin Tag Management
+  const [isTagManagerOpen, setIsTagManagerOpen] = useState(false);
+  const [tagFilter, setTagFilter] = useState('');
 
   useEffect(() => {
       const closePopup = () => setSwatchPopup(null);
@@ -2407,7 +2539,10 @@ function ProductDetailModal({ product, allProducts, swatches, spaceContents, onC
        const content = spaceContents[spaceId];
        if (content && content.scenes) {
           content.scenes.forEach(scene => {
-             if (scene.productIds && scene.productIds.includes(product.id)) relatedScenes.push({ ...scene, spaceId });
+             // V 0.8.0 Fix: Ensure ID comparison handles string/number mismatch
+             if (scene.productIds && scene.productIds.some(id => String(id) === String(product.id))) {
+                 relatedScenes.push({ ...scene, spaceId });
+             }
           });
        }
     });
@@ -2462,6 +2597,17 @@ function ProductDetailModal({ product, allProducts, swatches, spaceContents, onC
   };
 
   const handleShareImage = async () => { /* ... */ };
+
+  // V 0.8.0 Tag Toggle Handler
+  const toggleRelatedProduct = async (pid) => {
+      const currentIds = product.relatedProductIds || [];
+      let newIds;
+      if(currentIds.includes(pid)) newIds = currentIds.filter(id => id !== pid);
+      else newIds = [...currentIds, pid];
+      
+      const updatedProduct = { ...product, relatedProductIds: newIds };
+      await onSaveProduct(updatedProduct); // This updates the parent state and DB
+  };
 
   return (
     <div key={product.id} className="fixed inset-0 bg-black/60 backdrop-blur-md z-50 flex items-center justify-center p-0 md:p-4 animate-in fade-in duration-300 slide-in-animation print:fixed print:inset-0 print:z-[100] print:bg-white print:h-auto print:overflow-visible">
@@ -2594,9 +2740,43 @@ function ProductDetailModal({ product, allProducts, swatches, spaceContents, onC
                 )}
               </div>
 
-              {relatedItems.length > 0 && (
-                  <div className="pt-8 border-t border-zinc-100">
-                     <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-3">Related Products</h3>
+              {/* Related Products with Admin Edit Capability (V 0.8.0) */}
+              <div className="pt-8 border-t border-zinc-100">
+                 <div className="flex justify-between items-center mb-3">
+                     <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Related Products</h3>
+                     {isAdmin && (
+                         <button onClick={() => setIsTagManagerOpen(!isTagManagerOpen)} className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded hover:bg-indigo-100 transition-colors">
+                             {isTagManagerOpen ? 'Done' : '+ Manage Tags'}
+                         </button>
+                     )}
+                 </div>
+                 
+                 {isAdmin && isTagManagerOpen && (
+                     <div className="mb-4 bg-zinc-50 p-3 rounded-xl border border-zinc-200 animate-in slide-in-from-top-2">
+                         <input 
+                             type="text" 
+                             placeholder="Search products to tag..." 
+                             className="w-full text-xs p-2 bg-white rounded-lg border border-zinc-200 mb-2 outline-none focus:border-indigo-500" 
+                             value={tagFilter} 
+                             onChange={(e) => setTagFilter(e.target.value)} 
+                         />
+                         <div className="max-h-32 overflow-y-auto space-y-1 custom-scrollbar">
+                             {allProducts.filter(p => p.id !== product.id && p.name.toLowerCase().includes(tagFilter.toLowerCase())).map(p => {
+                                 const isTagged = product.relatedProductIds?.includes(p.id);
+                                 return (
+                                     <div key={p.id} onClick={() => toggleRelatedProduct(p.id)} className={`flex items-center p-1.5 rounded cursor-pointer ${isTagged ? 'bg-indigo-100 text-indigo-800' : 'hover:bg-white'}`}>
+                                         <div className={`w-3 h-3 border rounded mr-2 flex items-center justify-center ${isTagged ? 'bg-indigo-500 border-indigo-500' : 'border-zinc-300 bg-white'}`}>
+                                             {isTagged && <Check className="w-2 h-2 text-white"/>}
+                                         </div>
+                                         <span className="text-xs truncate">{p.name}</span>
+                                     </div>
+                                 );
+                             })}
+                         </div>
+                     </div>
+                 )}
+
+                 {relatedItems.length > 0 ? (
                      <div className="grid grid-cols-2 gap-3">
                         {relatedItems.map(p => (
                             <button key={p.id} onClick={() => onNavigateProduct(p)} className="flex items-center p-2 rounded-lg border border-zinc-100 hover:border-zinc-300 hover:bg-zinc-50 transition-all text-left group">
@@ -2610,8 +2790,10 @@ function ProductDetailModal({ product, allProducts, swatches, spaceContents, onC
                             </button>
                         ))}
                      </div>
-                  </div>
-              )}
+                 ) : (
+                     <div className="text-xs text-zinc-400 italic">No related products tagged.</div>
+                 )}
+              </div>
 
               {contentImages.length > 0 && (<div className="pt-8 border-t border-zinc-100 space-y-4"><h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Detail View</h3><div className="flex flex-col gap-4">{contentImages.map((img, idx) => (
                   <div key={idx} className="relative">
@@ -2683,7 +2865,7 @@ function ProductFormModal({ categories, swatches = [], allProducts = [], existin
   const isEditMode = !!existingData;
   const fileInputRef = useRef(null);
   const contentInputRef = useRef(null);
-  const defaultCategory = (initialCategory && !['ALL','NEW','MY_PICK','DASHBOARD','COMPARE_PAGE'].includes(initialCategory) && !SPACES.find(s=>s.id===initialCategory)) ? initialCategory : 'EXECUTIVE';
+  const defaultCategory = (initialCategory && !['ALL','NEW','MY_PICK','DASHBOARD','COMPARE_PAGE','AWARDS_ROOT'].includes(initialCategory) && !SPACES.find(s=>s.id===initialCategory)) ? initialCategory : 'EXECUTIVE';
   
   const [formData, setFormData] = useState({ 
     id: null, name: '', category: defaultCategory, specs: '', designer: '',
@@ -2763,6 +2945,17 @@ function ProductFormModal({ categories, swatches = [], allProducts = [], existin
       });
   };
 
+  // V 0.8.0: Awards Tag Management
+  const toggleAwardTag = (tag) => {
+      setFormData(prev => {
+          const currentAwards = prev.awardsString.split(',').map(s=>s.trim()).filter(Boolean);
+          let newAwards;
+          if(currentAwards.includes(tag)) newAwards = currentAwards.filter(t => t !== tag);
+          else newAwards = [...currentAwards, tag];
+          return { ...prev, awardsString: newAwards.join(', ') };
+      });
+  };
+
   const handleSubmit = (e) => {
     e.preventDefault();
     onSave({ 
@@ -2835,7 +3028,21 @@ function ProductFormModal({ categories, swatches = [], allProducts = [], existin
           
           <div><label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Specs</label><textarea required rows={2} className="w-full border p-2 rounded-lg" value={formData.specs} onChange={e=>setFormData({...formData, specs: e.target.value})}/></div>
           <div className="grid grid-cols-2 gap-6"><div><label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Options (comma)</label><input className="w-full border p-2 rounded-lg" value={formData.optionsString} onChange={e=>setFormData({...formData, optionsString: e.target.value})}/></div><div><label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Features (comma)</label><input className="w-full border p-2 rounded-lg" value={formData.featuresString} onChange={e=>setFormData({...formData, featuresString: e.target.value})}/></div></div>
-          <div className="grid grid-cols-2 gap-6"><div><label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Materials (comma)</label><input className="w-full border p-2 rounded-lg" value={formData.materialsString} onChange={e=>setFormData({...formData, materialsString: e.target.value})}/></div><div><label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Awards (comma)</label><input className="w-full border p-2 rounded-lg" value={formData.awardsString} onChange={e=>setFormData({...formData, awardsString: e.target.value})}/></div></div>
+          
+          <div className="grid grid-cols-2 gap-6">
+              <div><label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Materials (comma)</label><input className="w-full border p-2 rounded-lg" value={formData.materialsString} onChange={e=>setFormData({...formData, materialsString: e.target.value})}/></div>
+              <div>
+                  <label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Awards (comma)</label>
+                  <input className="w-full border p-2 rounded-lg mb-2" value={formData.awardsString} onChange={e=>setFormData({...formData, awardsString: e.target.value})}/>
+                  <div className="flex flex-wrap gap-1">
+                      {DEFAULT_AWARD_TAGS.map(tag => (
+                          <button key={tag} type="button" onClick={() => toggleAwardTag(tag)} className={`px-2 py-1 rounded text-[10px] font-bold border ${formData.awardsString.includes(tag) ? 'bg-yellow-100 text-yellow-700 border-yellow-300' : 'bg-white text-zinc-500 border-zinc-200'}`}>
+                              {tag}
+                          </button>
+                      ))}
+                  </div>
+              </div>
+          </div>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-zinc-50 p-4 rounded-xl border border-zinc-100">
              <SwatchSelector 
@@ -3180,7 +3387,7 @@ function SpaceSceneModal({ scene, products, allProducts, isAdmin, onClose, onEdi
                {isAdmin && isProductManagerOpen && (
                  <div className="mb-4 bg-white p-3 rounded-xl border border-indigo-100 shadow-sm animate-in slide-in-from-top-2">
                     <input type="text" placeholder="Search to tag..." className="w-full text-xs p-2 bg-zinc-50 rounded-lg border border-zinc-200 mb-2 outline-none focus:border-indigo-500" value={productFilter} onChange={(e) => setProductFilter(e.target.value)} />
-                    <div className="max-h-32 overflow-y-auto space-y-1 custom-scrollbar">{allProducts.filter(p => p.name.toLowerCase().includes(productFilter.toLowerCase())).map(p => { const isTagged = scene.productIds?.includes(p.id); return (<div key={p.id} onClick={() => onProductToggle(p.id, !isTagged)} className={`flex items-center p-1.5 rounded cursor-pointer ${isTagged ? 'bg-indigo-50 text-indigo-700' : 'hover:bg-zinc-50'}`}><div className={`w-3 h-3 border rounded mr-2 flex items-center justify-center ${isTagged ? 'bg-indigo-500 border-indigo-500' : 'border-zinc-300'}`}>{isTagged && <Check className="w-2 h-2 text-white"/>}</div><span className="text-xs truncate">{p.name}</span></div>) })}</div>
+                    <div className="max-h-32 overflow-y-auto space-y-1 custom-scrollbar">{allProducts.filter(p => p.name.toLowerCase().includes(productFilter.toLowerCase())).map(p => { const isTagged = scene.productIds?.some(id => String(id) === String(p.id)); return (<div key={p.id} onClick={() => onProductToggle(p.id, !isTagged)} className={`flex items-center p-1.5 rounded cursor-pointer ${isTagged ? 'bg-indigo-50 text-indigo-700' : 'hover:bg-zinc-50'}`}><div className={`w-3 h-3 border rounded mr-2 flex items-center justify-center ${isTagged ? 'bg-indigo-500 border-indigo-500' : 'border-zinc-300'}`}>{isTagged && <Check className="w-2 h-2 text-white"/>}</div><span className="text-xs truncate">{p.name}</span></div>) })}</div>
                  </div>
                )}
                <div className="space-y-3 mb-8">{products.length > 0 ? products.map(product => (<div key={product.id} onClick={() => onNavigateProduct(product)} className="flex items-center p-3 bg-white rounded-xl border border-zinc-100 shadow-sm hover:border-zinc-300 transition-all cursor-pointer group"><div className="w-12 h-12 bg-zinc-50 rounded-lg flex-shrink-0 flex items-center justify-center mr-3 overflow-hidden">{product.images?.[0] ? <img src={typeof product.images[0] === 'object' ? product.images[0].url : product.images[0]} className="w-full h-full object-cover" /> : <ImageIcon className="w-5 h-5 text-zinc-300"/>}</div><div className="flex-1 min-w-0"><h4 className="text-sm font-bold text-zinc-900 truncate group-hover:text-blue-600">{product.name}</h4><p className="text-xs text-zinc-500">{product.category}</p></div><ChevronRight className="w-4 h-4 text-zinc-300 group-hover:text-zinc-600"/></div>)) : (<div className="text-center py-8 text-zinc-400 text-xs">연관된 제품이 없습니다.</div>)}</div>
@@ -3193,6 +3400,274 @@ function SpaceSceneModal({ scene, products, allProducts, isAdmin, onClose, onEdi
             </div>
          </div>
       </div>
+    </div>
+  );
+}
+
+// --- V 0.8.0 New Components: Awards ---
+
+function AwardsManager({ awards, products, isAdmin, onSave, onDelete, onSelect, searchTerm, searchTags }) {
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingAward, setEditingAward] = useState(null);
+  const [activeTag, setActiveTag] = useState('ALL');
+
+  // Collect all unique tags from awards
+  const allTags = Array.from(new Set(awards.flatMap(a => a.tags || []))).sort();
+
+  const handleCardClick = (award) => { onSelect(award); };
+  const handleEditClick = (e, award) => { e.stopPropagation(); setEditingAward(award); setIsModalOpen(true); };
+
+  // Filter Logic
+  const filteredAwards = awards.filter(a => {
+      const matchesTag = activeTag === 'ALL' || (a.tags && a.tags.includes(activeTag));
+      const fullText = [a.title, a.organization, ...(a.tags||[])].join(' ').toLowerCase();
+      const matchesSearch = !searchTerm || fullText.includes(searchTerm.toLowerCase());
+      const matchesSearchTags = searchTags.every(t => fullText.includes(t.toLowerCase()));
+      return matchesTag && matchesSearch && matchesSearchTags;
+  });
+
+  return (
+    <div className="p-1 animate-in fade-in pb-32">
+       <div className="flex items-center justify-between mb-6">
+         <h3 className="text-2xl font-extrabold text-zinc-900 flex items-center tracking-tight">
+             <Trophy className="w-6 h-6 mr-3 text-yellow-500" />
+             Awards
+         </h3>
+         {isAdmin && (
+             <button onClick={() => { setEditingAward(null); setIsModalOpen(true); }} className="px-4 py-2 bg-zinc-900 text-white text-sm font-bold rounded-xl hover:bg-black transition-all flex items-center shadow-lg whitespace-nowrap">
+                <Plus className="w-4 h-4 mr-2" /> Add Award
+             </button>
+          )}
+       </div>
+
+       {allTags.length > 0 && (
+         <div className="mb-6 flex gap-2 overflow-x-auto pb-2 custom-scrollbar">
+            <button onClick={() => setActiveTag('ALL')} className={`px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-colors border ${activeTag === 'ALL' ? 'bg-black text-white border-black' : 'bg-white text-zinc-500 border-zinc-200 hover:bg-zinc-100'}`}>ALL</button>
+            {allTags.map(tag => (
+               <button key={tag} onClick={() => setActiveTag(tag)} className={`px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-colors border ${activeTag === tag ? 'bg-black text-white border-black' : 'bg-white text-zinc-500 border-zinc-200 hover:bg-zinc-100'}`}>{tag}</button>
+            ))}
+         </div>
+       )}
+
+       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+          {filteredAwards.map(award => (
+             <div key={award.id} onClick={() => handleCardClick(award)} className="bg-white rounded-xl border border-zinc-200 overflow-hidden group hover:shadow-lg transition-all relative cursor-pointer">
+                <div className="aspect-square relative bg-zinc-50 flex items-center justify-center p-6">
+                   {award.image ? <img src={award.image} className="w-full h-full object-contain" /> : <Trophy className="w-12 h-12 text-zinc-300"/>}
+                   {isAdmin && (
+                     <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                        <button onClick={(e) => handleEditClick(e, award)} className="p-1.5 bg-white rounded-full shadow hover:text-blue-600"><Edit2 className="w-3 h-3"/></button>
+                        <button onClick={(e) => { e.stopPropagation(); onDelete(award.id); }} className="p-1.5 bg-white rounded-full shadow hover:text-red-600"><Trash2 className="w-3 h-3"/></button>
+                     </div>
+                   )}
+                </div>
+                <div className="p-4 border-t border-zinc-100">
+                   <h4 className="font-bold text-sm truncate mb-1">{award.title}</h4>
+                   <p className="text-xs text-zinc-500 truncate">{award.organization}</p>
+                   <div className="flex flex-wrap gap-1 mt-2">
+                       {award.tags?.slice(0, 2).map(t => <span key={t} className="text-[9px] bg-zinc-100 px-1.5 py-0.5 rounded text-zinc-600">{t}</span>)}
+                   </div>
+                </div>
+             </div>
+          ))}
+          {filteredAwards.length === 0 && (
+             <div className="col-span-full py-20 text-center text-zinc-400 border-2 border-dashed border-zinc-100 rounded-xl">
+                <Trophy className="w-10 h-10 mx-auto mb-2 opacity-20" />
+                No awards found.
+             </div>
+          )}
+       </div>
+
+       {isModalOpen && (
+         <AwardFormModal 
+            existingData={editingAward} 
+            onClose={() => setIsModalOpen(false)} 
+            onSave={(data) => { onSave(data); setIsModalOpen(false); }} 
+         />
+       )}
+    </div>
+  );
+}
+
+function AwardDetailModal({ award, products, onClose, onNavigateProduct }) {
+    useScrollLock();
+    
+    // Filter products that have this award tag
+    // Logic: Product 'awards' array contains strings like "iF", "Reddot"
+    // Award object has tags like ["iF", "2024"]
+    // We match if product has ANY of the award's tags (usually the award name)
+    const relatedProducts = products.filter(p => {
+        if (!p.awards) return false;
+        return p.awards.some(pAward => award.tags?.includes(pAward) || award.title.includes(pAward));
+    });
+
+    return (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[150] flex items-center justify-center p-0 md:p-4 animate-in zoom-in-95 duration-200">
+            <div className="bg-white w-full h-full md:h-auto md:max-w-4xl rounded-none md:rounded-3xl overflow-hidden shadow-2xl flex flex-col md:flex-row md:max-h-[90vh] relative">
+                <div className="absolute top-4 right-4 z-[100]">
+                   <button onClick={onClose} className="p-2 bg-white/50 hover:bg-zinc-100 rounded-full backdrop-blur shadow-sm"><X className="w-6 h-6 text-zinc-900"/></button>
+                </div>
+                
+                <div className="w-full md:w-5/12 bg-zinc-50 flex items-center justify-center p-8 relative min-h-[30vh]">
+                    <div className="w-48 h-48 md:w-64 md:h-64 flex items-center justify-center">
+                        {award.image ? <img src={award.image} className="w-full h-full object-contain" /> : <Trophy className="w-24 h-24 text-zinc-300"/>}
+                    </div>
+                </div>
+
+                <div className="w-full md:w-7/12 bg-white p-8 md:p-10 flex flex-col overflow-y-auto pb-safe">
+                    <div className="mb-6">
+                        <div className="flex gap-2 mb-2">
+                            {award.tags?.map(t => <span key={t} className="inline-block px-2 py-0.5 bg-zinc-100 text-zinc-600 text-[10px] font-bold rounded uppercase tracking-widest">{t}</span>)}
+                        </div>
+                        <h2 className="text-3xl font-black text-zinc-900 tracking-tighter mb-1">{award.title}</h2>
+                        <p className="text-lg font-bold text-zinc-500">{award.organization}</p>
+                    </div>
+
+                    <div className="space-y-6 flex-1">
+                        <div>
+                            <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2">Description</h3>
+                            <p className="text-sm text-zinc-600 leading-relaxed whitespace-pre-wrap">
+                                {award.description || "No description provided."}
+                            </p>
+                        </div>
+
+                        <div className="pt-6 border-t border-zinc-100">
+                             <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-3 flex justify-between items-center">
+                                 Awarded Products 
+                                 <span className="bg-zinc-100 text-zinc-600 px-2 py-0.5 rounded-full text-[10px]">{relatedProducts.length}</span>
+                             </h3>
+                             <div className="grid grid-cols-2 gap-3 max-h-60 overflow-y-auto custom-scrollbar p-1">
+                                 {relatedProducts.length > 0 ? relatedProducts.map(p => (
+                                     <button key={p.id} onClick={() => onNavigateProduct(p)} className="flex items-center p-2 rounded-lg border border-zinc-100 hover:border-zinc-300 hover:bg-zinc-50 transition-all text-left group">
+                                         <div className="w-10 h-10 rounded-md bg-zinc-100 overflow-hidden mr-3 flex-shrink-0">
+                                            {p.images?.[0] ? <img src={typeof p.images[0] === 'object' ? p.images[0].url : p.images[0]} className="w-full h-full object-cover" /> : <div className="w-full h-full bg-zinc-200"></div>}
+                                         </div>
+                                         <div className="min-w-0">
+                                             <div className="text-xs font-bold text-zinc-900 truncate group-hover:text-blue-600">{p.name}</div>
+                                             <div className="text-[10px] text-zinc-500 truncate">{p.category}</div>
+                                         </div>
+                                     </button>
+                                 )) : (
+                                     <div className="col-span-2 text-center py-6 text-zinc-300 text-xs">No products linked to this award.</div>
+                                 )}
+                             </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+function AwardFormModal({ existingData, onClose, onSave }) {
+  const [data, setData] = useState({ 
+     id: null, title: '', organization: '', description: '', image: null, tags: []
+  });
+  const [tagInput, setTagInput] = useState('');
+  const fileRef = useRef(null);
+
+  useEffect(() => {
+     if(existingData) {
+         setData({ ...existingData });
+     }
+  }, [existingData]);
+
+  const processImage = (file) => {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+           const canvas = document.createElement('canvas'); 
+           const MAX = 800; 
+           let w = img.width; let h = img.height; 
+           if (w > MAX) { h *= MAX / w; w = MAX; }
+           canvas.width = w; canvas.height = h;
+           const ctx = canvas.getContext('2d'); 
+           ctx.drawImage(img, 0, 0, w, h); 
+           resolve(canvas.toDataURL('image/jpeg', 0.8));
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handleUpload = async (e) => {
+     const file = e.target.files[0];
+     if(file) {
+        try { const url = await processImage(file); setData(p => ({...p, image: url})); } catch(e){}
+     }
+  };
+
+  const addTag = () => {
+      if(tagInput.trim()) {
+          setData(prev => ({ ...prev, tags: [...(prev.tags || []), tagInput.trim()] }));
+          setTagInput('');
+      }
+  };
+
+  const removeTag = (idx) => {
+      setData(prev => ({ ...prev, tags: prev.tags.filter((_, i) => i !== idx) }));
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[160] flex items-center justify-center p-4">
+       <div className="bg-white rounded-2xl w-full max-w-md overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
+          <div className="px-5 py-4 border-b border-zinc-100 font-bold text-lg flex-shrink-0">
+             {existingData ? 'Edit Award' : 'Add Award'}
+          </div>
+          <div className="p-6 space-y-4 overflow-y-auto custom-scrollbar">
+             <div className="flex justify-center mb-4">
+                <div onClick={() => fileRef.current.click()} className="w-32 h-32 rounded-xl shadow-md border-2 border-dashed border-zinc-300 cursor-pointer overflow-hidden relative group bg-zinc-50 flex items-center justify-center">
+                    {data.image ? <img src={data.image} className="w-full h-full object-contain" /> : <ImagePlus className="w-8 h-8 text-zinc-300"/>}
+                   <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"><Camera className="w-6 h-6 text-white"/></div>
+                </div>
+                <input type="file" ref={fileRef} className="hidden" accept="image/*" onChange={handleUpload} />
+             </div>
+
+             <div>
+                <label className="text-xs font-bold text-zinc-500 uppercase block mb-1">Award Title</label>
+                <input value={data.title} onChange={e=>setData({...data, title: e.target.value})} className="w-full border rounded-lg p-2 text-sm outline-none" placeholder="e.g. Red Dot Design Award 2024" />
+             </div>
+             
+             <div>
+                <label className="text-xs font-bold text-zinc-500 uppercase block mb-1">Organization</label>
+                <input value={data.organization} onChange={e=>setData({...data, organization: e.target.value})} className="w-full border rounded-lg p-2 text-sm outline-none" placeholder="e.g. Design Zentrum Nordrhein Westfalen" />
+             </div>
+
+             <div>
+                <label className="text-xs font-bold text-zinc-500 uppercase block mb-1">Description</label>
+                <textarea rows={3} value={data.description} onChange={e=>setData({...data, description: e.target.value})} className="w-full border rounded-lg p-2 text-sm outline-none" />
+             </div>
+
+             <div>
+                <label className="text-xs font-bold text-zinc-500 uppercase block mb-1">Tags (Default + Custom)</label>
+                <div className="flex flex-wrap gap-1 mb-2">
+                    {DEFAULT_AWARD_TAGS.map(tag => (
+                        <button key={tag} onClick={() => { if(!data.tags?.includes(tag)) setData(p => ({...p, tags: [...(p.tags||[]), tag]})) }} className="text-[10px] bg-zinc-100 border px-2 py-1 rounded hover:bg-zinc-200">
+                            + {tag}
+                        </button>
+                    ))}
+                </div>
+                <div className="flex gap-2 mb-2">
+                    <input value={tagInput} onChange={e=>setTagInput(e.target.value)} className="flex-1 border rounded p-1.5 text-xs" placeholder="Add custom tag (e.g. Year)" onKeyDown={e => e.key === 'Enter' && addTag()} />
+                    <button onClick={addTag} className="bg-zinc-900 text-white px-3 rounded text-xs font-bold">Add</button>
+                </div>
+                <div className="flex flex-wrap gap-1">
+                    {data.tags?.map((tag, idx) => (
+                        <span key={idx} className="bg-blue-50 text-blue-700 px-2 py-1 rounded text-xs font-bold flex items-center">
+                            {tag} <button onClick={() => removeTag(idx)} className="ml-1 hover:text-red-500"><X className="w-3 h-3"/></button>
+                        </span>
+                    ))}
+                </div>
+             </div>
+          </div>
+          <div className="px-5 py-4 border-t border-zinc-100 bg-zinc-50 flex justify-end space-x-2 flex-shrink-0">
+             <button onClick={onClose} className="px-4 py-2 text-sm font-bold text-zinc-500 hover:text-zinc-900">Cancel</button>
+             <button onClick={() => onSave(data)} className="px-4 py-2 bg-zinc-900 text-white rounded-lg text-sm font-bold shadow-md hover:bg-black">Save</button>
+          </div>
+       </div>
     </div>
   );
 }
