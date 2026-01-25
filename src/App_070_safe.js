@@ -38,7 +38,7 @@ const YOUR_FIREBASE_CONFIG = {
 // ----------------------------------------------------------------------
 // 상수 및 설정
 // ----------------------------------------------------------------------
-const APP_VERSION = "v0.8.71"; 
+const APP_VERSION = "v0.8.7"; 
 const BUILD_DATE = "2026.01.25";
 const ADMIN_PASSWORD = "adminlcg1"; 
 
@@ -926,16 +926,16 @@ export default function App() {
                 </div>
             </div>
           </div>
-          {/* V 0.8.71: Mobile Header Overflow Fix - All buttons visible including Sort */}
-          <div className="flex items-center space-x-2 flex-shrink-0 justify-end overflow-x-auto no-scrollbar mask-image-scroll md:overflow-visible">
+          {/* V 0.8.7: Mobile Header Overflow Fix - Ensure buttons are clickable and visible */}
+          <div className="flex items-center space-x-2 flex-shrink-0 overflow-x-auto md:overflow-visible no-scrollbar max-w-[40%] md:max-w-none justify-end mask-image-scroll">
              {compareList.length > 0 && <button onClick={handleCompareButtonClick} className={`flex items-center px-3 py-1.5 rounded-full text-xs font-bold animate-in fade-in transition-all mr-2 shadow-lg whitespace-nowrap ${activeCategory === 'COMPARE_PAGE' ? 'bg-black text-white ring-2 ring-zinc-200' : 'bg-zinc-900 text-white hover:bg-black'}`}><ArrowLeftRight className="w-3 h-3 mr-1.5"/> <span className="hidden md:inline">Compare</span> ({compareList.length})</button>}
              <button onClick={() => setIsFilterOpen(!isFilterOpen)} className={`p-2 rounded-full transition-all flex-shrink-0 ${isFilterOpen ? 'bg-zinc-200 text-black' : 'hover:bg-zinc-100 text-zinc-500'}`} title="Filters"><SlidersHorizontal className="w-5 h-5" /></button>
              <button onClick={handleMyPickToggle} className={`p-2 rounded-full transition-all items-center space-x-1 flex-shrink-0 ${activeCategory === 'MY_PICK' ? 'bg-yellow-100 text-yellow-600' : 'hover:bg-zinc-100 text-zinc-400 hover:text-zinc-600'}`} title="My Pick"><Heart className={`w-5 h-5 ${activeCategory === 'MY_PICK' ? 'fill-yellow-500 text-yellow-500' : ''}`} /></button>
-             <div className="flex items-center bg-zinc-100 rounded-lg p-1 flex-shrink-0 ml-1">
+             <div className="flex items-center bg-zinc-100 rounded-lg p-1 flex-shrink-0">
                 <select value={sortOption} onChange={(e) => setSortOption(e.target.value)} className="bg-transparent text-xs font-bold text-zinc-600 outline-none px-2 py-1 max-w-[80px] md:max-w-none cursor-pointer hidden md:block"><option value="manual">Manual</option><option value="launchDate">Launch</option><option value="createdAt">Added</option><option value="name">Name</option></select>
                 <button onClick={() => setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc')} className="p-1.5 rounded-md hover:bg-white hover:shadow-sm transition-all text-zinc-500" title="Sort">{sortDirection === 'asc' ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />}</button>
              </div>
-            {isAdmin && (<button onClick={() => { setEditingProduct(null); setIsFormOpen(true); }} className="flex items-center justify-center w-8 h-8 md:w-auto md:h-auto md:px-4 md:py-2 bg-zinc-900 text-white rounded-full hover:bg-black transition-all shadow-lg hover:shadow-xl active:scale-95 flex-shrink-0 ml-2"><Plus className="w-4 h-4 md:mr-1.5" /><span className="hidden md:inline text-sm font-bold">New</span></button>)}
+            {isAdmin && (<button onClick={() => { setEditingProduct(null); setIsFormOpen(true); }} className="flex items-center justify-center w-8 h-8 md:w-auto md:h-auto md:px-4 md:py-2 bg-zinc-900 text-white rounded-full hover:bg-black transition-all shadow-lg hover:shadow-xl active:scale-95 flex-shrink-0"><Plus className="w-4 h-4 md:mr-1.5" /><span className="hidden md:inline text-sm font-bold">New</span></button>)}
           </div>
         </header>
 
@@ -948,7 +948,6 @@ export default function App() {
            </div>
         )}
 
-        {/* V 0.8.71: Increased padding-bottom to ensure full scrolling */}
         <div ref={mainContentRef} className="flex-1 overflow-y-auto p-4 md:p-8 custom-scrollbar relative print:overflow-visible print:p-0 pb-40">
           {activeCategory === 'DASHBOARD' && !searchTerm && searchTags.length === 0 && !filters.year && !filters.color ? (
             <DashboardView 
@@ -1868,8 +1867,7 @@ function SwatchManager({ category, swatches, isAdmin, onSave, onDelete, onSelect
   });
 
   return (
-    // V 0.8.71: Increased padding bottom for scrolling
-    <div className="p-1 animate-in fade-in pb-40">
+    <div className="p-1 animate-in fade-in pb-32">
        {/* Adjusted Header Style to match Scenes/Collections */}
        <div className="flex items-center justify-between mb-6">
          <h3 className="text-2xl font-extrabold text-zinc-900 flex items-center tracking-tight">
@@ -2531,21 +2529,21 @@ function DashboardView({ products, favorites, awards, swatches, spaceContents, s
          ) : <div className="text-center py-20 text-zinc-300">No category data available</div>}
       </div>
 
-      {/* V 0.8.71: Mobile Optimized Awards Section (2-cols) */}
+      {/* V 0.8.5: Awards Section moved after Category Contribution */}
       {awardStats.length > 0 && (
           <div className="bg-white p-6 md:p-8 rounded-3xl border border-zinc-100 shadow-sm">
               <div className="flex items-center justify-between mb-6">
                   <h3 className="text-xl font-bold text-zinc-900 flex items-center"><Trophy className="w-6 h-6 mr-3 text-yellow-500" /> Award Achievements</h3>
               </div>
-              <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {awardStats.map(stat => (
                       <div key={stat.id} className="bg-zinc-50 rounded-xl border border-zinc-200 p-4">
                           <div className="flex items-center justify-between mb-3">
                               <div className="flex items-center">
                                   {stat.image ? <img src={stat.image} className="w-8 h-8 object-contain mr-3"/> : <Trophy className="w-8 h-8 text-zinc-300 mr-3"/>}
                                   <div>
-                                      <h4 className="text-sm font-bold text-zinc-900 truncate max-w-[80px] md:max-w-none">{stat.title}</h4>
-                                      <span className="text-[10px] text-zinc-500 truncate block max-w-[80px] md:max-w-none">{stat.organization}</span>
+                                      <h4 className="text-sm font-bold text-zinc-900">{stat.title}</h4>
+                                      <span className="text-[10px] text-zinc-500">{stat.organization}</span>
                                   </div>
                               </div>
                               <span className="text-lg font-black text-zinc-900">{stat.winners.length}</span>
@@ -2621,9 +2619,6 @@ function SpaceDetailView({ space, spaceContent, activeTag, setActiveTag, isAdmin
       return matchesTag && matchesSearch && matchesTags;
   });
 
-  // V 0.8.71: Fix Duplicates in products list using Map
-  const uniqueProducts = Array.from(new Map(products.map(p => [p.id, p])).values());
-
   const copySpaceLink = () => { navigator.clipboard.writeText(`${window.location.origin}${window.location.pathname}?space=${space.id}`); window.alert("공간 공유 링크가 복사되었습니다."); };
 
   return (
@@ -2672,17 +2667,17 @@ function SpaceDetailView({ space, spaceContent, activeTag, setActiveTag, isAdmin
         ) : (<div className="text-center py-12 bg-zinc-50 rounded-2xl border border-dashed border-zinc-200 text-zinc-400"><ImageIcon className="w-12 h-12 mx-auto mb-3 opacity-20" /><p className="text-sm">등록된 공간 장면이 없습니다.</p></div>)}
       </div>
       
-      {/* V 0.8.71: Fix Duplicate Product Listing and Removing Margin if Empty */}
-      {uniqueProducts.length > 0 ? (
+      {/* V 0.8.7: Fix duplicate product list and remove margin if empty */}
+      {products.length > 0 && (
           <>
               <div className="flex items-center justify-between mb-6 border-t border-zinc-100 pt-12 print:border-none print:pt-0">
-                 <h3 className="text-xl font-bold text-zinc-900 flex items-center"><Tag className="w-5 h-5 mr-2 text-zinc-400" /> All Curated Products <span className="ml-2 text-sm font-medium text-zinc-400 bg-zinc-100 px-2 py-0.5 rounded-full">{uniqueProducts.length}</span></h3>
+                 <h3 className="text-xl font-bold text-zinc-900 flex items-center"><Tag className="w-5 h-5 mr-2 text-zinc-400" /> All Curated Products <span className="ml-2 text-sm font-medium text-zinc-400 bg-zinc-100 px-2 py-0.5 rounded-full">{productCount}</span></h3>
                  {isAdmin && (<button onClick={onManageProducts} className="flex items-center text-sm font-bold text-zinc-500 hover:text-zinc-900 bg-white border border-zinc-200 px-4 py-2 rounded-lg hover:border-zinc-400 transition-colors"><Settings className="w-4 h-4 mr-2" /> Manage List</button>)}
               </div>
 
               {/* V 0.8.2: Use ProductCard for Curated Products List (Horizontal Layout from Total View) */}
               <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-6 pb-32 print:grid-cols-3 print:gap-4">
-                  {uniqueProducts.map((product) => (
+                  {products.map((product) => (
                       <div key={product.id}>
                           <ProductCard 
                               product={product} 
@@ -2696,7 +2691,7 @@ function SpaceDetailView({ space, spaceContent, activeTag, setActiveTag, isAdmin
                   ))}
               </div>
           </>
-      ) : null}
+      )}
     </div>
   );
 }
@@ -3478,8 +3473,7 @@ function SwatchSelector({ label, selected, swatches, onChange }) {
 
   const handleSelect = (swatch) => {
      const snapshot = { 
-         id: swatch.id, name: swatch.name, hex: swatch.hex,
-         image: swatch.image, 
+         id: swatch.id, name: swatch.name, hex: swatch.hex, image: swatch.image, 
          category: swatch.category, textureType: swatch.textureType, materialCode: swatch.materialCode 
      };
      if(!selected.find(s => (typeof s === 'object' ? s.id === swatch.id : false))) {
@@ -3725,16 +3719,6 @@ function SpaceSceneModal({ scene, products, allProducts, isAdmin, onClose, onEdi
   const handleNext = () => { if(currentImageIndex < images.length - 1) setCurrentImageIndex(currentImageIndex + 1); };
   const handlePrev = () => { if(currentImageIndex > 0) setCurrentImageIndex(currentImageIndex - 1); };
 
-  // V 0.8.71: Fix Duplicates in tagged products list & Clean empty state
-  const uniqueProducts = useMemo(() => {
-      const seen = new Set();
-      return products.filter(p => {
-          if (seen.has(p.id)) return false;
-          seen.add(p.id);
-          return true;
-      });
-  }, [products]);
-
   const handleShareImage = async () => { /* Placeholder */ };
 
   return (
@@ -3793,21 +3777,24 @@ function SpaceSceneModal({ scene, products, allProducts, isAdmin, onClose, onEdi
                  </div>
                )}
                
-               {/* V 0.8.71: Fix Duplicates and Clean Empty State */}
-               <div className={`space-y-3 ${uniqueProducts.length > 0 ? 'mb-8' : 'mb-0'}`}>
-                   {uniqueProducts.length > 0 ? (
-                       uniqueProducts.map(product => (
-                           <div key={product.id} onClick={() => onNavigateProduct(product)} className="flex items-center p-3 bg-white rounded-xl border border-zinc-100 shadow-sm hover:border-zinc-300 transition-all cursor-pointer group">
-                               <div className="w-12 h-12 bg-zinc-50 rounded-lg flex-shrink-0 flex items-center justify-center mr-3 overflow-hidden">
-                                   {product.images?.[0] ? <img src={typeof product.images[0] === 'object' ? product.images[0].url : product.images[0]} className="w-full h-full object-cover" /> : <ImageIcon className="w-5 h-5 text-zinc-300"/>}
+               {/* V 0.8.7: Prevent Duplicates & Remove Extra Margin if Empty */}
+               <div className={`space-y-3 ${products.length > 0 ? 'mb-8' : 'mb-0'}`}>
+                   {products.length > 0 ? (
+                       // Filter out duplicates just in case
+                       Array.from(new Set(products.map(p => p.id)))
+                           .map(id => products.find(p => p.id === id))
+                           .map(product => (
+                               <div key={product.id} onClick={() => onNavigateProduct(product)} className="flex items-center p-3 bg-white rounded-xl border border-zinc-100 shadow-sm hover:border-zinc-300 transition-all cursor-pointer group">
+                                   <div className="w-12 h-12 bg-zinc-50 rounded-lg flex-shrink-0 flex items-center justify-center mr-3 overflow-hidden">
+                                       {product.images?.[0] ? <img src={typeof product.images[0] === 'object' ? product.images[0].url : product.images[0]} className="w-full h-full object-cover" /> : <ImageIcon className="w-5 h-5 text-zinc-300"/>}
+                                   </div>
+                                   <div className="flex-1 min-w-0">
+                                       <h4 className="text-sm font-bold text-zinc-900 truncate group-hover:text-blue-600">{product.name}</h4>
+                                       <p className="text-xs text-zinc-500">{product.category}</p>
+                                   </div>
+                                   <ChevronRight className="w-4 h-4 text-zinc-300 group-hover:text-zinc-600"/>
                                </div>
-                               <div className="flex-1 min-w-0">
-                                   <h4 className="text-sm font-bold text-zinc-900 truncate group-hover:text-blue-600">{product.name}</h4>
-                                   <p className="text-xs text-zinc-500">{product.category}</p>
-                               </div>
-                               <ChevronRight className="w-4 h-4 text-zinc-300 group-hover:text-zinc-600"/>
-                           </div>
-                       ))
+                           ))
                    ) : (
                        <div className="text-center py-8 text-zinc-400 text-xs">연관된 제품이 없습니다.</div>
                    )}
@@ -3844,8 +3831,7 @@ function AwardsManager({ awards, products, isAdmin, onSave, onDelete, onSelect, 
   });
 
   return (
-    // V 0.8.71: Increased padding bottom
-    <div className="p-1 animate-in fade-in pb-40">
+    <div className="p-1 animate-in fade-in pb-32">
        <div className="flex items-center justify-between mb-6">
          <h3 className="text-2xl font-extrabold text-zinc-900 flex items-center tracking-tight">
              <Trophy className="w-6 h-6 mr-3 text-yellow-500" />
@@ -3867,11 +3853,11 @@ function AwardsManager({ awards, products, isAdmin, onSave, onDelete, onSelect, 
          </div>
        )}
 
-       {/* V 0.8.71: Mobile Optimized Grid (2 cols) & Square Image Ratio */}
+       {/* V 0.8.7: Mobile Optimized Grid (2 cols) & Square Image Ratio */}
        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
           {filteredAwards.map(award => (
              <div key={award.id} onClick={() => handleCardClick(award)} className="bg-white rounded-xl border border-zinc-200 overflow-hidden group hover:shadow-lg transition-all relative cursor-pointer flex flex-col">
-                {/* V 0.8.71: Square Aspect Ratio for Image Container, No Gray Background, Fix Clipping */}
+                {/* V 0.8.7: Square Aspect Ratio for Image Container, No Gray Background, Fix Clipping */}
                 <div className="aspect-square relative bg-white flex items-center justify-center p-6">
                    {award.image ? <img src={award.image} className="w-full h-full object-contain" /> : <Trophy className="w-12 h-12 text-zinc-300"/>}
                    
@@ -3880,7 +3866,7 @@ function AwardsManager({ awards, products, isAdmin, onSave, onDelete, onSelect, 
                        <Star className={`w-3.5 h-3.5 ${favorites.includes(award.id) ? 'fill-yellow-400 text-yellow-400' : ''}`}/>
                    </button>
                 </div>
-                {/* V 0.8.71: Compact Info Area */}
+                {/* V 0.8.7: Compact Info Area */}
                 <div className="p-3 border-t border-zinc-100 flex-1 flex flex-col justify-center bg-zinc-50/30">
                    <h4 className="font-bold text-xs md:text-sm truncate mb-0.5">{award.title}</h4>
                    <p className="text-[10px] md:text-xs text-zinc-500 truncate">{award.organization}</p>
@@ -4274,102 +4260,6 @@ function AwardFormModal({ existingData, allProducts = [], onClose, onSave }) {
              <button onClick={() => onSave(data, winners)} className="px-6 py-2.5 bg-zinc-900 text-white rounded-xl text-sm font-bold shadow-lg hover:bg-black hover:scale-105 transition-all">Save Changes</button>
           </div>
        </div>
-    </div>
-  );
-}
-
-function SwatchSelector({ label, selected, swatches, onChange }) {
-  const [isOpen, setIsOpen] = useState(false);
-  const [filter, setFilter] = useState('');
-  const [activeTab, setActiveTab] = useState('ALL');
-
-  const handleSelect = (swatch) => {
-     const snapshot = { 
-         id: swatch.id, name: swatch.name, hex: swatch.hex, image: swatch.image, 
-         category: swatch.category, textureType: swatch.textureType, materialCode: swatch.materialCode 
-     };
-     if(!selected.find(s => (typeof s === 'object' ? s.id === swatch.id : false))) {
-        onChange([...selected, snapshot]);
-     }
-     setIsOpen(false);
-  };
-
-  const handleRemove = (index) => {
-     const newSelected = [...selected];
-     newSelected.splice(index, 1);
-     onChange(newSelected);
-  };
-  
-  const handleMove = (index, direction) => {
-     const newSelected = [...selected];
-     const targetIndex = index + direction;
-     if (targetIndex >= 0 && targetIndex < newSelected.length) {
-        const temp = newSelected[index];
-        newSelected[index] = newSelected[targetIndex];
-        newSelected[targetIndex] = temp;
-        onChange(newSelected);
-     }
-  };
-
-  const handleManualAdd = () => {
-     const hex = prompt("Enter Hex Color (e.g. #000000) or Name:");
-     if(hex) onChange([...selected, hex]);
-  };
-
-  const filteredSwatches = swatches.filter(s => {
-     if(activeTab !== 'ALL' && s.category !== activeTab) return false;
-     return s.name.toLowerCase().includes(filter.toLowerCase());
-  });
-
-  return (
-    <div className="relative">
-       <div className="flex justify-between items-center mb-1">
-          <label className="block text-xs font-bold text-zinc-500 uppercase">{label}</label>
-          <button type="button" onClick={handleManualAdd} className="text-[10px] text-blue-600 font-bold hover:underline">Manual Input</button>
-       </div>
-       <div className="flex flex-wrap gap-2 min-h-[40px] p-2 bg-white border rounded-lg items-center">
-          {selected.map((item, idx) => (
-             <div key={idx} className="relative group">
-                <SwatchDisplay color={item} size="small" />
-                <div className="absolute -top-3 left-1/2 -translate-x-1/2 flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity bg-white shadow-md rounded-full border border-zinc-200 overflow-hidden z-20 scale-75">
-                  <button type="button" onClick={()=>handleMove(idx, -1)} className="p-1 hover:bg-zinc-100"><ChevronLeft size={10}/></button>
-                  <button type="button" onClick={()=>handleRemove(idx)} className="p-1 hover:bg-zinc-100 text-red-500"><X size={10}/></button>
-                  <button type="button" onClick={()=>handleMove(idx, 1)} className="p-1 hover:bg-zinc-100"><ChevronRight size={10}/></button>
-                </div>
-             </div>
-          ))}
-          <button type="button" onClick={() => setIsOpen(true)} className="w-6 h-6 rounded-full border border-dashed border-zinc-400 flex items-center justify-center text-zinc-400 hover:border-zinc-900 hover:text-zinc-900"><Plus className="w-3 h-3"/></button>
-       </div>
-
-       {isOpen && (
-          <div className="absolute top-full left-0 z-50 mt-2 w-full md:w-[400px] bg-white rounded-xl shadow-xl border border-zinc-200 p-4">
-             <div className="flex justify-between items-center mb-3">
-                <h4 className="font-bold text-sm">Select Material</h4>
-                <button onClick={() => setIsOpen(false)}><X className="w-4 h-4 text-zinc-400 hover:text-black"/></button>
-             </div>
-             
-             <div className="flex gap-1 overflow-x-auto pb-2 mb-2 custom-scrollbar">
-                <button type="button" onClick={()=>setActiveTab('ALL')} className={`px-2 py-1 rounded text-[10px] font-bold whitespace-nowrap ${activeTab==='ALL'?'bg-black text-white':'bg-zinc-100'}`}>ALL</button>
-                {SWATCH_CATEGORIES.map(c => (
-                   <button key={c.id} type="button" onClick={()=>setActiveTab(c.id)} className={`px-2 py-1 rounded text-[10px] font-bold whitespace-nowrap ${activeTab===c.id?'bg-black text-white':'bg-zinc-100'}`}>{c.label}</button>
-                ))}
-             </div>
-
-             <input placeholder="Search materials..." value={filter} onChange={e=>setFilter(e.target.value)} className="w-full text-xs p-2 bg-zinc-50 rounded border mb-3 outline-none" />
-             
-             <div className="grid grid-cols-5 gap-2 max-h-48 overflow-y-auto custom-scrollbar">
-                {filteredSwatches.map(s => (
-                   <button key={s.id} type="button" onClick={() => handleSelect(s)} className="flex flex-col items-center group">
-                      <div className="w-8 h-8 rounded-full border overflow-hidden relative">
-                         {s.image ? <img src={s.image} className="w-full h-full object-cover"/> : <div className="w-full h-full" style={{backgroundColor:s.hex}}></div>}
-                         <div className="absolute inset-0 bg-black/20 hidden group-hover:flex items-center justify-center"><Plus className="w-4 h-4 text-white"/></div>
-                      </div>
-                      <span className="text-[9px] text-zinc-500 truncate w-full text-center mt-1">{s.name}</span>
-                   </button>
-                ))}
-             </div>
-          </div>
-       )}
     </div>
   );
 }
