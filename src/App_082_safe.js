@@ -37,7 +37,7 @@ const YOUR_FIREBASE_CONFIG = {
 // ----------------------------------------------------------------------
 // 상수 및 설정
 // ----------------------------------------------------------------------
-const APP_VERSION = "v0.8.3"; 
+const APP_VERSION = "v0.8.2"; 
 const BUILD_DATE = "2026.01.25";
 const ADMIN_PASSWORD = "adminlcg1"; 
 
@@ -180,7 +180,7 @@ export default function App() {
   const [isFormOpen, setIsFormOpen] = useState(false); 
   const [editingProduct, setEditingProduct] = useState(null);
   const [editingSwatchFromModal, setEditingSwatchFromModal] = useState(null);
-  const [editingAwardFromModal, setEditingAwardFromModal] = useState(null); 
+  const [editingAwardFromModal, setEditingAwardFromModal] = useState(null); // V 0.8.2
 
   const [isLoading, setIsLoading] = useState(true);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -217,8 +217,8 @@ export default function App() {
         if (e.key === 'Escape') {
             if (editingSwatchFromModal) setEditingSwatchFromModal(null);
             else if (editingAwardFromModal) setEditingAwardFromModal(null);
-            else if (selectedProduct) setSelectedProduct(null); // Topmost
             else if (selectedSwatch) setSelectedSwatch(null);
+            else if (selectedProduct) setSelectedProduct(null);
             else if (selectedScene) setSelectedScene(null);
             else if (selectedAward) setSelectedAward(null);
             else if (editingScene) setEditingScene(null);
@@ -566,12 +566,11 @@ export default function App() {
   const handleSaveSwatch = async (swatchData) => { const docId = swatchData.id ? String(swatchData.id) : String(Date.now()); const payload = { ...swatchData, id: docId, updatedAt: Date.now() }; if (isFirebaseAvailable && db) { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'swatches', docId), payload, { merge: true }); } else { const idx = swatches.findIndex(s => s.id === docId); let newSwatches = [...swatches]; if (idx >= 0) newSwatches[idx] = payload; else newSwatches = [payload, ...newSwatches]; saveSwatchesToLocal(newSwatches); } showToast("마감재가 저장되었습니다."); };
   const handleDeleteSwatch = async (swatchId) => { if (!window.confirm("정말 삭제하시겠습니까?")) return; if (isFirebaseAvailable && db) { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'swatches', String(swatchId))); } else { saveSwatchesToLocal(swatches.filter(s => s.id !== swatchId)); } showToast("마감재가 삭제되었습니다."); };
   
-  // Awards Actions (V 0.8.3: Handle product history updates)
-  const handleSaveAward = async (awardData, winners = []) => {
+  // Awards Actions
+  const handleSaveAward = async (awardData) => {
       const docId = awardData.id ? String(awardData.id) : String(Date.now());
       const payload = { ...awardData, id: docId, updatedAt: Date.now() };
       
-      // 1. Save Award Data
       if (isFirebaseAvailable && db) {
           await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'awards', docId), payload, { merge: true });
       } else {
@@ -581,87 +580,13 @@ export default function App() {
           saveAwardsToLocal(newAwards);
       }
       
-      // 2. Update Products (Winners) - V 0.8.3
-      // We need to update products that are in the 'winners' list (add/update history)
-      // And potentially remove history from products that were removed (if we track that)
-      // For simplicity in this file-based structure, we iterate all products and update if needed.
-      // In a real DB, we'd use batch writes.
-      
-      if (winners.length > 0) {
-          const batch = isFirebaseAvailable && db ? writeBatch(db) : null;
-          let localProducts = [...products];
-          let hasUpdates = false;
-
-          // Map of winner ID to year
-          const winnerMap = {};
-          winners.forEach(w => winnerMap[w.id] = w.year);
-
-          for (const p of products) {
-              const newYear = winnerMap[p.id];
-              const currentHistory = p.awardHistory || [];
-              const existingEntry = currentHistory.find(h => h.awardId === docId);
-              
-              let newHistory = currentHistory;
-              let needsUpdate = false;
-
-              if (newYear) {
-                  // Add or Update
-                  if (existingEntry) {
-                      if (existingEntry.year !== newYear) {
-                          newHistory = currentHistory.map(h => h.awardId === docId ? { ...h, year: newYear } : h);
-                          needsUpdate = true;
-                      }
-                  } else {
-                      newHistory = [...currentHistory, { awardId: docId, title: payload.title, year: newYear }];
-                      needsUpdate = true;
-                  }
-                  
-                  // Ensure tag exists
-                  if (!p.awards?.includes(payload.title)) {
-                      // We don't strictly need to update 'awards' array if we use history, but for compatibility:
-                      // Let's skip updating the string array to avoid complexity, relying on history.
-                      // But the prompt says "Awards card name becomes tag".
-                      // So we should probably add it.
-                      // For now, let's focus on history as the source of truth for the modal.
-                  }
-              } else {
-                  // Remove if it was there (User removed from list)
-                  // Note: This logic requires knowing if it *was* there. 
-                  // Since we don't pass "removed" list, we can't easily bulk remove without scanning all.
-                  // For this implementation, we only ADD/UPDATE from the modal. 
-                  // Removal is done via product detail or individual delete.
-                  // BUT, the prompt says "Awards 카드의 수정은... 어워드 수상작을 추가하거나 삭제 가능".
-                  // So we should handle removal if we can.
-                  // Let's assume 'winners' contains the *complete* list of winners for this award.
-                  if (existingEntry) {
-                      newHistory = currentHistory.filter(h => h.awardId !== docId);
-                      needsUpdate = true;
-                  }
-              }
-
-              if (needsUpdate) {
-                  if (batch) {
-                      const pRef = doc(db, 'artifacts', appId, 'public', 'data', 'products', p.id);
-                      batch.update(pRef, { awardHistory: newHistory });
-                  } else {
-                      const idx = localProducts.findIndex(lp => lp.id === p.id);
-                      if (idx >= 0) localProducts[idx] = { ...localProducts[idx], awardHistory: newHistory };
-                      hasUpdates = true;
-                  }
-              }
-          }
-
-          if (batch) await batch.commit();
-          if (!isFirebaseAvailable && hasUpdates) saveToLocalStorage(localProducts);
-      }
-      
-      // Update view if selected
+      // V 0.8.2: If editing from modal, update the selected award view
       if(selectedAward && selectedAward.id === docId) {
           setSelectedAward(payload);
       }
       
       setEditingAwardFromModal(null);
-      showToast("어워드 및 수상작이 저장되었습니다.");
+      showToast("어워드가 저장되었습니다.");
   };
 
   const handleDeleteAward = async (awardId) => {
@@ -964,7 +889,7 @@ export default function App() {
             <DashboardView 
                 products={products} 
                 favorites={favorites} 
-                awards={awards} 
+                awards={awards} // V 0.8.2: Pass awards to Dashboard
                 setActiveCategory={setActiveCategory} 
                 setSelectedProduct={setSelectedProduct} 
                 isAdmin={isAdmin} 
@@ -1190,11 +1115,7 @@ export default function App() {
            products={products}
            isAdmin={isAdmin}
            onClose={() => setSelectedAward(null)}
-           onNavigateProduct={(p) => { 
-               // V 0.8.3: Navigate to product without closing award modal (stacking)
-               // App logic handles stacking by keeping selectedAward set
-               setSelectedProduct(p); 
-           }}
+           onNavigateProduct={(p) => { setSelectedAward(null); setSelectedProduct(p); }}
            onSaveProduct={handleSaveProduct} 
            onEdit={() => { setSelectedAward(null); setEditingAwardFromModal(selectedAward); }}
         />
@@ -1203,9 +1124,8 @@ export default function App() {
       {editingAwardFromModal && (
         <AwardFormModal 
            existingData={editingAwardFromModal}
-           allProducts={products} // V 0.8.3: Pass products for selection
            onClose={() => setEditingAwardFromModal(null)}
-           onSave={(data, winners) => { handleSaveAward(data, winners); }}
+           onSave={(data) => { handleSaveAward(data); }}
         />
       )}
 
@@ -1549,7 +1469,7 @@ function CategoryRootView({ type, spaces, spaceContents, collections, materials,
                                             }}
                                             className="group cursor-pointer relative"
                                         >
-                                            <div className={`aspect-[4/3] ${isMaterial ? 'rounded-xl aspect-square' : 'rounded-xl'} bg-zinc-50 overflow-hidden border border-zinc-100 relative mb-2 p-0`}>
+                                            <div className={`aspect-square ${isMaterial ? 'rounded-xl' : 'rounded-xl'} bg-zinc-50 overflow-hidden border border-zinc-100 relative mb-2 p-0`}>
                                                 {type === 'SPACES_ROOT' ? (
                                                     <img src={sub.image} className="w-full h-full object-cover group-hover:scale-105 transition-transform"/>
                                                 ) : (
@@ -2635,18 +2555,22 @@ function SpaceDetailView({ space, spaceContent, activeTag, setActiveTag, isAdmin
       <div className={`${filteredScenes.length === 0 ? '' : 'mb-12'} print:hidden`}>
         <div className="flex items-center justify-between mb-6"><h3 className="text-2xl font-extrabold text-zinc-900 flex items-center"><ImageIcon className="w-6 h-6 mr-2 text-indigo-500" /> Space Scenes ({filteredScenes.length})</h3>{isAdmin && (<button onClick={onAddScene} className="flex items-center text-sm font-bold bg-zinc-900 text-white px-4 py-2 rounded-lg hover:bg-black transition-colors shadow-lg"><Plus className="w-4 h-4 mr-2" /> Add Scene</button>)}</div>
         {filteredScenes.length > 0 ? (
-          // V 0.8.3: Updated Grid Layout for Scenes (Horizontal 4-col)
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredScenes.map((scene) => (
-              <div key={scene.id} onClick={() => onViewScene(scene)} className="group cursor-pointer relative">
-                <div className="aspect-[4/3] bg-zinc-50 rounded-xl mb-2 overflow-hidden border border-zinc-100 relative">
-                    <img src={scene.image} className="w-full h-full object-cover group-hover:scale-105 transition-transform" alt={scene.title} />
-                    {/* V 0.8.1: Unified Star Button for Space Scenes */}
-                    <button onClick={(e) => onToggleFavorite(e, scene.id)} className="absolute top-2 right-2 p-1.5 bg-white/80 rounded-full text-zinc-300 hover:text-yellow-400 hover:scale-110 transition-all z-10">
-                        <Star className={`w-3.5 h-3.5 ${favorites.includes(scene.id) ? 'fill-yellow-400 text-yellow-400' : ''}`}/>
-                    </button>
+              <div key={scene.id} onClick={() => onViewScene(scene)} className="group relative aspect-[4/3] rounded-2xl overflow-hidden bg-zinc-100 shadow-md hover:shadow-xl transition-all cursor-pointer">
+                <img src={scene.image} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" alt={scene.title} />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-80 group-hover:opacity-100 transition-opacity"></div>
+                {scene.productIds && scene.productIds.length > 0 && <div className="absolute top-4 right-4 bg-black/60 backdrop-blur text-white text-[10px] font-bold px-2 py-1 rounded-lg flex items-center"><Tag className="w-3 h-3 mr-1" /> {scene.productIds.length} Products</div>}
+                
+                {/* V 0.8.1: Unified Star Button for Space Scenes */}
+                <button onClick={(e) => onToggleFavorite(e, scene.id)} className="absolute top-4 right-4 p-2 bg-black/40 backdrop-blur rounded-full text-white hover:text-yellow-400 z-30">
+                    <Star className={`w-5 h-5 ${favorites.includes(scene.id) ? 'fill-yellow-400 text-yellow-400' : ''}`}/>
+                </button>
+
+                <div className="absolute bottom-5 left-5 right-5 text-white transform translate-y-2 group-hover:translate-y-0 transition-transform">
+                  <h4 className="text-xl font-bold mb-1 truncate">{scene.title}</h4>
+                  <p className="text-xs text-zinc-300 line-clamp-1">{scene.description}</p>
                 </div>
-                <h4 className="text-xs font-bold text-zinc-900 truncate group-hover:text-blue-600">{scene.title}</h4>
               </div>
             ))}
           </div>
@@ -3338,6 +3262,7 @@ function ProductFormModal({ categories, swatches = [], allProducts = [], awards 
               <div><label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Materials (comma)</label><input className="w-full border p-2 rounded-lg" value={formData.materialsString} onChange={e=>setFormData({...formData, materialsString: e.target.value})}/></div>
               <div>
                   <label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Awards (Select & Year)</label>
+                  {/* V 0.8.2: Awards Selection with Year */}
                   <div className="flex flex-wrap gap-1 mb-2">
                       {awards.map(award => {
                           const isSelected = formData.awardsString.includes(award.title);
@@ -3348,6 +3273,7 @@ function ProductFormModal({ categories, swatches = [], allProducts = [], awards 
                           );
                       })}
                   </div>
+                  {/* Display Selected Awards with Year Input */}
                   <div className="space-y-1">
                       {formData.awardHistory.map((h, idx) => (
                           <div key={idx} className="flex items-center text-xs bg-yellow-50 p-1.5 rounded border border-yellow-100">
@@ -3384,6 +3310,7 @@ function ProductFormModal({ categories, swatches = [], allProducts = [], awards 
              />
           </div>
 
+          {/* Related Products Selection */}
           <div className="border-t border-zinc-100 pt-6">
               <label className="block text-xs font-bold text-zinc-500 uppercase mb-2">Related Products (Tagging)</label>
               <div className="border border-zinc-200 rounded-xl p-4 bg-zinc-50 max-h-60 overflow-y-auto">
@@ -3728,14 +3655,24 @@ function SpaceSceneModal({ scene, products, allProducts, isAdmin, onClose, onEdi
   );
 }
 
+// --- V 0.8.2 New Components: Awards ---
+
 function AwardsManager({ awards, products, isAdmin, onSave, onDelete, onSelect, searchTerm, searchTags, favorites, onToggleFavorite }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingAward, setEditingAward] = useState(null);
   const [activeTag, setActiveTag] = useState('ALL');
 
+  // Collect all unique tags from awards
   const allTags = Array.from(new Set(awards.flatMap(a => a.tags || []))).sort();
 
   const handleCardClick = (award) => { onSelect(award); };
+  
+  // V 0.8.2: Edit is now handled inside the detail modal, but we keep this for quick access if needed
+  // or remove it to enforce the "Edit via Detail Modal" rule. 
+  // The prompt says "Awards 카드의 수정은 상세모달카드의 수정버튼으로 진입".
+  // So we remove the edit button from the card here, or keep it as a shortcut.
+  // Let's keep it consistent with other sections but respect the prompt's workflow emphasis.
+  // I will hide the edit button here to force detail modal entry, or just keep delete.
   
   // Filter Logic
   const filteredAwards = awards.filter(a => {
@@ -3800,9 +3737,8 @@ function AwardsManager({ awards, products, isAdmin, onSave, onDelete, onSelect, 
        {isModalOpen && (
          <AwardFormModal 
             existingData={editingAward} 
-            allProducts={products} // V 0.8.3: Pass products for selection
             onClose={() => setIsModalOpen(false)} 
-            onSave={(data, winners) => { onSave(data, winners); setIsModalOpen(false); }} 
+            onSave={(data) => { onSave(data); setIsModalOpen(false); }} 
          />
        )}
     </div>
@@ -3811,6 +3747,9 @@ function AwardsManager({ awards, products, isAdmin, onSave, onDelete, onSelect, 
 
 function AwardDetailModal({ award, products, onClose, onNavigateProduct, onSaveProduct, isAdmin, onEdit }) {
     useScrollLock();
+    const [isAddingProduct, setIsAddingProduct] = useState(false);
+    const [productFilter, setProductFilter] = useState('');
+    const [awardYear, setAwardYear] = useState(new Date().getFullYear().toString());
     
     // V 0.8.2: Filter products that have this award history or tag
     const relatedProducts = products.filter(p => {
@@ -3818,6 +3757,18 @@ function AwardDetailModal({ award, products, onClose, onNavigateProduct, onSaveP
         const hasHistory = p.awardHistory?.some(h => h.awardId === award.id);
         return hasTag || hasHistory;
     });
+
+    // V 0.8.2: Add product to award with year
+    const addProductToAward = async (product) => {
+        const currentAwards = product.awards || [];
+        const newAwards = currentAwards.includes(award.title) ? currentAwards : [...currentAwards, award.title];
+        
+        const currentHistory = product.awardHistory || [];
+        const newHistory = [...currentHistory.filter(h => h.awardId !== award.id), { awardId: award.id, title: award.title, year: awardYear }];
+
+        const updatedProduct = { ...product, awards: newAwards, awardHistory: newHistory };
+        await onSaveProduct(updatedProduct);
+    };
 
     return (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[150] flex items-center justify-center p-0 md:p-4 animate-in zoom-in-95 duration-200">
@@ -3864,10 +3815,48 @@ function AwardDetailModal({ award, products, onClose, onNavigateProduct, onSaveP
                                      Winners Gallery 
                                      <span className="bg-zinc-100 text-zinc-600 px-2 py-0.5 rounded-full text-[10px] ml-2">{relatedProducts.length}</span>
                                  </h3>
+                                 {isAdmin && (
+                                     <button onClick={() => setIsAddingProduct(!isAddingProduct)} className="text-[10px] font-bold text-indigo-600 border border-indigo-200 px-3 py-1.5 rounded hover:bg-indigo-50 transition-colors">
+                                         {isAddingProduct ? 'Done' : '+ Add Winner'}
+                                     </button>
+                                 )}
                              </div>
 
-                             {/* V 0.8.3: Scrollable Product List with Margin */}
-                             <div className="grid grid-cols-2 md:grid-cols-3 gap-4 max-h-80 overflow-y-auto custom-scrollbar p-1 pb-10">
+                             {isAdmin && isAddingProduct && (
+                                 <div className="mb-6 bg-zinc-50 p-4 rounded-xl border border-zinc-200 animate-in slide-in-from-top-2">
+                                     <div className="flex gap-2 mb-2">
+                                         <input 
+                                             type="text" 
+                                             placeholder="Search products..." 
+                                             className="flex-1 text-xs p-2 bg-white rounded-lg border border-zinc-200 outline-none" 
+                                             value={productFilter} 
+                                             onChange={(e) => setProductFilter(e.target.value)} 
+                                         />
+                                         <input 
+                                             type="number" 
+                                             className="w-20 text-xs p-2 bg-white rounded-lg border border-zinc-200 outline-none text-center" 
+                                             value={awardYear} 
+                                             onChange={(e) => setAwardYear(e.target.value)} 
+                                             placeholder="Year"
+                                         />
+                                     </div>
+                                     <div className="max-h-40 overflow-y-auto space-y-1 custom-scrollbar">
+                                         {products.filter(p => p.name.toLowerCase().includes(productFilter.toLowerCase())).map(p => {
+                                             const isAdded = p.awardHistory?.some(h => h.awardId === award.id);
+                                             return (
+                                                 <div key={p.id} onClick={() => !isAdded && addProductToAward(p)} className={`flex items-center p-2 rounded cursor-pointer ${isAdded ? 'opacity-50 cursor-default' : 'hover:bg-white'}`}>
+                                                     <div className={`w-4 h-4 border rounded mr-3 flex items-center justify-center ${isAdded ? 'bg-zinc-300 border-zinc-300' : 'border-zinc-300 bg-white'}`}>
+                                                         {isAdded && <Check className="w-3 h-3 text-white"/>}
+                                                     </div>
+                                                     <span className="text-xs font-bold text-zinc-700">{p.name}</span>
+                                                 </div>
+                                             );
+                                         })}
+                                     </div>
+                                 </div>
+                             )}
+
+                             <div className="grid grid-cols-2 md:grid-cols-3 gap-4 max-h-80 overflow-y-auto custom-scrollbar p-1">
                                  {relatedProducts.length > 0 ? relatedProducts.map(p => {
                                      // Find specific year for this award
                                      const historyItem = p.awardHistory?.find(h => h.awardId === award.id);
@@ -3899,36 +3888,18 @@ function AwardDetailModal({ award, products, onClose, onNavigateProduct, onSaveP
     );
 }
 
-function AwardFormModal({ existingData, allProducts = [], onClose, onSave }) {
+function AwardFormModal({ existingData, onClose, onSave }) {
   const [data, setData] = useState({ 
      id: null, title: '', organization: '', description: '', image: null, link: '', tags: []
   });
   const [tagInput, setTagInput] = useState('');
-  const [winners, setWinners] = useState([]); // V 0.8.3: Manage winners locally
-  const [productFilter, setProductFilter] = useState('');
   const fileRef = useRef(null);
 
   useEffect(() => {
      if(existingData) {
          setData({ ...existingData, link: existingData.link || '' });
-         
-         // V 0.8.3: Initialize winners from allProducts based on history/tags
-         const currentWinners = allProducts.filter(p => {
-             const hasTag = p.awards?.includes(existingData.title);
-             const hasHistory = p.awardHistory?.some(h => h.awardId === existingData.id);
-             return hasTag || hasHistory;
-         }).map(p => {
-             const historyItem = p.awardHistory?.find(h => h.awardId === existingData.id);
-             return {
-                 id: p.id,
-                 name: p.name,
-                 image: p.images?.[0],
-                 year: historyItem ? historyItem.year : (p.launchDate?.substring(0,4) || new Date().getFullYear().toString())
-             };
-         });
-         setWinners(currentWinners);
      }
-  }, [existingData, allProducts]);
+  }, [existingData]);
 
   const processImage = (file) => {
     return new Promise((resolve) => {
@@ -3969,157 +3940,60 @@ function AwardFormModal({ existingData, allProducts = [], onClose, onSave }) {
       setData(prev => ({ ...prev, tags: prev.tags.filter((_, i) => i !== idx) }));
   };
 
-  // V 0.8.3: Winner Management
-  const toggleWinner = (product) => {
-      if (winners.some(w => w.id === product.id)) {
-          setWinners(winners.filter(w => w.id !== product.id));
-      } else {
-          setWinners([...winners, {
-              id: product.id,
-              name: product.name,
-              image: product.images?.[0],
-              year: new Date().getFullYear().toString()
-          }]);
-      }
-  };
-
-  const updateWinnerYear = (id, year) => {
-      setWinners(winners.map(w => w.id === id ? { ...w, year } : w));
-  };
-
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[160] flex items-center justify-center p-4">
-       {/* V 0.8.3: Increased Modal Size (max-w-5xl) */}
-       <div className="bg-white rounded-2xl w-full max-w-5xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
-          <div className="px-6 py-4 border-b border-zinc-100 font-bold text-lg flex-shrink-0 flex justify-between items-center">
-             <span>{existingData ? 'Edit Award' : 'Add Award'}</span>
-             <button onClick={onClose}><X className="w-5 h-5 text-zinc-400 hover:text-black"/></button>
+       <div className="bg-white rounded-2xl w-full max-w-md overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
+          <div className="px-5 py-4 border-b border-zinc-100 font-bold text-lg flex-shrink-0">
+             {existingData ? 'Edit Award' : 'Add Award'}
           </div>
-          
-          <div className="flex-1 overflow-hidden flex flex-col md:flex-row">
-              {/* Left: Award Info */}
-              <div className="w-full md:w-1/3 p-6 overflow-y-auto custom-scrollbar border-r border-zinc-100">
-                 <div className="flex justify-center mb-6">
-                    <div onClick={() => fileRef.current.click()} className="w-32 h-32 rounded-xl shadow-md border-2 border-dashed border-zinc-300 cursor-pointer overflow-hidden relative group bg-zinc-50 flex items-center justify-center">
-                        {data.image ? <img src={data.image} className="w-full h-full object-contain" /> : <ImagePlus className="w-8 h-8 text-zinc-300"/>}
-                       <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"><Camera className="w-6 h-6 text-white"/></div>
-                    </div>
-                    <input type="file" ref={fileRef} className="hidden" accept="image/*" onChange={handleUpload} />
-                 </div>
+          <div className="p-6 space-y-4 overflow-y-auto custom-scrollbar">
+             <div className="flex justify-center mb-4">
+                <div onClick={() => fileRef.current.click()} className="w-32 h-32 rounded-xl shadow-md border-2 border-dashed border-zinc-300 cursor-pointer overflow-hidden relative group bg-zinc-50 flex items-center justify-center">
+                    {data.image ? <img src={data.image} className="w-full h-full object-contain" /> : <ImagePlus className="w-8 h-8 text-zinc-300"/>}
+                   <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"><Camera className="w-6 h-6 text-white"/></div>
+                </div>
+                <input type="file" ref={fileRef} className="hidden" accept="image/*" onChange={handleUpload} />
+             </div>
 
-                 <div className="space-y-4">
-                     <div>
-                        <label className="text-xs font-bold text-zinc-500 uppercase block mb-1">Award Title</label>
-                        <input value={data.title} onChange={e=>setData({...data, title: e.target.value})} className="w-full border rounded-lg p-2 text-sm outline-none" placeholder="e.g. Red Dot" />
-                     </div>
-                     
-                     <div>
-                        <label className="text-xs font-bold text-zinc-500 uppercase block mb-1">Organization</label>
-                        <input value={data.organization} onChange={e=>setData({...data, organization: e.target.value})} className="w-full border rounded-lg p-2 text-sm outline-none" />
-                     </div>
+             <div>
+                <label className="text-xs font-bold text-zinc-500 uppercase block mb-1">Award Title (Will be used as Tag)</label>
+                <input value={data.title} onChange={e=>setData({...data, title: e.target.value})} className="w-full border rounded-lg p-2 text-sm outline-none" placeholder="e.g. Red Dot Design Award" />
+             </div>
+             
+             <div>
+                <label className="text-xs font-bold text-zinc-500 uppercase block mb-1">Organization</label>
+                <input value={data.organization} onChange={e=>setData({...data, organization: e.target.value})} className="w-full border rounded-lg p-2 text-sm outline-none" placeholder="e.g. Design Zentrum Nordrhein Westfalen" />
+             </div>
 
-                     <div>
-                        <label className="text-xs font-bold text-zinc-500 uppercase block mb-1">Official Link</label>
-                        <input value={data.link} onChange={e=>setData({...data, link: e.target.value})} className="w-full border rounded-lg p-2 text-sm outline-none" />
-                     </div>
+             {/* V 0.8.2: Link Field */}
+             <div>
+                <label className="text-xs font-bold text-zinc-500 uppercase block mb-1">Official Link</label>
+                <input value={data.link} onChange={e=>setData({...data, link: e.target.value})} className="w-full border rounded-lg p-2 text-sm outline-none" placeholder="https://..." />
+             </div>
 
-                     <div>
-                        <label className="text-xs font-bold text-zinc-500 uppercase block mb-1">Description</label>
-                        <textarea rows={4} value={data.description} onChange={e=>setData({...data, description: e.target.value})} className="w-full border rounded-lg p-2 text-sm outline-none" />
-                     </div>
+             <div>
+                <label className="text-xs font-bold text-zinc-500 uppercase block mb-1">Description</label>
+                <textarea rows={3} value={data.description} onChange={e=>setData({...data, description: e.target.value})} className="w-full border rounded-lg p-2 text-sm outline-none" />
+             </div>
 
-                     <div>
-                        <label className="text-xs font-bold text-zinc-500 uppercase block mb-1">Tags</label>
-                        <div className="flex gap-2 mb-2">
-                            <input value={tagInput} onChange={e=>setTagInput(e.target.value)} className="flex-1 border rounded p-1.5 text-xs" placeholder="Add tag" onKeyDown={e => e.key === 'Enter' && addTag()} />
-                            <button onClick={addTag} className="bg-zinc-900 text-white px-3 rounded text-xs font-bold">Add</button>
-                        </div>
-                        <div className="flex flex-wrap gap-1">
-                            {data.tags?.map((tag, idx) => (
-                                <span key={idx} className="bg-blue-50 text-blue-700 px-2 py-1 rounded text-xs font-bold flex items-center">
-                                    {tag} <button onClick={() => removeTag(idx)} className="ml-1 hover:text-red-500"><X className="w-3 h-3"/></button>
-                                </span>
-                            ))}
-                        </div>
-                     </div>
-                 </div>
-              </div>
-
-              {/* Right: Winner Management (V 0.8.3) */}
-              <div className="w-full md:w-2/3 p-6 flex flex-col bg-zinc-50/50">
-                  <div className="mb-4">
-                      <h3 className="text-sm font-bold text-zinc-900 mb-2 flex justify-between">
-                          Manage Winners 
-                          <span className="bg-zinc-200 text-zinc-600 px-2 py-0.5 rounded-full text-xs">{winners.length} selected</span>
-                      </h3>
-                      <input 
-                          type="text" 
-                          placeholder="Search products to add..." 
-                          className="w-full p-2 bg-white border border-zinc-200 rounded-lg text-sm outline-none focus:border-zinc-400"
-                          value={productFilter}
-                          onChange={(e) => setProductFilter(e.target.value)}
-                      />
-                  </div>
-
-                  <div className="flex-1 overflow-y-auto custom-scrollbar border border-zinc-200 rounded-xl bg-white">
-                      {/* Available Products List (Filtered) */}
-                      {productFilter && (
-                          <div className="p-2 border-b border-zinc-100 bg-blue-50/30">
-                              <span className="text-[10px] font-bold text-zinc-400 uppercase px-2">Search Results</span>
-                              <div className="grid grid-cols-2 gap-2 mt-1">
-                                  {allProducts.filter(p => p.name.toLowerCase().includes(productFilter.toLowerCase()) && !winners.some(w => w.id === p.id)).map(p => (
-                                      <div key={p.id} onClick={() => toggleWinner(p)} className="flex items-center p-2 hover:bg-blue-50 cursor-pointer rounded-lg transition-colors border border-transparent hover:border-blue-100">
-                                          <Plus className="w-4 h-4 text-blue-500 mr-2"/>
-                                          <div className="w-8 h-8 bg-zinc-100 rounded overflow-hidden mr-2">
-                                              {p.images?.[0] && <img src={typeof p.images[0] === 'object' ? p.images[0].url : p.images[0]} className="w-full h-full object-cover"/>}
-                                          </div>
-                                          <span className="text-xs font-bold truncate">{p.name}</span>
-                                      </div>
-                                  ))}
-                              </div>
-                          </div>
-                      )}
-
-                      {/* Selected Winners List */}
-                      <div className="p-2">
-                          <span className="text-[10px] font-bold text-zinc-400 uppercase px-2 block mb-2">Selected Winners</span>
-                          <div className="space-y-2">
-                              {winners.map(winner => (
-                                  <div key={winner.id} className="flex items-center justify-between p-2 bg-zinc-50 rounded-lg border border-zinc-100">
-                                      <div className="flex items-center flex-1 min-w-0">
-                                          <div className="w-10 h-10 bg-white rounded-md overflow-hidden border border-zinc-200 mr-3 flex-shrink-0">
-                                              {winner.image && <img src={typeof winner.image === 'object' ? winner.image.url : winner.image} className="w-full h-full object-cover"/>}
-                                          </div>
-                                          <div className="truncate mr-2">
-                                              <div className="text-xs font-bold text-zinc-900 truncate">{winner.name}</div>
-                                          </div>
-                                      </div>
-                                      <div className="flex items-center gap-2">
-                                          <div className="flex items-center bg-white border border-zinc-200 rounded px-2 py-1">
-                                              <span className="text-[10px] text-zinc-400 mr-1">Year:</span>
-                                              <input 
-                                                  type="number" 
-                                                  className="w-12 text-xs font-bold text-center outline-none" 
-                                                  value={winner.year} 
-                                                  onChange={(e) => updateWinnerYear(winner.id, e.target.value)}
-                                              />
-                                          </div>
-                                          <button onClick={() => toggleWinner(winner)} className="p-1.5 text-zinc-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors">
-                                              <Trash2 className="w-4 h-4"/>
-                                          </button>
-                                      </div>
-                                  </div>
-                              ))}
-                              {winners.length === 0 && <div className="text-center py-8 text-zinc-300 text-xs">No winners selected.</div>}
-                          </div>
-                      </div>
-                  </div>
-              </div>
+             <div>
+                <label className="text-xs font-bold text-zinc-500 uppercase block mb-1">Additional Tags</label>
+                <div className="flex gap-2 mb-2">
+                    <input value={tagInput} onChange={e=>setTagInput(e.target.value)} className="flex-1 border rounded p-1.5 text-xs" placeholder="Add custom tag" onKeyDown={e => e.key === 'Enter' && addTag()} />
+                    <button onClick={addTag} className="bg-zinc-900 text-white px-3 rounded text-xs font-bold">Add</button>
+                </div>
+                <div className="flex flex-wrap gap-1">
+                    {data.tags?.map((tag, idx) => (
+                        <span key={idx} className="bg-blue-50 text-blue-700 px-2 py-1 rounded text-xs font-bold flex items-center">
+                            {tag} <button onClick={() => removeTag(idx)} className="ml-1 hover:text-red-500"><X className="w-3 h-3"/></button>
+                        </span>
+                    ))}
+                </div>
+             </div>
           </div>
-          
-          <div className="px-6 py-4 border-t border-zinc-100 bg-white flex justify-end space-x-3 flex-shrink-0">
-             <button onClick={onClose} className="px-5 py-2.5 border border-zinc-200 rounded-xl text-sm font-bold text-zinc-600 hover:bg-zinc-50">Cancel</button>
-             <button onClick={() => onSave(data, winners)} className="px-6 py-2.5 bg-zinc-900 text-white rounded-xl text-sm font-bold shadow-lg hover:bg-black hover:scale-105 transition-all">Save Changes</button>
+          <div className="px-5 py-4 border-t border-zinc-100 bg-zinc-50 flex justify-end space-x-2 flex-shrink-0">
+             <button onClick={onClose} className="px-4 py-2 text-sm font-bold text-zinc-500 hover:text-zinc-900">Cancel</button>
+             <button onClick={() => onSave(data)} className="px-4 py-2 bg-zinc-900 text-white rounded-lg text-sm font-bold shadow-md hover:bg-black">Save</button>
           </div>
        </div>
     </div>
