@@ -11,7 +11,8 @@ import {
   ChevronsUp, Camera, ImagePlus, Sofa, Briefcase, Users, Home as HomeIcon, MapPin,
   Edit3, Grid, MoreVertical, MousePointer2, CheckSquare, XCircle, Printer, List, Eye,
   PlayCircle, BarChart3, CornerUpLeft, Grid3X3, Droplet, Coffee, GraduationCap, ShoppingBag, FileDown, FileUp,
-  ArrowLeftRight, SlidersHorizontal, Move, Monitor, Maximize, EyeOff, Type, ExternalLink, Circle, Award, Globe
+  ArrowLeftRight, SlidersHorizontal, Move, Monitor, Maximize, EyeOff, Type, ExternalLink, Circle, Award, Globe,
+  BoxSelect, Component
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { 
@@ -215,6 +216,7 @@ export default function App() {
   useEffect(() => {
     const handleEsc = (e) => {
         if (e.key === 'Escape') {
+            // Priority 1 - Close Edit Forms
             if (editingSwatchFromModal) { setEditingSwatchFromModal(null); return; }
             if (editingAwardFromModal) { setEditingAwardFromModal(null); return; }
             if (isFormOpen) { setIsFormOpen(false); setEditingProduct(null); return; }
@@ -223,7 +225,7 @@ export default function App() {
             if (editingSpaceInfoId) { setEditingSpaceInfoId(null); return; }
             if (showAdminDashboard) { setShowAdminDashboard(false); return; }
 
-            // Stacked Modals
+            // Priority 2 - Close Detail Modals
             if (selectedProduct) { setSelectedProduct(null); return; }
             if (selectedSwatch) { setSelectedSwatch(null); return; }
             if (selectedScene) { setSelectedScene(null); return; }
@@ -386,6 +388,19 @@ export default function App() {
       setIsMobileMenuOpen(false);
   };
 
+  // V 0.8.5: Navigate to Award Modal from Product Tag
+  const handleNavigateToAward = (awardTitle) => {
+      const foundAward = awards.find(a => a.title === awardTitle);
+      if (foundAward) {
+          // Close product modal if needed, or just stack
+          setSelectedProduct(null); // Close product modal to show award modal clearly
+          setActiveCategory('AWARDS_ROOT');
+          setSelectedAward(foundAward);
+      } else {
+          showToast("Award details not found.", "error");
+      }
+  };
+
   const loadFromLocalStorage = () => {
     const saved = localStorage.getItem('patra_products');
     setProducts(saved ? JSON.parse(saved) : []);
@@ -417,7 +432,6 @@ export default function App() {
     }
   };
   
-  // Enhanced Toggle Favorite to support Scenes, Swatches, and Awards
   const toggleFavorite = (e, itemId) => {
     if(e) e.stopPropagation();
     let newFavs;
@@ -556,7 +570,6 @@ export default function App() {
       } 
       showToast(isMove ? "장면이 이동되었습니다." : "장면이 저장되었습니다."); 
       
-      // Return to View Mode with updated data
       setSelectedScene({...sceneData, spaceId: targetSpaceId});
       setEditingScene(null);
   };
@@ -568,12 +581,10 @@ export default function App() {
   const handleSaveSwatch = async (swatchData) => { const docId = swatchData.id ? String(swatchData.id) : String(Date.now()); const payload = { ...swatchData, id: docId, updatedAt: Date.now() }; if (isFirebaseAvailable && db) { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'swatches', docId), payload, { merge: true }); } else { const idx = swatches.findIndex(s => s.id === docId); let newSwatches = [...swatches]; if (idx >= 0) newSwatches[idx] = payload; else newSwatches = [payload, ...newSwatches]; saveSwatchesToLocal(newSwatches); } showToast("마감재가 저장되었습니다."); };
   const handleDeleteSwatch = async (swatchId) => { if (!window.confirm("정말 삭제하시겠습니까?")) return; if (isFirebaseAvailable && db) { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'swatches', String(swatchId))); } else { saveSwatchesToLocal(swatches.filter(s => s.id !== swatchId)); } showToast("마감재가 삭제되었습니다."); };
   
-  // Awards Actions (V 0.8.3: Handle product history updates)
   const handleSaveAward = async (awardData, winners = []) => {
       const docId = awardData.id ? String(awardData.id) : String(Date.now());
       const payload = { ...awardData, id: docId, updatedAt: Date.now() };
       
-      // 1. Save Award Data
       if (isFirebaseAvailable && db) {
           await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'awards', docId), payload, { merge: true });
       } else {
@@ -583,7 +594,6 @@ export default function App() {
           saveAwardsToLocal(newAwards);
       }
       
-      // 2. Update Products (Winners)
       if (winners.length > 0) {
           const batch = isFirebaseAvailable && db ? writeBatch(db) : null;
           let localProducts = [...products];
@@ -601,7 +611,6 @@ export default function App() {
               let needsUpdate = false;
 
               if (newYear) {
-                  // Add or Update
                   if (existingEntry) {
                       if (existingEntry.year !== newYear) {
                           newHistory = currentHistory.map(h => h.awardId === docId ? { ...h, year: newYear } : h);
@@ -612,7 +621,6 @@ export default function App() {
                       needsUpdate = true;
                   }
               } else {
-                  // Remove if it was there (User removed from list)
                   if (existingEntry) {
                       newHistory = currentHistory.filter(h => h.awardId !== docId);
                       needsUpdate = true;
@@ -635,7 +643,6 @@ export default function App() {
           if (!isFirebaseAvailable && hasUpdates) saveToLocalStorage(localProducts);
       }
       
-      // Update view if selected
       if(selectedAward && selectedAward.id === docId) {
           setSelectedAward(payload);
       }
@@ -734,7 +741,7 @@ export default function App() {
       let matchesCategory = true;
       if (activeCategory === 'DASHBOARD' || activeCategory === 'COMPARE_PAGE') matchesCategory = false; 
       else if (activeCategory === 'MY_PICK') matchesCategory = favorites.includes(product.id);
-      else if (activeCategory === 'ALL') matchesCategory = true; // ALL now means Total View (Master List)
+      else if (activeCategory === 'ALL') matchesCategory = true; 
       else if (activeCategory === 'SPACES_ROOT' || activeCategory === 'COLLECTIONS_ROOT' || activeCategory === 'MATERIALS_ROOT' || activeCategory === 'AWARDS_ROOT') matchesCategory = false; 
       else if (SPACES.find(s => s.id === activeCategory)) {
          matchesCategory = product.spaces && product.spaces.includes(activeCategory);
@@ -743,7 +750,6 @@ export default function App() {
       else if (SWATCH_CATEGORIES.find(s => s.id === activeCategory)) matchesCategory = false; 
       else matchesCategory = product.category === activeCategory;
       
-      // Search Logic (Tags + Text) - Enhanced for V 0.8.2 (Color Code/Name)
       const searchFields = [ 
           product.name, 
           product.specs, 
@@ -918,11 +924,12 @@ export default function App() {
                 </div>
             </div>
           </div>
-          <div className="flex items-center space-x-2 flex-shrink-0">
-             {compareList.length > 0 && <button onClick={handleCompareButtonClick} className={`flex items-center px-3 py-1.5 rounded-full text-xs font-bold animate-in fade-in transition-all mr-2 shadow-lg ${activeCategory === 'COMPARE_PAGE' ? 'bg-black text-white ring-2 ring-zinc-200' : 'bg-zinc-900 text-white hover:bg-black'}`}><ArrowLeftRight className="w-3 h-3 mr-1.5"/> Compare ({compareList.length})</button>}
-             <button onClick={() => setIsFilterOpen(!isFilterOpen)} className={`p-2 rounded-full transition-all ${isFilterOpen ? 'bg-zinc-200 text-black' : 'hover:bg-zinc-100 text-zinc-500'}`} title="Filters"><SlidersHorizontal className="w-5 h-5" /></button>
-             <button onClick={handleMyPickToggle} className={`p-2 rounded-full transition-all items-center space-x-1 ${activeCategory === 'MY_PICK' ? 'bg-yellow-100 text-yellow-600' : 'hover:bg-zinc-100 text-zinc-400 hover:text-zinc-600'}`} title="My Pick"><Heart className={`w-5 h-5 ${activeCategory === 'MY_PICK' ? 'fill-yellow-500 text-yellow-500' : ''}`} /></button>
-             <div className="flex items-center bg-zinc-100 rounded-lg p-1">
+          {/* V 0.8.5: Mobile Header Overflow Fix */}
+          <div className="flex items-center space-x-2 flex-shrink-0 overflow-x-auto md:overflow-visible no-scrollbar max-w-[40%] md:max-w-none justify-end">
+             {compareList.length > 0 && <button onClick={handleCompareButtonClick} className={`flex items-center px-3 py-1.5 rounded-full text-xs font-bold animate-in fade-in transition-all mr-2 shadow-lg whitespace-nowrap ${activeCategory === 'COMPARE_PAGE' ? 'bg-black text-white ring-2 ring-zinc-200' : 'bg-zinc-900 text-white hover:bg-black'}`}><ArrowLeftRight className="w-3 h-3 mr-1.5"/> <span className="hidden md:inline">Compare</span> ({compareList.length})</button>}
+             <button onClick={() => setIsFilterOpen(!isFilterOpen)} className={`p-2 rounded-full transition-all flex-shrink-0 ${isFilterOpen ? 'bg-zinc-200 text-black' : 'hover:bg-zinc-100 text-zinc-500'}`} title="Filters"><SlidersHorizontal className="w-5 h-5" /></button>
+             <button onClick={handleMyPickToggle} className={`p-2 rounded-full transition-all items-center space-x-1 flex-shrink-0 ${activeCategory === 'MY_PICK' ? 'bg-yellow-100 text-yellow-600' : 'hover:bg-zinc-100 text-zinc-400 hover:text-zinc-600'}`} title="My Pick"><Heart className={`w-5 h-5 ${activeCategory === 'MY_PICK' ? 'fill-yellow-500 text-yellow-500' : ''}`} /></button>
+             <div className="flex items-center bg-zinc-100 rounded-lg p-1 flex-shrink-0">
                 <select value={sortOption} onChange={(e) => setSortOption(e.target.value)} className="bg-transparent text-xs font-bold text-zinc-600 outline-none px-2 py-1 max-w-[80px] md:max-w-none cursor-pointer hidden md:block"><option value="manual">Manual</option><option value="launchDate">Launch</option><option value="createdAt">Added</option><option value="name">Name</option></select>
                 <button onClick={() => setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc')} className="p-1.5 rounded-md hover:bg-white hover:shadow-sm transition-all text-zinc-500" title="Sort">{sortDirection === 'asc' ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />}</button>
              </div>
@@ -945,8 +952,8 @@ export default function App() {
                 products={products} 
                 favorites={favorites} 
                 awards={awards} 
-                swatches={swatches} // V 0.8.5: Pass swatches for count
-                spaceContents={spaceContents} // V 0.8.5: Pass spaceContents for count
+                swatches={swatches}
+                spaceContents={spaceContents}
                 setActiveCategory={setActiveCategory} 
                 setSelectedProduct={setSelectedProduct} 
                 isAdmin={isAdmin} 
@@ -1086,7 +1093,7 @@ export default function App() {
                             {processedProducts.map((product, idx) => (
                                <div key={product.id} draggable={isAdmin && sortOption === 'manual'} onDragStart={(e) => handleDragStart(e, idx)} onDragEnter={(e) => handleDragEnter(e, idx)} onDragEnd={handleDragEnd} className={isAdmin && sortOption === 'manual' ? 'cursor-move active:opacity-50 transition-all' : ''}>
                                   <ProductCard product={product} onClick={() => setSelectedProduct(product)} isAdmin={isAdmin} isFavorite={favorites.includes(product.id)} onToggleFavorite={(e) => toggleFavorite(e, product.id)} onCompareToggle={(e) => toggleCompare(e, product)} onDuplicate={(e) => { e.stopPropagation(); handleDuplicateProduct(product); }} isCompared={!!compareList.find(p=>p.id===product.id)} />
-                               </div>
+                                </div>
                             ))}
                             {isAdmin && activeCategory !== 'MY_PICK' && !SPACES.find(s => s.id === activeCategory) && (<button onClick={() => { setEditingProduct(null); setIsFormOpen(true); }} className="border-2 border-dashed border-zinc-200 rounded-2xl flex flex-col items-center justify-center min-h-[250px] md:min-h-[300px] text-zinc-400 hover:border-zinc-400 hover:text-zinc-600 hover:bg-zinc-50 transition-all group print:hidden"><div className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-zinc-100 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform"><Plus className="w-6 h-6" /></div><span className="text-xs md:text-sm font-bold">Add Product</span></button>)}
                         </div>
@@ -1124,12 +1131,8 @@ export default function App() {
           onNavigateScene={(scene) => { setSelectedProduct(null); setActiveCategory(scene.spaceId || scene.id); setSelectedScene({...scene, spaceId: scene.spaceId || 'UNKNOWN'}); }}
           onNavigateProduct={(product) => setSelectedProduct(product)}
           onNavigateSwatch={(swatch) => { setSelectedSwatch(swatch); /* Stacks on top */ }}
+          onNavigateAward={handleNavigateToAward} // V 0.8.5
           onSaveProduct={handleSaveProduct} 
-          // V 0.8.5: Navigate to Award Modal from Product
-          onNavigateAward={(awardTitle) => {
-              const foundAward = awards.find(a => a.title === awardTitle);
-              if (foundAward) setSelectedAward(foundAward);
-          }}
         />
       )}
       
@@ -1507,13 +1510,8 @@ function CategoryRootView({ type, spaces, spaceContents, collections, materials,
 
                     return (
                         <CollapsibleSection key={item.id} title={item.label} count={subItems.length}>
-                            {/* V 0.8.5: Grid Layout Optimization */}
-                            {/* SPACES_ROOT uses 4-col (Total View style), others use standard logic */}
-                            <div className={`grid gap-4 ${
-                                type === 'MATERIALS_ROOT' ? 'grid-cols-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6' : 
-                                type === 'SPACES_ROOT' ? 'grid-cols-2 md:grid-cols-3 lg:grid-cols-4' : // V 0.8.5: 4-col for Spaces Root
-                                'grid-cols-2 md:grid-cols-4 lg:grid-cols-5'
-                            }`}>
+                            {/* V 0.8.5: Spaces Root Grid (4 cols), Others (4-5 cols) */}
+                            <div className={`grid gap-4 ${type === 'MATERIALS_ROOT' ? 'grid-cols-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6' : (type === 'SPACES_ROOT' ? 'grid-cols-2 md:grid-cols-3 lg:grid-cols-4' : 'grid-cols-2 md:grid-cols-4 lg:grid-cols-5')}`}>
                                 {subItems.map(sub => {
                                     // V 0.8.1: Use ProductCard for Collections
                                     if (type === 'COLLECTIONS_ROOT') {
@@ -2308,6 +2306,30 @@ function PieChartComponent({ data, total, selectedIndex, onSelect }) {
   );
 }
 
+// V 0.8.5: Compact Stats Bar Component
+function CompactStatsBar({ spacesCount, productsCount, materialsCount, awardsCount }) {
+    return (
+        <div className="grid grid-cols-4 gap-2 md:gap-4 mb-6">
+            <div className="bg-white p-3 rounded-xl border border-zinc-100 shadow-sm flex flex-col items-center justify-center text-center">
+                <span className="text-[10px] text-zinc-400 uppercase font-bold mb-1">Spaces</span>
+                <span className="text-lg md:text-xl font-black text-zinc-900">{spacesCount}</span>
+            </div>
+            <div className="bg-white p-3 rounded-xl border border-zinc-100 shadow-sm flex flex-col items-center justify-center text-center">
+                <span className="text-[10px] text-zinc-400 uppercase font-bold mb-1">Products</span>
+                <span className="text-lg md:text-xl font-black text-zinc-900">{productsCount}</span>
+            </div>
+            <div className="bg-white p-3 rounded-xl border border-zinc-100 shadow-sm flex flex-col items-center justify-center text-center">
+                <span className="text-[10px] text-zinc-400 uppercase font-bold mb-1">Materials</span>
+                <span className="text-lg md:text-xl font-black text-zinc-900">{materialsCount}</span>
+            </div>
+            <div className="bg-white p-3 rounded-xl border border-zinc-100 shadow-sm flex flex-col items-center justify-center text-center">
+                <span className="text-[10px] text-zinc-400 uppercase font-bold mb-1">Awards</span>
+                <span className="text-lg md:text-xl font-black text-zinc-900">{awardsCount}</span>
+            </div>
+        </div>
+    );
+}
+
 function DashboardView({ products, favorites, awards, swatches, spaceContents, setActiveCategory, setSelectedProduct, isAdmin, bannerData, onBannerUpload, onLogoUpload, onBannerTextChange, onSaveBannerText }) {
   const totalCount = products.length; const newCount = products.filter(p => p.isNew).length; const pickCount = favorites.length;
   const categoryCounts = []; let totalStandardProducts = 0;
@@ -2324,12 +2346,6 @@ function DashboardView({ products, favorites, awards, swatches, spaceContents, s
   const [isListExpanded, setIsListExpanded] = useState(false); // For Dropdown
   const [isLaunchExpanded, setIsLaunchExpanded] = useState(false); // For Launching Dropdown
   const [expandedAwardId, setExpandedAwardId] = useState(null); // V 0.8.2
-
-  // V 0.8.5: Calculate Counts for Compact Stats
-  const spaceCount = Object.values(spaceContents).reduce((acc, curr) => acc + (curr.scenes?.length || 0), 0);
-  const materialCount = swatches.length;
-  // Count products that have any award tag or history
-  const awardedProductCount = products.filter(p => (p.awards && p.awards.length > 0) || (p.awardHistory && p.awardHistory.length > 0)).length;
 
   // Helper for Selected Slice Data
   const getSelectedSliceDetails = () => {
@@ -2363,6 +2379,11 @@ function DashboardView({ products, favorites, awards, swatches, spaceContents, s
       }).filter(a => a.winners.length > 0);
   }, [awards, products]);
 
+  // V 0.8.5: Calculate Counts for Stats Bar
+  const spacesCount = Object.values(spaceContents).reduce((acc, content) => acc + (content.scenes?.length || 0), 0);
+  const materialsCount = swatches.length;
+  const totalAwardWinners = awardStats.reduce((acc, stat) => acc + stat.winners.length, 0);
+
   return (
     <div className="max-w-7xl mx-auto space-y-6 md:space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-32 print:hidden" onClick={() => setSelectedSlice(null)}>
       
@@ -2381,15 +2402,15 @@ function DashboardView({ products, favorites, awards, swatches, spaceContents, s
                     ) : (
                         <button onClick={()=>logoInputRef.current.click()} className="text-xs text-white bg-white/20 px-3 py-1 rounded hover:bg-white/40">+ Upload Logo</button>
                     )}
-                    {/* V 0.8.5: Font Weight Adjustment */}
-                    <input type="text" value={bannerData.title} onChange={(e) => onBannerTextChange('title', e.target.value)} onBlur={onSaveBannerText} className="bg-transparent text-3xl md:text-5xl font-bold tracking-tight text-white w-full outline-none placeholder-zinc-500 border-b border-transparent hover:border-zinc-500 transition-colors" placeholder="Main Title" />
+                    <input type="text" value={bannerData.title} onChange={(e) => onBannerTextChange('title', e.target.value)} onBlur={onSaveBannerText} className="bg-transparent text-3xl md:text-5xl font-black text-white tracking-tighter w-full outline-none placeholder-zinc-500 border-b border-transparent hover:border-zinc-500 transition-colors" placeholder="Main Title" />
                  </div>
                 <input type="text" value={bannerData.subtitle} onChange={(e) => onBannerTextChange('subtitle', e.target.value)} onBlur={onSaveBannerText} className="bg-transparent text-zinc-300 font-medium text-sm md:text-xl w-full outline-none placeholder-zinc-500 border-b border-transparent hover:border-zinc-500 transition-colors" placeholder="Subtitle" />
                 <input type="file" ref={logoInputRef} className="hidden" accept="image/*" onChange={onLogoUpload} />
               </div>
             ) : (
               <>
-                {bannerData.logoUrl ? <img src={bannerData.logoUrl} className="h-16 md:h-24 w-auto object-contain mb-4" alt="Logo" /> : <h2 className="text-3xl md:text-6xl font-bold tracking-tight text-white mb-2">{bannerData.title}</h2>}
+                {/* V 0.8.5: Typography Adjustment (font-black -> font-bold) */}
+                {bannerData.logoUrl ? <img src={bannerData.logoUrl} className="h-16 md:h-24 w-auto object-contain mb-4" alt="Logo" /> : <h2 className="text-3xl md:text-6xl font-bold text-white mb-2">{bannerData.title}</h2>}
                 <p className="text-zinc-300 font-medium text-sm md:text-xl opacity-90">{bannerData.subtitle}</p>
               </>
             )}
@@ -2397,38 +2418,15 @@ function DashboardView({ products, favorites, awards, swatches, spaceContents, s
          {isAdmin && (<><button onClick={() => fileInputRef.current.click()} className="absolute top-4 right-4 z-30 p-2 bg-white/20 backdrop-blur rounded-full text-white hover:bg-white hover:text-black transition-all opacity-0 group-hover:opacity-100" title="Change Banner Image"><Camera className="w-5 h-5" /></button><input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={onBannerUpload} /></>)}
       </div>
 
-      {/* V 0.8.5: Compact Stats Bar (Replaces Big Cards) */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <div onClick={() => setActiveCategory('SPACES_ROOT')} className="bg-white p-4 rounded-xl border border-zinc-100 shadow-sm hover:shadow-md cursor-pointer transition-all flex items-center justify-between group">
-              <div>
-                  <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide block mb-1">Spaces</span>
-                  <span className="text-2xl font-black text-zinc-900">{spaceCount}</span>
-              </div>
-              <Briefcase className="w-6 h-6 text-zinc-200 group-hover:text-zinc-800 transition-colors"/>
-          </div>
-          <div onClick={() => setActiveCategory('ALL')} className="bg-white p-4 rounded-xl border border-zinc-100 shadow-sm hover:shadow-md cursor-pointer transition-all flex items-center justify-between group">
-              <div>
-                  <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide block mb-1">Products</span>
-                  <span className="text-2xl font-black text-zinc-900">{totalCount}</span>
-              </div>
-              <LayoutGrid className="w-6 h-6 text-zinc-200 group-hover:text-zinc-800 transition-colors"/>
-          </div>
-          <div onClick={() => setActiveCategory('MATERIALS_ROOT')} className="bg-white p-4 rounded-xl border border-zinc-100 shadow-sm hover:shadow-md cursor-pointer transition-all flex items-center justify-between group">
-              <div>
-                  <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide block mb-1">Materials</span>
-                  <span className="text-2xl font-black text-zinc-900">{materialCount}</span>
-              </div>
-              <Palette className="w-6 h-6 text-zinc-200 group-hover:text-zinc-800 transition-colors"/>
-          </div>
-          <div onClick={() => setActiveCategory('AWARDS_ROOT')} className="bg-white p-4 rounded-xl border border-zinc-100 shadow-sm hover:shadow-md cursor-pointer transition-all flex items-center justify-between group">
-              <div>
-                  <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide block mb-1">Awards</span>
-                  <span className="text-2xl font-black text-zinc-900">{awardedProductCount}</span>
-              </div>
-              <Trophy className="w-6 h-6 text-zinc-200 group-hover:text-yellow-500 transition-colors"/>
-          </div>
-      </div>
+      {/* V 0.8.5: Compact Stats Bar */}
+      <CompactStatsBar 
+          spacesCount={spacesCount} 
+          productsCount={totalCount} 
+          materialsCount={materialsCount} 
+          awardsCount={totalAwardWinners} 
+      />
 
+      {/* V 0.8.5: Reordered - Category Contribution First */}
       <div className="bg-white p-6 md:p-8 rounded-3xl border border-zinc-100 shadow-sm">
          <div className="flex items-center justify-between mb-8">
             <h3 className="text-xl font-bold text-zinc-900 flex items-center"><PieChart className="w-6 h-6 mr-3 text-zinc-400" /> Category Contribution</h3>
@@ -2529,13 +2527,12 @@ function DashboardView({ products, favorites, awards, swatches, spaceContents, s
          ) : <div className="text-center py-20 text-zinc-300">No category data available</div>}
       </div>
 
-      {/* V 0.8.5: Awards Section Moved Up */}
+      {/* V 0.8.5: Awards Section moved after Category Contribution */}
       {awardStats.length > 0 && (
           <div className="bg-white p-6 md:p-8 rounded-3xl border border-zinc-100 shadow-sm">
               <div className="flex items-center justify-between mb-6">
                   <h3 className="text-xl font-bold text-zinc-900 flex items-center"><Trophy className="w-6 h-6 mr-3 text-yellow-500" /> Award Achievements</h3>
               </div>
-              {/* V 0.8.5: Mobile Optimized Grid */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {awardStats.map(stat => (
                       <div key={stat.id} className="bg-zinc-50 rounded-xl border border-zinc-200 p-4">
@@ -2629,8 +2626,8 @@ function SpaceDetailView({ space, spaceContent, activeTag, setActiveTag, isAdmin
         {banner ? <img src={banner} className="w-full h-full object-cover transition-transform duration-1000" alt="Space Banner" /> : <div className="w-full h-full flex items-center justify-center opacity-30"><span className="text-white text-4xl font-bold uppercase">{space.label}</span></div>}
         <div className="absolute bottom-8 left-8 md:bottom-12 md:left-12 z-20 text-white max-w-3xl">
            <div className="flex items-center space-x-3 mb-3"><div className="p-2 bg-white/20 backdrop-blur-md rounded-xl">{React.createElement(space.icon, { className: "w-6 h-6" })}</div></div>
-           {/* V 0.8.5: Font Weight Adjustment */}
-           <h2 className="text-4xl md:text-6xl font-bold tracking-tight mb-4 leading-tight">{space.label}</h2>
+           {/* V 0.8.5: Typography Adjustment (font-black -> font-bold) */}
+           <h2 className="text-4xl md:text-6xl font-bold mb-4 tracking-tight leading-tight">{space.label}</h2>
            <p className="text-zinc-200 text-sm md:text-lg leading-relaxed font-light">{description}</p>
            {trend && (<div className="mt-6 pl-4 border-l-2 border-indigo-500"><p className="text-indigo-300 text-xs font-bold uppercase mb-1">Design Trend</p><p className="text-zinc-300 text-sm italic">"{trend}"</p></div>)}
         </div>
@@ -2650,8 +2647,8 @@ function SpaceDetailView({ space, spaceContent, activeTag, setActiveTag, isAdmin
       <div className={`${filteredScenes.length === 0 ? '' : 'mb-12'} print:hidden`}>
         <div className="flex items-center justify-between mb-6"><h3 className="text-2xl font-extrabold text-zinc-900 flex items-center"><ImageIcon className="w-6 h-6 mr-2 text-indigo-500" /> Space Scenes ({filteredScenes.length})</h3>{isAdmin && (<button onClick={onAddScene} className="flex items-center text-sm font-bold bg-zinc-900 text-white px-4 py-2 rounded-lg hover:bg-black transition-colors shadow-lg"><Plus className="w-4 h-4 mr-2" /> Add Scene</button>)}</div>
         {filteredScenes.length > 0 ? (
-          // V 0.8.5: Use 3-col Grid for Sub-categories (Wide Design)
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          // V 0.8.5: Sub-categories (Office, etc.) use 3-column grid (wider look)
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {filteredScenes.map((scene) => (
               <div key={scene.id} onClick={() => onViewScene(scene)} className="group cursor-pointer relative">
                 <div className="aspect-[4/3] bg-zinc-50 rounded-xl mb-2 overflow-hidden border border-zinc-100 relative">
@@ -2751,7 +2748,7 @@ function ProductCard({ product, onClick, showMoveControls, onMove, isFavorite, o
   );
 }
 
-function ProductDetailModal({ product, allProducts, swatches, spaceContents, awards, onClose, onEdit, isAdmin, showToast, isFavorite, onToggleFavorite, onNavigateSpace, onNavigateScene, onNavigateNext, onNavigatePrev, onNavigateProduct, onNavigateSwatch, onSaveProduct, onNavigateAward }) {
+function ProductDetailModal({ product, allProducts, swatches, spaceContents, awards, onClose, onEdit, isAdmin, showToast, isFavorite, onToggleFavorite, onNavigateSpace, onNavigateScene, onNavigateNext, onNavigatePrev, onNavigateProduct, onNavigateSwatch, onNavigateAward, onSaveProduct }) {
   useScrollLock();
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [isZoomed, setIsZoomed] = useState(false);
@@ -2983,16 +2980,24 @@ function ProductDetailModal({ product, allProducts, swatches, spaceContents, awa
               <div className="flex flex-wrap gap-2 mb-3 items-center">
                  {product.awardHistory && product.awardHistory.length > 0 ? (
                      product.awardHistory.map((h, i) => (
-                         // V 0.8.5: Navigate to Award Modal on click
-                         <button key={i} onClick={() => onNavigateAward && onNavigateAward(h.title)} className="inline-flex items-center px-2.5 py-0.5 bg-yellow-400/20 text-yellow-700 border border-yellow-400/30 text-[10px] font-bold rounded uppercase tracking-wide group relative hover:bg-yellow-400/40 transition-colors">
+                         // V 0.8.5: Click to Navigate to Award Modal
+                         <button 
+                             key={i} 
+                             onClick={() => onNavigateAward(h.title)}
+                             className="inline-flex items-center px-2.5 py-0.5 bg-yellow-400/20 text-yellow-700 border border-yellow-400/30 text-[10px] font-bold rounded uppercase tracking-wide group relative hover:bg-yellow-400/40 transition-colors"
+                         >
                              <Trophy className="w-3 h-3 mr-1" /> {h.title} <span className="ml-1 text-yellow-800/70">'{h.year.slice(2)}</span>
-                             {isAdmin && <span onClick={(e) => { e.stopPropagation(); handleRemoveAward(h.awardId, h.title); }} className="ml-1.5 hover:text-red-600 hidden group-hover:inline-block"><X className="w-3 h-3"/></span>}
+                             {isAdmin && <span onClick={(e) => {e.stopPropagation(); handleRemoveAward(h.awardId, h.title)}} className="ml-1.5 hover:text-red-600 hidden group-hover:inline-block"><X className="w-3 h-3"/></span>}
                          </button>
                      ))
                  ) : (
                      // Fallback for old string tags
                      product.awards?.map(award => (
-                         <button key={award} onClick={() => onNavigateAward && onNavigateAward(award)} className="inline-flex items-center px-2.5 py-0.5 bg-yellow-400/20 text-yellow-700 border border-yellow-400/30 text-[10px] font-bold rounded uppercase tracking-wide hover:bg-yellow-400/40 transition-colors">
+                         <button 
+                             key={award} 
+                             onClick={() => onNavigateAward(award)}
+                             className="inline-flex items-center px-2.5 py-0.5 bg-yellow-400/20 text-yellow-700 border border-yellow-400/30 text-[10px] font-bold rounded uppercase tracking-wide hover:bg-yellow-400/40 transition-colors"
+                         >
                              <Trophy className="w-3 h-3 mr-1" /> {award}
                          </button>
                      ))
@@ -3164,6 +3169,38 @@ function ProductDetailModal({ product, allProducts, swatches, spaceContents, awa
     </div>
   );
 }
+
+function SpaceInfoEditModal({ spaceId, currentData = {}, defaultTags, onClose, onSave }) {
+  const [data, setData] = useState({ description: '', trend: '', tagsString: '' });
+  useEffect(() => { 
+     const tags = currentData.tags || defaultTags || [];
+     setData({ 
+        description: currentData.description || '', 
+        trend: currentData.trend || '',
+        tagsString: tags.join(', ')
+     }); 
+  }, [currentData, defaultTags]);
+
+  const handleSave = () => {
+     const tags = data.tagsString.split(',').map(t => t.trim()).filter(Boolean);
+     onSave({ ...data, tags });
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[80] flex items-center justify-center p-4">
+      <div className="bg-white w-full max-w-lg rounded-2xl overflow-hidden shadow-2xl">
+        <div className="px-6 py-4 border-b border-zinc-100 flex justify-between items-center"><h3 className="text-lg font-bold text-zinc-900">Edit Space Info</h3><button onClick={onClose}><X className="w-5 h-5 text-zinc-400" /></button></div>
+        <div className="p-6 space-y-4">
+           <div><label className="block text-xs font-bold text-zinc-500 uppercase mb-2">Description</label><textarea className="w-full border border-zinc-300 rounded-xl p-3 text-sm focus:ring-2 focus:ring-zinc-900 outline-none" rows={4} value={data.description} onChange={(e) => setData({...data, description: e.target.value})} /></div>
+           <div><label className="block text-xs font-bold text-zinc-500 uppercase mb-2">Design Trend Keywords</label><input type="text" className="w-full border border-zinc-300 rounded-xl p-3 text-sm focus:ring-2 focus:ring-zinc-900 outline-none" value={data.trend} onChange={(e) => setData({...data, trend: e.target.value})} placeholder="e.g. Minimalist, Eco-friendly, Open Plan" /></div>
+           <div><label className="block text-xs font-bold text-zinc-500 uppercase mb-2">Space Tags (comma separated)</label><input type="text" className="w-full border border-zinc-300 rounded-xl p-3 text-sm focus:ring-2 focus:ring-zinc-900 outline-none" value={data.tagsString} onChange={(e) => setData({...data, tagsString: e.target.value})} placeholder="Task, Executive, Meeting..." /></div>
+        </div>
+        <div className="px-6 py-4 border-t border-zinc-100 bg-zinc-50 flex justify-end"><button onClick={handleSave} className="px-6 py-2 bg-zinc-900 text-white rounded-xl text-sm font-bold hover:bg-black shadow-lg">Save Changes</button></div>
+      </div>
+    </div>
+  );
+}
+
 function ProductFormModal({ categories, swatches = [], allProducts = [], awards = [], existingData, onClose, onSave, onDelete, isFirebaseAvailable, initialCategory, spaceTags = [] }) {
   const isEditMode = !!existingData;
   const fileInputRef = useRef(null);
@@ -3751,8 +3788,6 @@ function SpaceSceneModal({ scene, products, allProducts, isAdmin, onClose, onEdi
   );
 }
 
-// --- V 0.8.2 New Components: Awards ---
-
 function AwardsManager({ awards, products, isAdmin, onSave, onDelete, onSelect, searchTerm, searchTags, favorites, onToggleFavorite }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingAward, setEditingAward] = useState(null);
@@ -3794,6 +3829,7 @@ function AwardsManager({ awards, products, isAdmin, onSave, onDelete, onSelect, 
          </div>
        )}
 
+       {/* V 0.8.5: Mobile Optimized Grid & Card Height */}
        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
           {filteredAwards.map(award => (
              <div key={award.id} onClick={() => handleCardClick(award)} className="bg-white rounded-xl border border-zinc-200 overflow-hidden group hover:shadow-lg transition-all relative cursor-pointer">
@@ -3805,10 +3841,10 @@ function AwardsManager({ awards, products, isAdmin, onSave, onDelete, onSelect, 
                        <Star className={`w-3.5 h-3.5 ${favorites.includes(award.id) ? 'fill-yellow-400 text-yellow-400' : ''}`}/>
                    </button>
                 </div>
-                <div className="p-4 border-t border-zinc-100">
-                   <h4 className="font-bold text-sm truncate mb-1">{award.title}</h4>
-                   <p className="text-xs text-zinc-500 truncate">{award.organization}</p>
-                   <div className="flex flex-wrap gap-1 mt-2">
+                <div className="p-3 md:p-4 border-t border-zinc-100">
+                   <h4 className="font-bold text-xs md:text-sm truncate mb-0.5 md:mb-1">{award.title}</h4>
+                   <p className="text-[10px] md:text-xs text-zinc-500 truncate">{award.organization}</p>
+                   <div className="flex flex-wrap gap-1 mt-1 md:mt-2">
                        {award.tags?.slice(0, 2).map(t => <span key={t} className="text-[9px] bg-zinc-100 px-1.5 py-0.5 rounded text-zinc-600">{t}</span>)}
                    </div>
                 </div>
