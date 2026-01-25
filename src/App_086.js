@@ -38,7 +38,7 @@ const YOUR_FIREBASE_CONFIG = {
 // ----------------------------------------------------------------------
 // 상수 및 설정
 // ----------------------------------------------------------------------
-const APP_VERSION = "v0.8.7"; 
+const APP_VERSION = "v0.8.6"; 
 const BUILD_DATE = "2026.01.25";
 const ADMIN_PASSWORD = "adminlcg1"; 
 
@@ -926,7 +926,7 @@ export default function App() {
                 </div>
             </div>
           </div>
-          {/* V 0.8.7: Mobile Header Overflow Fix - Ensure buttons are clickable and visible */}
+          {/* V 0.8.6: Mobile Header Overflow Fix - Ensure buttons are clickable and visible */}
           <div className="flex items-center space-x-2 flex-shrink-0 overflow-x-auto md:overflow-visible no-scrollbar max-w-[40%] md:max-w-none justify-end mask-image-scroll">
              {compareList.length > 0 && <button onClick={handleCompareButtonClick} className={`flex items-center px-3 py-1.5 rounded-full text-xs font-bold animate-in fade-in transition-all mr-2 shadow-lg whitespace-nowrap ${activeCategory === 'COMPARE_PAGE' ? 'bg-black text-white ring-2 ring-zinc-200' : 'bg-zinc-900 text-white hover:bg-black'}`}><ArrowLeftRight className="w-3 h-3 mr-1.5"/> <span className="hidden md:inline">Compare</span> ({compareList.length})</button>}
              <button onClick={() => setIsFilterOpen(!isFilterOpen)} className={`p-2 rounded-full transition-all flex-shrink-0 ${isFilterOpen ? 'bg-zinc-200 text-black' : 'hover:bg-zinc-100 text-zinc-500'}`} title="Filters"><SlidersHorizontal className="w-5 h-5" /></button>
@@ -948,7 +948,7 @@ export default function App() {
            </div>
         )}
 
-        <div ref={mainContentRef} className="flex-1 overflow-y-auto p-4 md:p-8 custom-scrollbar relative print:overflow-visible print:p-0 pb-40">
+        <div ref={mainContentRef} className="flex-1 overflow-y-auto p-4 md:p-8 custom-scrollbar relative print:overflow-visible print:p-0">
           {activeCategory === 'DASHBOARD' && !searchTerm && searchTags.length === 0 && !filters.year && !filters.color ? (
             <DashboardView 
                 products={products} 
@@ -2667,30 +2667,30 @@ function SpaceDetailView({ space, spaceContent, activeTag, setActiveTag, isAdmin
         ) : (<div className="text-center py-12 bg-zinc-50 rounded-2xl border border-dashed border-zinc-200 text-zinc-400"><ImageIcon className="w-12 h-12 mx-auto mb-3 opacity-20" /><p className="text-sm">등록된 공간 장면이 없습니다.</p></div>)}
       </div>
       
-      {/* V 0.8.7: Fix duplicate product list and remove margin if empty */}
+      {/* V 0.8.1: Remove extra margin if no products */}
       {products.length > 0 && (
-          <>
-              <div className="flex items-center justify-between mb-6 border-t border-zinc-100 pt-12 print:border-none print:pt-0">
-                 <h3 className="text-xl font-bold text-zinc-900 flex items-center"><Tag className="w-5 h-5 mr-2 text-zinc-400" /> All Curated Products <span className="ml-2 text-sm font-medium text-zinc-400 bg-zinc-100 px-2 py-0.5 rounded-full">{productCount}</span></h3>
-                 {isAdmin && (<button onClick={onManageProducts} className="flex items-center text-sm font-bold text-zinc-500 hover:text-zinc-900 bg-white border border-zinc-200 px-4 py-2 rounded-lg hover:border-zinc-400 transition-colors"><Settings className="w-4 h-4 mr-2" /> Manage List</button>)}
-              </div>
+          <div className="flex items-center justify-between mb-6 border-t border-zinc-100 pt-12 print:border-none print:pt-0">
+             <h3 className="text-xl font-bold text-zinc-900 flex items-center"><Tag className="w-5 h-5 mr-2 text-zinc-400" /> All Curated Products <span className="ml-2 text-sm font-medium text-zinc-400 bg-zinc-100 px-2 py-0.5 rounded-full">{productCount}</span></h3>
+             {isAdmin && (<button onClick={onManageProducts} className="flex items-center text-sm font-bold text-zinc-500 hover:text-zinc-900 bg-white border border-zinc-200 px-4 py-2 rounded-lg hover:border-zinc-400 transition-colors"><Settings className="w-4 h-4 mr-2" /> Manage List</button>)}
+          </div>
+      )}
 
-              {/* V 0.8.2: Use ProductCard for Curated Products List (Horizontal Layout from Total View) */}
-              <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-6 pb-32 print:grid-cols-3 print:gap-4">
-                  {products.map((product) => (
-                      <div key={product.id}>
-                          <ProductCard 
-                              product={product} 
-                              onClick={() => onProductClick(product)}
-                              isFavorite={favorites.includes(product.id)}
-                              onToggleFavorite={(e) => onToggleFavorite(e, product.id)}
-                              onCompareToggle={(e) => onCompareToggle(e, product)}
-                              isCompared={!!compareList.find(p=>p.id===product.id)}
-                          />
-                      </div>
-                  ))}
-              </div>
-          </>
+      {/* V 0.8.2: Use ProductCard for Curated Products List (Horizontal Layout from Total View) */}
+      {products.length > 0 && (
+          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-6 pb-32 print:grid-cols-3 print:gap-4">
+              {products.map((product) => (
+                  <div key={product.id}>
+                      <ProductCard 
+                          product={product} 
+                          onClick={() => onProductClick(product)}
+                          isFavorite={favorites.includes(product.id)}
+                          onToggleFavorite={(e) => onToggleFavorite(e, product.id)}
+                          onCompareToggle={(e) => onCompareToggle(e, product)}
+                          isCompared={!!compareList.find(p=>p.id===product.id)}
+                      />
+                  </div>
+              ))}
+          </div>
       )}
     </div>
   );
@@ -3777,7 +3777,7 @@ function SpaceSceneModal({ scene, products, allProducts, isAdmin, onClose, onEdi
                  </div>
                )}
                
-               {/* V 0.8.7: Prevent Duplicates & Remove Extra Margin if Empty */}
+               {/* V 0.8.6: Prevent Duplicates & Remove Extra Margin if Empty */}
                <div className={`space-y-3 ${products.length > 0 ? 'mb-8' : 'mb-0'}`}>
                    {products.length > 0 ? (
                        // Filter out duplicates just in case
@@ -3853,12 +3853,12 @@ function AwardsManager({ awards, products, isAdmin, onSave, onDelete, onSelect, 
          </div>
        )}
 
-       {/* V 0.8.7: Mobile Optimized Grid (2 cols) & Square Image Ratio */}
+       {/* V 0.8.6: Mobile Optimized Grid (2 cols) & Square Image Ratio */}
        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
           {filteredAwards.map(award => (
              <div key={award.id} onClick={() => handleCardClick(award)} className="bg-white rounded-xl border border-zinc-200 overflow-hidden group hover:shadow-lg transition-all relative cursor-pointer flex flex-col">
-                {/* V 0.8.7: Square Aspect Ratio for Image Container, No Gray Background, Fix Clipping */}
-                <div className="aspect-square relative bg-white flex items-center justify-center p-6">
+                {/* V 0.8.6: Square Aspect Ratio for Image Container */}
+                <div className="aspect-square relative bg-zinc-50 flex items-center justify-center p-6">
                    {award.image ? <img src={award.image} className="w-full h-full object-contain" /> : <Trophy className="w-12 h-12 text-zinc-300"/>}
                    
                    {/* V 0.8.1: My Pick Button for Awards */}
@@ -3866,8 +3866,8 @@ function AwardsManager({ awards, products, isAdmin, onSave, onDelete, onSelect, 
                        <Star className={`w-3.5 h-3.5 ${favorites.includes(award.id) ? 'fill-yellow-400 text-yellow-400' : ''}`}/>
                    </button>
                 </div>
-                {/* V 0.8.7: Compact Info Area */}
-                <div className="p-3 border-t border-zinc-100 flex-1 flex flex-col justify-center bg-zinc-50/30">
+                {/* V 0.8.6: Compact Info Area */}
+                <div className="p-3 border-t border-zinc-100 flex-1 flex flex-col justify-center">
                    <h4 className="font-bold text-xs md:text-sm truncate mb-0.5">{award.title}</h4>
                    <p className="text-[10px] md:text-xs text-zinc-500 truncate">{award.organization}</p>
                 </div>
