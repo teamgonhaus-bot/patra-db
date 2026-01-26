@@ -39,7 +39,7 @@ const YOUR_FIREBASE_CONFIG = {
 // 상수 및 설정
 // ----------------------------------------------------------------------
 const APP_VERSION = "v0.8.71"; 
-const BUILD_DATE = "2026.01.25";
+const BUILD_DATE = "2026.01.26";
 const ADMIN_PASSWORD = "adminlcg1"; 
 
 // Firebase 초기화
@@ -926,16 +926,16 @@ export default function App() {
                 </div>
             </div>
           </div>
-          {/* V 0.8.71: Mobile Header Overflow Fix - All buttons visible including Sort */}
-          <div className="flex items-center space-x-2 flex-shrink-0 justify-end overflow-x-auto no-scrollbar mask-image-scroll md:overflow-visible">
-             {compareList.length > 0 && <button onClick={handleCompareButtonClick} className={`flex items-center px-3 py-1.5 rounded-full text-xs font-bold animate-in fade-in transition-all mr-2 shadow-lg whitespace-nowrap ${activeCategory === 'COMPARE_PAGE' ? 'bg-black text-white ring-2 ring-zinc-200' : 'bg-zinc-900 text-white hover:bg-black'}`}><ArrowLeftRight className="w-3 h-3 mr-1.5"/> <span className="hidden md:inline">Compare</span> ({compareList.length})</button>}
+          {/* V 0.8.71: Mobile Header Overflow Fix - Ensure buttons are clickable and visible */}
+          <div className="flex items-center space-x-1 md:space-x-2 flex-shrink-0 overflow-visible justify-end">
+             {compareList.length > 0 && <button onClick={handleCompareButtonClick} className={`flex items-center px-3 py-1.5 rounded-full text-xs font-bold animate-in fade-in transition-all mr-1 shadow-lg whitespace-nowrap ${activeCategory === 'COMPARE_PAGE' ? 'bg-black text-white ring-2 ring-zinc-200' : 'bg-zinc-900 text-white hover:bg-black'}`}><ArrowLeftRight className="w-3 h-3 md:mr-1.5"/> <span className="hidden md:inline">Compare</span> ({compareList.length})</button>}
              <button onClick={() => setIsFilterOpen(!isFilterOpen)} className={`p-2 rounded-full transition-all flex-shrink-0 ${isFilterOpen ? 'bg-zinc-200 text-black' : 'hover:bg-zinc-100 text-zinc-500'}`} title="Filters"><SlidersHorizontal className="w-5 h-5" /></button>
              <button onClick={handleMyPickToggle} className={`p-2 rounded-full transition-all items-center space-x-1 flex-shrink-0 ${activeCategory === 'MY_PICK' ? 'bg-yellow-100 text-yellow-600' : 'hover:bg-zinc-100 text-zinc-400 hover:text-zinc-600'}`} title="My Pick"><Heart className={`w-5 h-5 ${activeCategory === 'MY_PICK' ? 'fill-yellow-500 text-yellow-500' : ''}`} /></button>
              <div className="flex items-center bg-zinc-100 rounded-lg p-1 flex-shrink-0 ml-1">
                 <select value={sortOption} onChange={(e) => setSortOption(e.target.value)} className="bg-transparent text-xs font-bold text-zinc-600 outline-none px-2 py-1 max-w-[80px] md:max-w-none cursor-pointer hidden md:block"><option value="manual">Manual</option><option value="launchDate">Launch</option><option value="createdAt">Added</option><option value="name">Name</option></select>
                 <button onClick={() => setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc')} className="p-1.5 rounded-md hover:bg-white hover:shadow-sm transition-all text-zinc-500" title="Sort">{sortDirection === 'asc' ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />}</button>
              </div>
-            {isAdmin && (<button onClick={() => { setEditingProduct(null); setIsFormOpen(true); }} className="flex items-center justify-center w-8 h-8 md:w-auto md:h-auto md:px-4 md:py-2 bg-zinc-900 text-white rounded-full hover:bg-black transition-all shadow-lg hover:shadow-xl active:scale-95 flex-shrink-0 ml-2"><Plus className="w-4 h-4 md:mr-1.5" /><span className="hidden md:inline text-sm font-bold">New</span></button>)}
+            {isAdmin && (<button onClick={() => { setEditingProduct(null); setIsFormOpen(true); }} className="flex items-center justify-center w-8 h-8 md:w-auto md:h-auto md:px-4 md:py-2 bg-zinc-900 text-white rounded-full hover:bg-black transition-all shadow-lg hover:shadow-xl active:scale-95 flex-shrink-0 ml-1"><Plus className="w-4 h-4 md:mr-1.5" /><span className="hidden md:inline text-sm font-bold">New</span></button>)}
           </div>
         </header>
 
@@ -948,8 +948,8 @@ export default function App() {
            </div>
         )}
 
-        {/* V 0.8.71: Increased padding-bottom to ensure full scrolling */}
-        <div ref={mainContentRef} className="flex-1 overflow-y-auto p-4 md:p-8 custom-scrollbar relative print:overflow-visible print:p-0 pb-40">
+        {/* V 0.8.71: Main Content Container with pb-32 for scroll fixing */}
+        <div ref={mainContentRef} className="flex-1 overflow-y-auto p-4 md:p-8 custom-scrollbar relative print:overflow-visible print:p-0 pb-32 md:pb-40">
           {activeCategory === 'DASHBOARD' && !searchTerm && searchTags.length === 0 && !filters.year && !filters.color ? (
             <DashboardView 
                 products={products} 
@@ -1868,8 +1868,7 @@ function SwatchManager({ category, swatches, isAdmin, onSave, onDelete, onSelect
   });
 
   return (
-    // V 0.8.71: Increased padding bottom for scrolling
-    <div className="p-1 animate-in fade-in pb-40">
+    <div className="p-1 animate-in fade-in pb-32">
        {/* Adjusted Header Style to match Scenes/Collections */}
        <div className="flex items-center justify-between mb-6">
          <h3 className="text-2xl font-extrabold text-zinc-900 flex items-center tracking-tight">
@@ -2531,24 +2530,24 @@ function DashboardView({ products, favorites, awards, swatches, spaceContents, s
          ) : <div className="text-center py-20 text-zinc-300">No category data available</div>}
       </div>
 
-      {/* V 0.8.71: Mobile Optimized Awards Section (2-cols) */}
+      {/* V 0.8.71: Awards Section moved after Category Contribution - Mobile 2-col Grid */}
       {awardStats.length > 0 && (
           <div className="bg-white p-6 md:p-8 rounded-3xl border border-zinc-100 shadow-sm">
               <div className="flex items-center justify-between mb-6">
                   <h3 className="text-xl font-bold text-zinc-900 flex items-center"><Trophy className="w-6 h-6 mr-3 text-yellow-500" /> Award Achievements</h3>
               </div>
-              <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
                   {awardStats.map(stat => (
                       <div key={stat.id} className="bg-zinc-50 rounded-xl border border-zinc-200 p-4">
                           <div className="flex items-center justify-between mb-3">
-                              <div className="flex items-center">
-                                  {stat.image ? <img src={stat.image} className="w-8 h-8 object-contain mr-3"/> : <Trophy className="w-8 h-8 text-zinc-300 mr-3"/>}
-                                  <div>
-                                      <h4 className="text-sm font-bold text-zinc-900 truncate max-w-[80px] md:max-w-none">{stat.title}</h4>
-                                      <span className="text-[10px] text-zinc-500 truncate block max-w-[80px] md:max-w-none">{stat.organization}</span>
+                              <div className="flex items-center min-w-0">
+                                  {stat.image ? <img src={stat.image} className="w-8 h-8 object-contain mr-2 flex-shrink-0"/> : <Trophy className="w-8 h-8 text-zinc-300 mr-2 flex-shrink-0"/>}
+                                  <div className="min-w-0">
+                                      <h4 className="text-xs md:text-sm font-bold text-zinc-900 truncate">{stat.title}</h4>
+                                      <span className="text-[9px] md:text-[10px] text-zinc-500 truncate block">{stat.organization}</span>
                                   </div>
                               </div>
-                              <span className="text-lg font-black text-zinc-900">{stat.winners.length}</span>
+                              <span className="text-lg font-black text-zinc-900 ml-2">{stat.winners.length}</span>
                           </div>
                           
                           {/* Dropdown for Winners */}
@@ -2621,9 +2620,6 @@ function SpaceDetailView({ space, spaceContent, activeTag, setActiveTag, isAdmin
       return matchesTag && matchesSearch && matchesTags;
   });
 
-  // V 0.8.71: Fix Duplicates in products list using Map
-  const uniqueProducts = Array.from(new Map(products.map(p => [p.id, p])).values());
-
   const copySpaceLink = () => { navigator.clipboard.writeText(`${window.location.origin}${window.location.pathname}?space=${space.id}`); window.alert("공간 공유 링크가 복사되었습니다."); };
 
   return (
@@ -2672,17 +2668,17 @@ function SpaceDetailView({ space, spaceContent, activeTag, setActiveTag, isAdmin
         ) : (<div className="text-center py-12 bg-zinc-50 rounded-2xl border border-dashed border-zinc-200 text-zinc-400"><ImageIcon className="w-12 h-12 mx-auto mb-3 opacity-20" /><p className="text-sm">등록된 공간 장면이 없습니다.</p></div>)}
       </div>
       
-      {/* V 0.8.71: Fix Duplicate Product Listing and Removing Margin if Empty */}
-      {uniqueProducts.length > 0 ? (
+      {/* V 0.8.71: Fix duplicate product list and remove margin if empty */}
+      {products.length > 0 && (
           <>
               <div className="flex items-center justify-between mb-6 border-t border-zinc-100 pt-12 print:border-none print:pt-0">
-                 <h3 className="text-xl font-bold text-zinc-900 flex items-center"><Tag className="w-5 h-5 mr-2 text-zinc-400" /> All Curated Products <span className="ml-2 text-sm font-medium text-zinc-400 bg-zinc-100 px-2 py-0.5 rounded-full">{uniqueProducts.length}</span></h3>
+                 <h3 className="text-xl font-bold text-zinc-900 flex items-center"><Tag className="w-5 h-5 mr-2 text-zinc-400" /> All Curated Products <span className="ml-2 text-sm font-medium text-zinc-400 bg-zinc-100 px-2 py-0.5 rounded-full">{productCount}</span></h3>
                  {isAdmin && (<button onClick={onManageProducts} className="flex items-center text-sm font-bold text-zinc-500 hover:text-zinc-900 bg-white border border-zinc-200 px-4 py-2 rounded-lg hover:border-zinc-400 transition-colors"><Settings className="w-4 h-4 mr-2" /> Manage List</button>)}
               </div>
 
               {/* V 0.8.2: Use ProductCard for Curated Products List (Horizontal Layout from Total View) */}
               <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-6 pb-32 print:grid-cols-3 print:gap-4">
-                  {uniqueProducts.map((product) => (
+                  {products.map((product) => (
                       <div key={product.id}>
                           <ProductCard 
                               product={product} 
@@ -2696,7 +2692,7 @@ function SpaceDetailView({ space, spaceContent, activeTag, setActiveTag, isAdmin
                   ))}
               </div>
           </>
-      ) : null}
+      )}
     </div>
   );
 }
@@ -3478,8 +3474,7 @@ function SwatchSelector({ label, selected, swatches, onChange }) {
 
   const handleSelect = (swatch) => {
      const snapshot = { 
-         id: swatch.id, name: swatch.name, hex: swatch.hex,
-         image: swatch.image, 
+         id: swatch.id, name: swatch.name, hex: swatch.hex, image: swatch.image, 
          category: swatch.category, textureType: swatch.textureType, materialCode: swatch.materialCode 
      };
      if(!selected.find(s => (typeof s === 'object' ? s.id === swatch.id : false))) {
@@ -3709,7 +3704,6 @@ function SpaceSceneModal({ scene, products, allProducts, isAdmin, onClose, onEdi
   const currentImgUrl = typeof currentImgObj === 'object' ? currentImgObj.url : currentImgObj;
   const currentImgCaption = typeof currentImgObj === 'object' ? currentImgObj.caption : '';
 
-  // V 0.8.4: Keyboard Navigation for Scene Images
   useEffect(() => {
       const handleKeyDown = (e) => {
           if (e.key === 'ArrowLeft') {
@@ -3725,17 +3719,21 @@ function SpaceSceneModal({ scene, products, allProducts, isAdmin, onClose, onEdi
   const handleNext = () => { if(currentImageIndex < images.length - 1) setCurrentImageIndex(currentImageIndex + 1); };
   const handlePrev = () => { if(currentImageIndex > 0) setCurrentImageIndex(currentImageIndex - 1); };
 
-  // V 0.8.71: Fix Duplicates in tagged products list & Clean empty state
-  const uniqueProducts = useMemo(() => {
-      const seen = new Set();
-      return products.filter(p => {
-          if (seen.has(p.id)) return false;
-          seen.add(p.id);
-          return true;
-      });
-  }, [products]);
-
   const handleShareImage = async () => { /* Placeholder */ };
+
+  // V 0.8.71: Eliminate Duplicate Products & Check Empty
+  // We use a Set to ensure unique IDs, then map back to product objects
+  const uniqueProducts = useMemo(() => {
+      const uniqueIds = new Set();
+      const uniqueList = [];
+      products.forEach(p => {
+          if(!uniqueIds.has(p.id)){
+              uniqueIds.add(p.id);
+              uniqueList.push(p);
+          }
+      });
+      return uniqueList;
+  }, [products]);
 
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[60] flex items-center justify-center p-0 md:p-6 animate-in zoom-in-95 duration-200 print:hidden">
@@ -3747,24 +3745,18 @@ function SpaceSceneModal({ scene, products, allProducts, isAdmin, onClose, onEdi
             <button onClick={onClose} className="p-2 bg-white/50 hover:bg-zinc-100 rounded-full backdrop-blur shadow-sm"><X className="w-6 h-6 text-zinc-900" /></button>
          </div>
          
-         {/* Image Section - Scrolls with content on mobile, Fixed on Desktop */}
          <div className="w-full md:w-2/3 bg-black relative flex flex-col justify-center shrink-0 md:h-full">
             <div className="relative w-full h-full min-h-[40vh] md:min-h-0">
                 <img src={currentImgUrl} className="w-full h-full object-contain cursor-zoom-in" alt="Scene" onClick={() => setIsZoomed(true)} />
                 <button onClick={onToggleFavorite} className="absolute top-4 left-4 p-2 bg-black/40 backdrop-blur rounded-full text-white hover:text-yellow-400 z-30"><Star className={`w-6 h-6 ${isFavorite ? 'fill-yellow-400 text-yellow-400' : ''}`}/></button>
             </div>
-            {/* Caption Outside */}
             {currentImgCaption && <div className="absolute bottom-20 left-0 right-0 text-center text-white/90 text-sm bg-black/40 backdrop-blur-sm p-2 mx-auto max-w-md rounded-xl z-20">{currentImgCaption}</div>}
-            
-            {/* Navigation Arrows */}
             {images.length > 1 && (
                 <>
                     <button onClick={(e) => {e.stopPropagation(); handlePrev()}} className="absolute left-4 top-1/2 -translate-y-1/2 p-2 bg-white/10 hover:bg-white/30 rounded-full text-white backdrop-blur-sm disabled:opacity-30" disabled={currentImageIndex === 0}><ChevronLeft className="w-6 h-6"/></button>
                     <button onClick={(e) => {e.stopPropagation(); handleNext()}} className="absolute right-4 top-1/2 -translate-y-1/2 p-2 bg-white/10 hover:bg-white/30 rounded-full text-white backdrop-blur-sm disabled:opacity-30" disabled={currentImageIndex === images.length - 1}><ChevronRight className="w-6 h-6"/></button>
                 </>
             )}
-
-            {/* Mini Thumbnails */}
             {images.length > 1 && (
                 <div className="absolute bottom-4 left-0 right-0 flex justify-center space-x-2 px-4 overflow-x-auto custom-scrollbar z-20">
                     {images.map((img, idx) => (
@@ -3776,7 +3768,6 @@ function SpaceSceneModal({ scene, products, allProducts, isAdmin, onClose, onEdi
             )}
          </div>
 
-         {/* Content Section */}
          <div className="w-full md:w-1/3 bg-white flex flex-col border-l border-zinc-100 md:h-full relative">
             <div className="p-6 md:p-8 border-b border-zinc-50 pt-8 md:pt-16 flex-shrink-0">
                <div className="mb-4">
@@ -3793,10 +3784,10 @@ function SpaceSceneModal({ scene, products, allProducts, isAdmin, onClose, onEdi
                  </div>
                )}
                
-               {/* V 0.8.71: Fix Duplicates and Clean Empty State */}
-               <div className={`space-y-3 ${uniqueProducts.length > 0 ? 'mb-8' : 'mb-0'}`}>
-                   {uniqueProducts.length > 0 ? (
-                       uniqueProducts.map(product => (
+               {/* V 0.8.71: Fixed duplication and removed margin if empty */}
+               {uniqueProducts.length > 0 ? (
+                   <div className="space-y-3 mb-8">
+                       {uniqueProducts.map(product => (
                            <div key={product.id} onClick={() => onNavigateProduct(product)} className="flex items-center p-3 bg-white rounded-xl border border-zinc-100 shadow-sm hover:border-zinc-300 transition-all cursor-pointer group">
                                <div className="w-12 h-12 bg-zinc-50 rounded-lg flex-shrink-0 flex items-center justify-center mr-3 overflow-hidden">
                                    {product.images?.[0] ? <img src={typeof product.images[0] === 'object' ? product.images[0].url : product.images[0]} className="w-full h-full object-cover" /> : <ImageIcon className="w-5 h-5 text-zinc-300"/>}
@@ -3807,13 +3798,12 @@ function SpaceSceneModal({ scene, products, allProducts, isAdmin, onClose, onEdi
                                </div>
                                <ChevronRight className="w-4 h-4 text-zinc-300 group-hover:text-zinc-600"/>
                            </div>
-                       ))
-                   ) : (
-                       <div className="text-center py-8 text-zinc-400 text-xs">연관된 제품이 없습니다.</div>
-                   )}
-               </div>
+                       ))}
+                   </div>
+               ) : (
+                   <div className="text-center py-8 text-zinc-400 text-xs">연관된 제품이 없습니다.</div>
+               )}
             
-               {/* Share & Print for Mobile Consistency */}
                <div className="pt-4 border-t border-zinc-100 flex gap-3 print:hidden mb-safe">
                     <button onClick={handleShareImage} className="flex-1 py-3 bg-white border border-zinc-200 text-zinc-600 rounded-xl text-xs font-bold hover:bg-zinc-50 flex items-center justify-center"><ImgIcon className="w-4 h-4 mr-2"/> Share</button>
                     <button onClick={() => window.print()} className="flex-1 py-3 bg-white border border-zinc-200 text-zinc-600 rounded-xl text-xs font-bold hover:bg-zinc-50 flex items-center justify-center"><Printer className="w-4 h-4 mr-2"/> PDF</button>
@@ -3844,8 +3834,7 @@ function AwardsManager({ awards, products, isAdmin, onSave, onDelete, onSelect, 
   });
 
   return (
-    // V 0.8.71: Increased padding bottom
-    <div className="p-1 animate-in fade-in pb-40">
+    <div className="p-1 animate-in fade-in pb-32">
        <div className="flex items-center justify-between mb-6">
          <h3 className="text-2xl font-extrabold text-zinc-900 flex items-center tracking-tight">
              <Trophy className="w-6 h-6 mr-3 text-yellow-500" />
@@ -3871,16 +3860,12 @@ function AwardsManager({ awards, products, isAdmin, onSave, onDelete, onSelect, 
        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
           {filteredAwards.map(award => (
              <div key={award.id} onClick={() => handleCardClick(award)} className="bg-white rounded-xl border border-zinc-200 overflow-hidden group hover:shadow-lg transition-all relative cursor-pointer flex flex-col">
-                {/* V 0.8.71: Square Aspect Ratio for Image Container, No Gray Background, Fix Clipping */}
                 <div className="aspect-square relative bg-white flex items-center justify-center p-6">
                    {award.image ? <img src={award.image} className="w-full h-full object-contain" /> : <Trophy className="w-12 h-12 text-zinc-300"/>}
-                   
-                   {/* V 0.8.1: My Pick Button for Awards */}
                    <button onClick={(e) => onToggleFavorite(e, award.id)} className="absolute top-2 right-2 p-1.5 bg-white/80 rounded-full text-zinc-300 hover:text-yellow-400 hover:scale-110 transition-all z-10">
                        <Star className={`w-3.5 h-3.5 ${favorites.includes(award.id) ? 'fill-yellow-400 text-yellow-400' : ''}`}/>
                    </button>
                 </div>
-                {/* V 0.8.71: Compact Info Area */}
                 <div className="p-3 border-t border-zinc-100 flex-1 flex flex-col justify-center bg-zinc-50/30">
                    <h4 className="font-bold text-xs md:text-sm truncate mb-0.5">{award.title}</h4>
                    <p className="text-[10px] md:text-xs text-zinc-500 truncate">{award.organization}</p>
@@ -3898,7 +3883,7 @@ function AwardsManager({ awards, products, isAdmin, onSave, onDelete, onSelect, 
        {isModalOpen && (
          <AwardFormModal 
             existingData={editingAward} 
-            allProducts={products} // V 0.8.3: Pass products for selection
+            allProducts={products} 
             onClose={() => setIsModalOpen(false)} 
             onSave={(data, winners) => { onSave(data, winners); setIsModalOpen(false); }} 
          />
@@ -3913,40 +3898,33 @@ function AwardDetailModal({ award, products, onClose, onNavigateProduct, onSaveP
     const [productFilter, setProductFilter] = useState('');
     const [awardYear, setAwardYear] = useState(new Date().getFullYear().toString());
     
-    // V 0.8.2: Filter products that have this award history or tag
     const relatedProducts = products.filter(p => {
         const hasTag = p.awards?.includes(award.title);
         const hasHistory = p.awardHistory?.some(h => h.awardId === award.id);
         return hasTag || hasHistory;
     });
 
-    // V 0.8.2: Add product to award with year
     const addProductToAward = async (product) => {
         const currentAwards = product.awards || [];
         const newAwards = currentAwards.includes(award.title) ? currentAwards : [...currentAwards, award.title];
-        
         const currentHistory = product.awardHistory || [];
         const newHistory = [...currentHistory.filter(h => h.awardId !== award.id), { awardId: award.id, title: award.title, year: awardYear }];
-
         const updatedProduct = { ...product, awards: newAwards, awardHistory: newHistory };
         await onSaveProduct(updatedProduct);
     };
 
     return (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[150] flex items-center justify-center p-0 md:p-4 animate-in zoom-in-95 duration-200">
-            {/* V 0.8.2: Wide Design (max-w-6xl) */}
             <div className="bg-white w-full h-full md:h-auto md:max-w-6xl rounded-none md:rounded-3xl overflow-hidden shadow-2xl flex flex-col md:flex-row md:max-h-[90vh] relative">
                 <div className="absolute top-4 right-4 z-[100] flex gap-2">
                    {isAdmin && <button onClick={onEdit} className="p-2 bg-white/50 hover:bg-zinc-100 rounded-full backdrop-blur shadow-sm"><Edit3 className="w-6 h-6 text-zinc-900"/></button>}
                    <button onClick={onClose} className="p-2 bg-white/50 hover:bg-zinc-100 rounded-full backdrop-blur shadow-sm"><X className="w-6 h-6 text-zinc-900"/></button>
                 </div>
-                
                 <div className="w-full md:w-4/12 bg-zinc-50 flex items-center justify-center p-8 relative min-h-[30vh]">
                     <div className="w-48 h-48 md:w-64 md:h-64 flex items-center justify-center">
                         {award.image ? <img src={award.image} className="w-full h-full object-contain" /> : <Trophy className="w-24 h-24 text-zinc-300"/>}
                     </div>
                 </div>
-
                 <div className="w-full md:w-8/12 bg-white p-8 md:p-12 flex flex-col overflow-y-auto pb-safe">
                     <div className="mb-8">
                         <div className="flex gap-2 mb-3">
@@ -3954,15 +3932,12 @@ function AwardDetailModal({ award, products, onClose, onNavigateProduct, onSaveP
                         </div>
                         <h2 className="text-4xl font-black text-zinc-900 tracking-tighter mb-2">{award.title}</h2>
                         <p className="text-xl font-bold text-zinc-500 mb-4">{award.organization}</p>
-                        
-                        {/* V 0.8.2: Award Link */}
                         {award.link && (
                             <a href={award.link} target="_blank" rel="noopener noreferrer" className="inline-flex items-center text-xs font-bold text-blue-600 hover:underline">
                                 <ExternalLink className="w-3 h-3 mr-1"/> Official Website
                             </a>
                         )}
                     </div>
-
                     <div className="space-y-8 flex-1">
                         <div>
                             <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-3">About Award</h3>
@@ -3970,7 +3945,6 @@ function AwardDetailModal({ award, products, onClose, onNavigateProduct, onSaveP
                                 {award.description || "No description provided."}
                             </p>
                         </div>
-
                         <div className="pt-8 border-t border-zinc-100">
                              <div className="flex justify-between items-center mb-4">
                                  <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest flex items-center">
@@ -3983,7 +3957,6 @@ function AwardDetailModal({ award, products, onClose, onNavigateProduct, onSaveP
                                      </button>
                                  )}
                              </div>
-
                              {isAdmin && isAddingProduct && (
                                  <div className="mb-6 bg-zinc-50 p-4 rounded-xl border border-zinc-200 animate-in slide-in-from-top-2">
                                      <div className="flex gap-2 mb-2">
@@ -4017,14 +3990,10 @@ function AwardDetailModal({ award, products, onClose, onNavigateProduct, onSaveP
                                      </div>
                                  </div>
                              )}
-
-                             {/* V 0.8.3: Scrollable Product List with Margin */}
                              <div className="grid grid-cols-2 md:grid-cols-3 gap-4 max-h-80 overflow-y-auto custom-scrollbar p-1 pb-10">
                                  {relatedProducts.length > 0 ? relatedProducts.map(p => {
-                                     // Find specific year for this award
                                      const historyItem = p.awardHistory?.find(h => h.awardId === award.id);
                                      const year = historyItem ? historyItem.year : (p.launchDate?.substring(0,4) || '-');
-                                     
                                      return (
                                          <button key={p.id} onClick={() => onNavigateProduct(p)} className="flex flex-col p-3 rounded-xl border border-zinc-100 hover:border-zinc-300 hover:bg-zinc-50 transition-all text-left group bg-white shadow-sm">
                                              <div className="aspect-[4/3] w-full rounded-lg bg-zinc-50 overflow-hidden mb-3 flex items-center justify-center">
@@ -4056,15 +4025,13 @@ function AwardFormModal({ existingData, allProducts = [], onClose, onSave }) {
      id: null, title: '', organization: '', description: '', image: null, link: '', tags: []
   });
   const [tagInput, setTagInput] = useState('');
-  const [winners, setWinners] = useState([]); // V 0.8.3: Manage winners locally
+  const [winners, setWinners] = useState([]); 
   const [productFilter, setProductFilter] = useState('');
   const fileRef = useRef(null);
 
   useEffect(() => {
      if(existingData) {
          setData({ ...existingData, link: existingData.link || '' });
-         
-         // V 0.8.3: Initialize winners from allProducts based on history/tags
          const currentWinners = allProducts.filter(p => {
              const hasTag = p.awards?.includes(existingData.title);
              const hasHistory = p.awardHistory?.some(h => h.awardId === existingData.id);
@@ -4121,7 +4088,6 @@ function AwardFormModal({ existingData, allProducts = [], onClose, onSave }) {
       setData(prev => ({ ...prev, tags: prev.tags.filter((_, i) => i !== idx) }));
   };
 
-  // V 0.8.3: Winner Management
   const toggleWinner = (product) => {
       if (winners.some(w => w.id === product.id)) {
           setWinners(winners.filter(w => w.id !== product.id));
@@ -4141,15 +4107,12 @@ function AwardFormModal({ existingData, allProducts = [], onClose, onSave }) {
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[160] flex items-center justify-center p-4">
-       {/* V 0.8.3: Increased Modal Size (max-w-5xl) */}
        <div className="bg-white rounded-2xl w-full max-w-5xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
           <div className="px-6 py-4 border-b border-zinc-100 font-bold text-lg flex-shrink-0 flex justify-between items-center">
              <span>{existingData ? 'Edit Award' : 'Add Award'}</span>
              <button onClick={onClose}><X className="w-5 h-5 text-zinc-400 hover:text-black"/></button>
           </div>
-          
           <div className="flex-1 overflow-hidden flex flex-col md:flex-row">
-              {/* Left: Award Info */}
               <div className="w-full md:w-1/3 p-6 overflow-y-auto custom-scrollbar border-r border-zinc-100">
                  <div className="flex justify-center mb-6">
                     <div onClick={() => fileRef.current.click()} className="w-32 h-32 rounded-xl shadow-md border-2 border-dashed border-zinc-300 cursor-pointer overflow-hidden relative group bg-zinc-50 flex items-center justify-center">
@@ -4158,218 +4121,44 @@ function AwardFormModal({ existingData, allProducts = [], onClose, onSave }) {
                     </div>
                     <input type="file" ref={fileRef} className="hidden" accept="image/*" onChange={handleUpload} />
                  </div>
-
                  <div className="space-y-4">
-                     <div>
-                        <label className="text-xs font-bold text-zinc-500 uppercase block mb-1">Award Title</label>
-                        <input value={data.title} onChange={e=>setData({...data, title: e.target.value})} className="w-full border rounded-lg p-2 text-sm outline-none" placeholder="e.g. Red Dot" />
-                     </div>
-                     
-                     <div>
-                        <label className="text-xs font-bold text-zinc-500 uppercase block mb-1">Organization</label>
-                        <input value={data.organization} onChange={e=>setData({...data, organization: e.target.value})} className="w-full border rounded-lg p-2 text-sm outline-none" />
-                     </div>
-
-                     <div>
-                        <label className="text-xs font-bold text-zinc-500 uppercase block mb-1">Official Link</label>
-                        <input value={data.link} onChange={e=>setData({...data, link: e.target.value})} className="w-full border rounded-lg p-2 text-sm outline-none" />
-                     </div>
-
-                     <div>
-                        <label className="text-xs font-bold text-zinc-500 uppercase block mb-1">Description</label>
-                        <textarea rows={4} value={data.description} onChange={e=>setData({...data, description: e.target.value})} className="w-full border rounded-lg p-2 text-sm outline-none" />
-                     </div>
-
+                     <div><label className="text-xs font-bold text-zinc-500 uppercase block mb-1">Award Title</label><input value={data.title} onChange={e=>setData({...data, title: e.target.value})} className="w-full border rounded-lg p-2 text-sm outline-none" placeholder="e.g. Red Dot" /></div>
+                     <div><label className="text-xs font-bold text-zinc-500 uppercase block mb-1">Organization</label><input value={data.organization} onChange={e=>setData({...data, organization: e.target.value})} className="w-full border rounded-lg p-2 text-sm outline-none" /></div>
+                     <div><label className="text-xs font-bold text-zinc-500 uppercase block mb-1">Official Link</label><input value={data.link} onChange={e=>setData({...data, link: e.target.value})} className="w-full border rounded-lg p-2 text-sm outline-none" /></div>
+                     <div><label className="text-xs font-bold text-zinc-500 uppercase block mb-1">Description</label><textarea rows={4} value={data.description} onChange={e=>setData({...data, description: e.target.value})} className="w-full border rounded-lg p-2 text-sm outline-none" /></div>
                      <div>
                         <label className="text-xs font-bold text-zinc-500 uppercase block mb-1">Tags</label>
-                        <div className="flex gap-2 mb-2">
-                            <input value={tagInput} onChange={e=>setTagInput(e.target.value)} className="flex-1 border rounded p-1.5 text-xs" placeholder="Add tag" onKeyDown={e => e.key === 'Enter' && addTag()} />
-                            <button onClick={addTag} className="bg-zinc-900 text-white px-3 rounded text-xs font-bold">Add</button>
-                        </div>
-                        <div className="flex flex-wrap gap-1">
-                            {data.tags?.map((tag, idx) => (
-                                <span key={idx} className="bg-blue-50 text-blue-700 px-2 py-1 rounded text-xs font-bold flex items-center">
-                                    {tag} <button onClick={() => removeTag(idx)} className="ml-1 hover:text-red-500"><X className="w-3 h-3"/></button>
-                                </span>
-                            ))}
-                        </div>
+                        <div className="flex gap-2 mb-2"><input value={tagInput} onChange={e=>setTagInput(e.target.value)} className="flex-1 border rounded p-1.5 text-xs" placeholder="Add tag" onKeyDown={e => e.key === 'Enter' && addTag()} /><button onClick={addTag} className="bg-zinc-900 text-white px-3 rounded text-xs font-bold">Add</button></div>
+                        <div className="flex flex-wrap gap-1">{data.tags?.map((tag, idx) => (<span key={idx} className="bg-blue-50 text-blue-700 px-2 py-1 rounded text-xs font-bold flex items-center">{tag} <button onClick={() => removeTag(idx)} className="ml-1 hover:text-red-500"><X className="w-3 h-3"/></button></span>))}</div>
                      </div>
                  </div>
               </div>
-
-              {/* Right: Winner Management (V 0.8.3) */}
               <div className="w-full md:w-2/3 p-6 flex flex-col bg-zinc-50/50">
                   <div className="mb-4">
-                      <h3 className="text-sm font-bold text-zinc-900 mb-2 flex justify-between">
-                          Manage Winners 
-                          <span className="bg-zinc-200 text-zinc-600 px-2 py-0.5 rounded-full text-xs">{winners.length} selected</span>
-                      </h3>
-                      <input 
-                          type="text" 
-                          placeholder="Search products to add..." 
-                          className="w-full p-2 bg-white border border-zinc-200 rounded-lg text-sm outline-none focus:border-zinc-400"
-                          value={productFilter}
-                          onChange={(e) => setProductFilter(e.target.value)}
-                      />
+                      <h3 className="text-sm font-bold text-zinc-900 mb-2 flex justify-between">Manage Winners <span className="bg-zinc-200 text-zinc-600 px-2 py-0.5 rounded-full text-xs">{winners.length} selected</span></h3>
+                      <input type="text" placeholder="Search products to add..." className="w-full p-2 bg-white border border-zinc-200 rounded-lg text-sm outline-none focus:border-zinc-400" value={productFilter} onChange={(e) => setProductFilter(e.target.value)} />
                   </div>
-
                   <div className="flex-1 overflow-y-auto custom-scrollbar border border-zinc-200 rounded-xl bg-white">
-                      {/* Available Products List (Filtered) */}
                       {productFilter && (
                           <div className="p-2 border-b border-zinc-100 bg-blue-50/30">
                               <span className="text-[10px] font-bold text-zinc-400 uppercase px-2">Search Results</span>
-                              <div className="grid grid-cols-2 gap-2 mt-1">
-                                  {allProducts.filter(p => p.name.toLowerCase().includes(productFilter.toLowerCase()) && !winners.some(w => w.id === p.id)).map(p => (
-                                      <div key={p.id} onClick={() => toggleWinner(p)} className="flex items-center p-2 hover:bg-blue-50 cursor-pointer rounded-lg transition-colors border border-transparent hover:border-blue-100">
-                                          <Plus className="w-4 h-4 text-blue-500 mr-2"/>
-                                          <div className="w-8 h-8 bg-zinc-100 rounded overflow-hidden mr-2">
-                                              {p.images?.[0] && <img src={typeof p.images[0] === 'object' ? p.images[0].url : p.images[0]} className="w-full h-full object-cover"/>}
-                                          </div>
-                                          <span className="text-xs font-bold truncate">{p.name}</span>
-                                      </div>
-                                  ))}
-                              </div>
+                              <div className="grid grid-cols-2 gap-2 mt-1">{allProducts.filter(p => p.name.toLowerCase().includes(productFilter.toLowerCase()) && !winners.some(w => w.id === p.id)).map(p => (<div key={p.id} onClick={() => toggleWinner(p)} className="flex items-center p-2 hover:bg-blue-50 cursor-pointer rounded-lg transition-colors border border-transparent hover:border-blue-100"><Plus className="w-4 h-4 text-blue-500 mr-2"/><div className="w-8 h-8 bg-zinc-100 rounded overflow-hidden mr-2">{p.images?.[0] && <img src={typeof p.images[0] === 'object' ? p.images[0].url : p.images[0]} className="w-full h-full object-cover"/>}</div><span className="text-xs font-bold truncate">{p.name}</span></div>))}</div>
                           </div>
                       )}
-
-                      {/* Selected Winners List */}
                       <div className="p-2">
                           <span className="text-[10px] font-bold text-zinc-400 uppercase px-2 block mb-2">Selected Winners</span>
-                          <div className="space-y-2">
-                              {winners.map(winner => (
-                                  <div key={winner.id} className="flex items-center justify-between p-2 bg-zinc-50 rounded-lg border border-zinc-100">
-                                      <div className="flex items-center flex-1 min-w-0">
-                                          <div className="w-10 h-10 bg-white rounded-md overflow-hidden border border-zinc-200 mr-3 flex-shrink-0">
-                                              {winner.image && <img src={typeof winner.image === 'object' ? winner.image.url : winner.image} className="w-full h-full object-cover"/>}
-                                          </div>
-                                          <div className="truncate mr-2">
-                                              <div className="text-xs font-bold text-zinc-900 truncate">{winner.name}</div>
-                                          </div>
-                                      </div>
-                                      <div className="flex items-center gap-2">
-                                          <div className="flex items-center bg-white border border-zinc-200 rounded px-2 py-1">
-                                              <span className="text-[10px] text-zinc-400 mr-1">Year:</span>
-                                              <input 
-                                                  type="number" 
-                                                  className="w-12 text-xs font-bold text-center outline-none" 
-                                                  value={winner.year} 
-                                                  onChange={(e) => updateWinnerYear(winner.id, e.target.value)}
-                                              />
-                                          </div>
-                                          <button onClick={() => toggleWinner(winner)} className="p-1.5 text-zinc-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors">
-                                              <Trash2 className="w-4 h-4"/>
-                                          </button>
-                                      </div>
-                                  </div>
-                              ))}
+                          <div className="space-y-2">{winners.map(winner => (<div key={winner.id} className="flex items-center justify-between p-2 bg-zinc-50 rounded-lg border border-zinc-100"><div className="flex items-center flex-1 min-w-0"><div className="w-10 h-10 bg-white rounded-md overflow-hidden border border-zinc-200 mr-3 flex-shrink-0">{winner.image && <img src={typeof winner.image === 'object' ? winner.image.url : winner.image} className="w-full h-full object-cover"/>}</div><div className="truncate mr-2"><div className="text-xs font-bold text-zinc-900 truncate">{winner.name}</div></div></div><div className="flex items-center gap-2"><div className="flex items-center bg-white border border-zinc-200 rounded px-2 py-1"><span className="text-[10px] text-zinc-400 mr-1">Year:</span><input type="number" className="w-12 text-xs font-bold text-center outline-none" value={winner.year} onChange={(e) => updateWinnerYear(winner.id, e.target.value)}/></div><button onClick={() => toggleWinner(winner)} className="p-1.5 text-zinc-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors"><Trash2 className="w-4 h-4"/></button></div></div>))}
                               {winners.length === 0 && <div className="text-center py-8 text-zinc-300 text-xs">No winners selected.</div>}
                           </div>
                       </div>
                   </div>
               </div>
           </div>
-          
           <div className="px-6 py-4 border-t border-zinc-100 bg-white flex justify-end space-x-3 flex-shrink-0">
              <button onClick={onClose} className="px-5 py-2.5 border border-zinc-200 rounded-xl text-sm font-bold text-zinc-600 hover:bg-zinc-50">Cancel</button>
              <button onClick={() => onSave(data, winners)} className="px-6 py-2.5 bg-zinc-900 text-white rounded-xl text-sm font-bold shadow-lg hover:bg-black hover:scale-105 transition-all">Save Changes</button>
           </div>
        </div>
-    </div>
-  );
-}
-
-function SwatchSelector({ label, selected, swatches, onChange }) {
-  const [isOpen, setIsOpen] = useState(false);
-  const [filter, setFilter] = useState('');
-  const [activeTab, setActiveTab] = useState('ALL');
-
-  const handleSelect = (swatch) => {
-     const snapshot = { 
-         id: swatch.id, name: swatch.name, hex: swatch.hex, image: swatch.image, 
-         category: swatch.category, textureType: swatch.textureType, materialCode: swatch.materialCode 
-     };
-     if(!selected.find(s => (typeof s === 'object' ? s.id === swatch.id : false))) {
-        onChange([...selected, snapshot]);
-     }
-     setIsOpen(false);
-  };
-
-  const handleRemove = (index) => {
-     const newSelected = [...selected];
-     newSelected.splice(index, 1);
-     onChange(newSelected);
-  };
-  
-  const handleMove = (index, direction) => {
-     const newSelected = [...selected];
-     const targetIndex = index + direction;
-     if (targetIndex >= 0 && targetIndex < newSelected.length) {
-        const temp = newSelected[index];
-        newSelected[index] = newSelected[targetIndex];
-        newSelected[targetIndex] = temp;
-        onChange(newSelected);
-     }
-  };
-
-  const handleManualAdd = () => {
-     const hex = prompt("Enter Hex Color (e.g. #000000) or Name:");
-     if(hex) onChange([...selected, hex]);
-  };
-
-  const filteredSwatches = swatches.filter(s => {
-     if(activeTab !== 'ALL' && s.category !== activeTab) return false;
-     return s.name.toLowerCase().includes(filter.toLowerCase());
-  });
-
-  return (
-    <div className="relative">
-       <div className="flex justify-between items-center mb-1">
-          <label className="block text-xs font-bold text-zinc-500 uppercase">{label}</label>
-          <button type="button" onClick={handleManualAdd} className="text-[10px] text-blue-600 font-bold hover:underline">Manual Input</button>
-       </div>
-       <div className="flex flex-wrap gap-2 min-h-[40px] p-2 bg-white border rounded-lg items-center">
-          {selected.map((item, idx) => (
-             <div key={idx} className="relative group">
-                <SwatchDisplay color={item} size="small" />
-                <div className="absolute -top-3 left-1/2 -translate-x-1/2 flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity bg-white shadow-md rounded-full border border-zinc-200 overflow-hidden z-20 scale-75">
-                  <button type="button" onClick={()=>handleMove(idx, -1)} className="p-1 hover:bg-zinc-100"><ChevronLeft size={10}/></button>
-                  <button type="button" onClick={()=>handleRemove(idx)} className="p-1 hover:bg-zinc-100 text-red-500"><X size={10}/></button>
-                  <button type="button" onClick={()=>handleMove(idx, 1)} className="p-1 hover:bg-zinc-100"><ChevronRight size={10}/></button>
-                </div>
-             </div>
-          ))}
-          <button type="button" onClick={() => setIsOpen(true)} className="w-6 h-6 rounded-full border border-dashed border-zinc-400 flex items-center justify-center text-zinc-400 hover:border-zinc-900 hover:text-zinc-900"><Plus className="w-3 h-3"/></button>
-       </div>
-
-       {isOpen && (
-          <div className="absolute top-full left-0 z-50 mt-2 w-full md:w-[400px] bg-white rounded-xl shadow-xl border border-zinc-200 p-4">
-             <div className="flex justify-between items-center mb-3">
-                <h4 className="font-bold text-sm">Select Material</h4>
-                <button onClick={() => setIsOpen(false)}><X className="w-4 h-4 text-zinc-400 hover:text-black"/></button>
-             </div>
-             
-             <div className="flex gap-1 overflow-x-auto pb-2 mb-2 custom-scrollbar">
-                <button type="button" onClick={()=>setActiveTab('ALL')} className={`px-2 py-1 rounded text-[10px] font-bold whitespace-nowrap ${activeTab==='ALL'?'bg-black text-white':'bg-zinc-100'}`}>ALL</button>
-                {SWATCH_CATEGORIES.map(c => (
-                   <button key={c.id} type="button" onClick={()=>setActiveTab(c.id)} className={`px-2 py-1 rounded text-[10px] font-bold whitespace-nowrap ${activeTab===c.id?'bg-black text-white':'bg-zinc-100'}`}>{c.label}</button>
-                ))}
-             </div>
-
-             <input placeholder="Search materials..." value={filter} onChange={e=>setFilter(e.target.value)} className="w-full text-xs p-2 bg-zinc-50 rounded border mb-3 outline-none" />
-             
-             <div className="grid grid-cols-5 gap-2 max-h-48 overflow-y-auto custom-scrollbar">
-                {filteredSwatches.map(s => (
-                   <button key={s.id} type="button" onClick={() => handleSelect(s)} className="flex flex-col items-center group">
-                      <div className="w-8 h-8 rounded-full border overflow-hidden relative">
-                         {s.image ? <img src={s.image} className="w-full h-full object-cover"/> : <div className="w-full h-full" style={{backgroundColor:s.hex}}></div>}
-                         <div className="absolute inset-0 bg-black/20 hidden group-hover:flex items-center justify-center"><Plus className="w-4 h-4 text-white"/></div>
-                      </div>
-                      <span className="text-[9px] text-zinc-500 truncate w-full text-center mt-1">{s.name}</span>
-                   </button>
-                ))}
-             </div>
-          </div>
-       )}
     </div>
   );
 }
