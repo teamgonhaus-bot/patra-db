@@ -38,7 +38,7 @@ const YOUR_FIREBASE_CONFIG = {
 // ----------------------------------------------------------------------
 // 상수 및 설정
 // ----------------------------------------------------------------------
-const APP_VERSION = "v0.8.72"; 
+const APP_VERSION = "v0.8.71"; 
 const BUILD_DATE = "2026.01.26";
 const ADMIN_PASSWORD = "adminlcg1"; 
 
@@ -82,7 +82,7 @@ const CATEGORIES = [
   { id: 'ETC', label: 'Etc', color: '#9ca3af' }
 ];
 
-// 공간 (Spaces) 정의 - V 0.8.72: Training Tags Updated
+// 공간 (Spaces) 정의
 const SPACES = [
   { 
     id: 'OFFICE', label: 'Office', icon: Briefcase, 
@@ -90,7 +90,7 @@ const SPACES = [
   },
   { 
     id: 'TRAINING', label: 'Training', icon: GraduationCap, 
-    defaultTags: ['Training room', 'classroom', 'Library', 'auditorium'] 
+    defaultTags: ['Education', 'Library', 'Public'] 
   },
   { 
     id: 'LIFESTYLE', label: 'Lifestyle', icon: Sofa, 
@@ -388,10 +388,12 @@ export default function App() {
       setIsMobileMenuOpen(false);
   };
 
+  // V 0.8.5: Navigate to Award Modal from Product Tag
   const handleNavigateToAward = (awardTitle) => {
       const foundAward = awards.find(a => a.title === awardTitle);
       if (foundAward) {
-          setSelectedProduct(null); 
+          // Close product modal if needed, or just stack
+          setSelectedProduct(null); // Close product modal to show award modal clearly
           setActiveCategory('AWARDS_ROOT');
           setSelectedAward(foundAward);
       } else {
@@ -493,6 +495,7 @@ export default function App() {
   const handleBannerTextChange = (key, value) => { if (!isAdmin) return; setBannerData(prev => ({ ...prev, [key]: value })); };
   const saveBannerText = async () => { if (isFirebaseAvailable && db) { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'banner'), bannerData, { merge: true }); showToast("배너 문구가 저장되었습니다."); } };
   
+  // App Header Settings
   const handleSidebarLogoUpload = async (e) => {
       if(!isAdmin) return;
       const file = e.target.files[0];
@@ -715,47 +718,6 @@ export default function App() {
      showToast("스와치가 복제되었습니다.");
   };
 
-  // --- V 0.8.72: Universal Batch Reorder Logic ---
-  const handleBatchReorder = async (collectionName, reorderedItems, parentId = null) => {
-      if (!isFirebaseAvailable || !db) {
-          // Local Storage Fallback
-          if (collectionName === 'products') saveToLocalStorage(reorderedItems);
-          else if (collectionName === 'swatches') saveSwatchesToLocal(reorderedItems);
-          else if (collectionName === 'awards') saveAwardsToLocal(reorderedItems);
-          else if (collectionName === 'scenes' && parentId) {
-             // For scenes, we need to update the specific space content
-             const newContent = { ...spaceContents[parentId], scenes: reorderedItems };
-             setSpaceContents(prev => ({ ...prev, [parentId]: newContent }));
-             // In local mode, we can't easily persist this without a complex structure, so we just update state
-          }
-          return;
-      }
-
-      const batch = writeBatch(db);
-      
-      // Special handling for Scenes (Array inside a document)
-      if (collectionName === 'scenes' && parentId) {
-          const spaceRef = doc(db, 'artifacts', appId, 'public', 'data', 'space_contents', parentId);
-          // For array fields, we just update the whole array in the new order
-          batch.update(spaceRef, { scenes: reorderedItems });
-      } else {
-          // For Collections (Products, Swatches, Awards)
-          reorderedItems.forEach((item, index) => {
-              const ref = doc(db, 'artifacts', appId, 'public', 'data', collectionName, item.id);
-              // Use a large gap to allow future insertions if needed, or just simple index
-              batch.update(ref, { orderIndex: index });
-          });
-      }
-
-      try {
-          await batch.commit();
-          showToast("순서가 저장되었습니다.");
-      } catch (e) {
-          console.error("Batch update failed", e);
-          showToast("순서 저장 실패", "error");
-      }
-  };
-
   // --- Search Tag Logic ---
   const handleSearchKeyDown = (e) => {
       if (e.key === ',' || e.key === 'Enter') {
@@ -825,29 +787,16 @@ export default function App() {
   };
   const processedProducts = getProcessedProducts();
 
-  // --- Drag & Drop (Universal) ---
+  // --- Drag & Drop ---
   const handleDragStart = (e, index) => { dragItem.current = index; };
   const handleDragEnter = (e, index) => { dragOverItem.current = index; };
-  
-  // V 0.8.72: Enhanced Drag End with Batch Update
-  const handleDragEnd = async (list, setList, collectionName, parentId = null) => {
-     const _list = [...list];
-     const dragIndex = dragItem.current; 
-     const dragOverIndex = dragOverItem.current;
-     
+  const handleDragEnd = async () => {
+     const _products = [...processedProducts];
+     const dragIndex = dragItem.current; const dragOverIndex = dragOverItem.current;
      if(dragIndex === null || dragOverIndex === null || dragIndex === dragOverIndex) return;
-     
-     const draggedItemContent = _list[dragIndex]; 
-     _list.splice(dragIndex, 1); 
-     _list.splice(dragOverIndex, 0, draggedItemContent);
-     
-     // Optimistic Update
-     setList(_list); 
-     dragItem.current = null; 
-     dragOverItem.current = null;
-
-     // DB Update
-     await handleBatchReorder(collectionName, _list, parentId);
+     const draggedItemContent = _products[dragIndex]; _products.splice(dragIndex, 1); _products.splice(dragOverIndex, 0, draggedItemContent);
+     if(isFirebaseAvailable && db) { showToast("순서가 변경되었습니다. (DB 반영은 전체 업데이트 필요)"); } else { saveToLocalStorage(_products); }
+     setProducts(_products); dragItem.current = null; dragOverItem.current = null;
   };
 
   // --- Navigation ---
@@ -938,7 +887,7 @@ export default function App() {
              {sidebarState.materials && (<div className="space-y-0.5 mt-2 pl-2 animate-in slide-in-from-top-2 duration-200">{SWATCH_CATEGORIES.map((cat) => (<button key={cat.id} onClick={() => handleCategoryClick(cat.id)} className={`w-full text-left px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center justify-between group ${activeCategory === cat.id ? 'bg-zinc-100 text-zinc-900 font-bold' : 'text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900'}`}>{cat.label}</button>))}</div>)}
           </div>
 
-          {/* Awards Group */}
+          {/* Awards Group (New V 0.8.2) */}
           <div className="py-2">
              <div className={`w-full flex items-center rounded-xl border mb-1 shadow-sm transition-all ${activeCategory === 'AWARDS_ROOT' ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-600 border-zinc-100 hover:border-zinc-300'}`}>
                 <button onClick={() => handleCategoryClick('AWARDS_ROOT')} className="flex-1 text-left px-4 py-3 text-sm font-bold tracking-tight flex items-center">AWARDS</button>
@@ -956,13 +905,13 @@ export default function App() {
 
       <main className="flex-1 flex flex-col h-screen overflow-hidden relative print:overflow-visible print:h-auto">
         <header className="h-14 md:h-16 bg-white/80 backdrop-blur-md border-b border-zinc-100 flex items-center justify-between px-4 md:px-8 z-30 flex-shrink-0 sticky top-0 transition-all print:hidden">
-          <div className="flex items-center space-x-3 w-full md:w-auto flex-1 mr-4 min-w-0">
-            <button onClick={() => setIsMobileMenuOpen(true)} className="md:hidden p-2 -ml-2 text-zinc-600 hover:bg-zinc-100 rounded-lg active:scale-95 transition-transform flex-shrink-0"><Menu className="w-6 h-6" /></button>
-            <div className="relative w-full max-w-md group flex items-center gap-2 flex-1 min-w-0">
+          <div className="flex items-center space-x-3 w-full md:w-auto flex-1 mr-4">
+            <button onClick={() => setIsMobileMenuOpen(true)} className="md:hidden p-2 -ml-2 text-zinc-600 hover:bg-zinc-100 rounded-lg active:scale-95 transition-transform"><Menu className="w-6 h-6" /></button>
+            <div className="relative w-full max-w-md group flex items-center gap-2 flex-1">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-zinc-400 w-4 h-4 group-focus-within:text-zinc-800 transition-colors" />
-                <div className="w-full pl-10 pr-4 py-2 bg-zinc-50/50 border border-transparent focus-within:bg-white focus-within:border-zinc-200 focus-within:ring-4 focus-within:ring-zinc-50 rounded-full text-sm transition-all flex items-center flex-wrap gap-1 overflow-hidden">
+                <div className="w-full pl-10 pr-4 py-2 bg-zinc-50/50 border border-transparent focus-within:bg-white focus-within:border-zinc-200 focus-within:ring-4 focus-within:ring-zinc-50 rounded-full text-sm transition-all flex items-center flex-wrap gap-1">
                     {searchTags.map((tag, idx) => (
-                        <span key={idx} className="bg-zinc-200 text-zinc-800 px-2 py-0.5 rounded-full text-xs font-bold flex items-center whitespace-nowrap">
+                        <span key={idx} className="bg-zinc-200 text-zinc-800 px-2 py-0.5 rounded-full text-xs font-bold flex items-center">
                             {tag} <button onClick={() => removeSearchTag(idx)} className="ml-1 hover:text-red-500"><X className="w-3 h-3"/></button>
                         </span>
                     ))}
@@ -977,7 +926,7 @@ export default function App() {
                 </div>
             </div>
           </div>
-          {/* V 0.8.72: Mobile Header Layout Fix - Prevent Clipping */}
+          {/* V 0.8.71: Mobile Header Overflow Fix - Ensure buttons are clickable and visible */}
           <div className="flex items-center space-x-1 md:space-x-2 flex-shrink-0 overflow-visible justify-end">
              {compareList.length > 0 && <button onClick={handleCompareButtonClick} className={`flex items-center px-3 py-1.5 rounded-full text-xs font-bold animate-in fade-in transition-all mr-1 shadow-lg whitespace-nowrap ${activeCategory === 'COMPARE_PAGE' ? 'bg-black text-white ring-2 ring-zinc-200' : 'bg-zinc-900 text-white hover:bg-black'}`}><ArrowLeftRight className="w-3 h-3 md:mr-1.5"/> <span className="hidden md:inline">Compare</span> ({compareList.length})</button>}
              <button onClick={() => setIsFilterOpen(!isFilterOpen)} className={`p-2 rounded-full transition-all flex-shrink-0 ${isFilterOpen ? 'bg-zinc-200 text-black' : 'hover:bg-zinc-100 text-zinc-500'}`} title="Filters"><SlidersHorizontal className="w-5 h-5" /></button>
@@ -999,8 +948,8 @@ export default function App() {
            </div>
         )}
 
-        {/* V 0.8.72: Main Content Container with pb-48 for scroll fixing */}
-        <div ref={mainContentRef} className="flex-1 overflow-y-auto p-4 md:p-8 custom-scrollbar relative print:overflow-visible print:p-0 pb-48 md:pb-40">
+        {/* V 0.8.71: Main Content Container with pb-32 for scroll fixing */}
+        <div ref={mainContentRef} className="flex-1 overflow-y-auto p-4 md:p-8 custom-scrollbar relative print:overflow-visible print:p-0 pb-32 md:pb-40">
           {activeCategory === 'DASHBOARD' && !searchTerm && searchTags.length === 0 && !filters.year && !filters.color ? (
             <DashboardView 
                 products={products} 
@@ -1072,7 +1021,6 @@ export default function App() {
                 searchTags={searchTags}
                 favorites={favorites}
                 onToggleFavorite={toggleFavorite}
-                onReorder={handleBatchReorder} // V 0.8.72
              />
           ) : activeCategory.endsWith('_ROOT') ? (
              <CategoryRootView 
@@ -1118,24 +1066,10 @@ export default function App() {
                     onToggleFavorite={toggleFavorite}
                     onCompareToggle={toggleCompare}
                     compareList={compareList}
-                    onReorder={handleBatchReorder} // V 0.8.72
                  />
               )}
               {SWATCH_CATEGORIES.find(s => s.id === activeCategory) && (
-                <SwatchManager 
-                    category={SWATCH_CATEGORIES.find(s => s.id === activeCategory)} 
-                    swatches={swatches.filter(s => s.category === activeCategory)} 
-                    isAdmin={isAdmin} 
-                    onSave={handleSaveSwatch} 
-                    onDelete={handleDeleteSwatch} 
-                    onSelect={(swatch) => setSelectedSwatch(swatch)} 
-                    onDuplicate={handleDuplicateSwatch} 
-                    searchTerm={searchTerm} 
-                    searchTags={searchTags} 
-                    favorites={favorites} 
-                    onToggleFavorite={toggleFavorite} 
-                    onReorder={handleBatchReorder} // V 0.8.72
-                />
+                <SwatchManager category={SWATCH_CATEGORIES.find(s => s.id === activeCategory)} swatches={swatches.filter(s => s.category === activeCategory)} isAdmin={isAdmin} onSave={handleSaveSwatch} onDelete={handleDeleteSwatch} onSelect={(swatch) => setSelectedSwatch(swatch)} onDuplicate={handleDuplicateSwatch} searchTerm={searchTerm} searchTags={searchTags} favorites={favorites} onToggleFavorite={toggleFavorite} />
               )}
               {!SWATCH_CATEGORIES.find(s => s.id === activeCategory) && (
                 <>
@@ -1160,7 +1094,7 @@ export default function App() {
                       ) : (
                         <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-6 pb-32 print:grid-cols-3 print:gap-4">
                             {processedProducts.map((product, idx) => (
-                               <div key={product.id} draggable={isAdmin && sortOption === 'manual'} onDragStart={(e) => handleDragStart(e, idx)} onDragEnter={(e) => handleDragEnter(e, idx)} onDragEnd={() => handleDragEnd(processedProducts, setProducts, 'products')} className={isAdmin && sortOption === 'manual' ? 'cursor-move active:opacity-50 transition-all' : ''}>
+                               <div key={product.id} draggable={isAdmin && sortOption === 'manual'} onDragStart={(e) => handleDragStart(e, idx)} onDragEnter={(e) => handleDragEnter(e, idx)} onDragEnd={handleDragEnd} className={isAdmin && sortOption === 'manual' ? 'cursor-move active:opacity-50 transition-all' : ''}>
                                   <ProductCard product={product} onClick={() => setSelectedProduct(product)} isAdmin={isAdmin} isFavorite={favorites.includes(product.id)} onToggleFavorite={(e) => toggleFavorite(e, product.id)} onCompareToggle={(e) => toggleCompare(e, product)} onDuplicate={(e) => { e.stopPropagation(); handleDuplicateProduct(product); }} isCompared={!!compareList.find(p=>p.id===product.id)} />
                                 </div>
                             ))}
@@ -1178,7 +1112,7 @@ export default function App() {
         </div>
       </main>
 
-      {toast && <div className="fixed bottom-8 right-8 bg-zinc-900 text-white px-5 py-3.5 rounded-xl shadow-2xl flex items-center space-x-3 animate-in slide-in-from-bottom-10 fade-in z-[250] print:hidden">{toast.type === 'success' ? <Check className="w-5 h-5 text-green-400" /> : <Info className="w-5 h-5 text-red-400" />}<span className="text-sm font-bold tracking-wide">{toast.message}</span></div>}
+      {toast && <div className="fixed bottom-8 right-8 bg-zinc-900 text-white px-5 py-3.5 rounded-xl shadow-2xl flex items-center space-x-3 animate-in slide-in-from-bottom-10 fade-in z-[90] print:hidden">{toast.type === 'success' ? <Check className="w-5 h-5 text-green-400" /> : <Info className="w-5 h-5 text-red-400" />}<span className="text-sm font-bold tracking-wide">{toast.message}</span></div>}
       
       {/* Modals are now stacked using conditional rendering with z-index management */}
       {selectedProduct && (
@@ -1200,7 +1134,7 @@ export default function App() {
           onNavigateScene={(scene) => { setSelectedProduct(null); setActiveCategory(scene.spaceId || scene.id); setSelectedScene({...scene, spaceId: scene.spaceId || 'UNKNOWN'}); }}
           onNavigateProduct={(product) => setSelectedProduct(product)}
           onNavigateSwatch={(swatch) => { setSelectedSwatch(swatch); /* Stacks on top */ }}
-          onNavigateAward={handleNavigateToAward} 
+          onNavigateAward={handleNavigateToAward} // V 0.8.5
           onSaveProduct={handleSaveProduct} 
         />
       )}
@@ -1250,6 +1184,8 @@ export default function App() {
            isAdmin={isAdmin}
            onClose={() => setSelectedAward(null)}
            onNavigateProduct={(p) => { 
+               // V 0.8.3: Navigate to product without closing award modal (stacking)
+               // V 0.8.4: Ensure product modal is set and visible
                setSelectedProduct(p); 
            }}
            onSaveProduct={handleSaveProduct} 
@@ -1260,7 +1196,7 @@ export default function App() {
       {editingAwardFromModal && (
         <AwardFormModal 
            existingData={editingAwardFromModal}
-           allProducts={products} 
+           allProducts={products} // V 0.8.3: Pass products for selection
            onClose={() => setEditingAwardFromModal(null)}
            onSave={(data, winners) => { handleSaveAward(data, winners); }}
         />
@@ -1424,6 +1360,7 @@ function TotalView({ products, categories, spaces, spaceContents, materials, mat
                                         <div key={scene.id} onClick={() => onSceneClick({...scene, spaceId: space.id})} className="group cursor-pointer relative">
                                             <div className="aspect-[4/3] bg-zinc-50 rounded-xl mb-2 overflow-hidden border border-zinc-100 relative">
                                                 <img src={scene.image} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                                                {/* V 0.8.1: Unified Star Button for Spaces */}
                                                 <button onClick={(e) => onToggleFavorite(e, scene.id)} className="absolute top-2 right-2 p-1.5 bg-white/80 rounded-full text-zinc-300 hover:text-yellow-400 hover:scale-110 transition-all z-10">
                                                     <Star className={`w-3.5 h-3.5 ${favorites.includes(scene.id) ? 'fill-yellow-400 text-yellow-400' : ''}`}/>
                                                 </button>
@@ -1438,7 +1375,7 @@ function TotalView({ products, categories, spaces, spaceContents, materials, mat
                 </div>
             </div>
 
-            {/* COLLECTIONS SECTION */}
+            {/* COLLECTIONS SECTION - V 0.8.1 Updated to use ProductCard style */}
             <div className="mb-16">
                 <h3 className="text-2xl font-black text-zinc-900 mb-6 flex items-center"><Cloud className="w-6 h-6 mr-2"/> COLLECTIONS</h3>
                 <div className="space-y-4">
@@ -1483,6 +1420,7 @@ function TotalView({ products, categories, spaces, spaceContents, materials, mat
                                         <div key={swatch.id} onClick={() => onSwatchClick(swatch)} className="group cursor-pointer relative">
                                             <div className="aspect-square bg-zinc-50 rounded-xl mb-2 overflow-hidden border border-zinc-100 relative">
                                                 <SwatchDisplay color={swatch} className="w-full h-full rounded-none scale-100"/>
+                                                {/* V 0.8.1: Add Favorite Button to Material Cards in Total View */}
                                                 <button onClick={(e) => onToggleFavorite(e, swatch.id)} className="absolute top-2 right-2 p-1.5 bg-white/80 rounded-full text-zinc-300 hover:text-yellow-400 hover:scale-110 transition-all z-10">
                                                     <Star className={`w-3.5 h-3.5 ${favorites.includes(swatch.id) ? 'fill-yellow-400 text-yellow-400' : ''}`}/>
                                                 </button>
@@ -1575,8 +1513,10 @@ function CategoryRootView({ type, spaces, spaceContents, collections, materials,
 
                     return (
                         <CollapsibleSection key={item.id} title={item.label} count={subItems.length}>
+                            {/* V 0.8.5: Spaces Root Grid (4 cols), Others (4-5 cols) */}
                             <div className={`grid gap-4 ${type === 'MATERIALS_ROOT' ? 'grid-cols-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6' : (type === 'SPACES_ROOT' ? 'grid-cols-2 md:grid-cols-3 lg:grid-cols-4' : 'grid-cols-2 md:grid-cols-4 lg:grid-cols-5')}`}>
                                 {subItems.map(sub => {
+                                    // V 0.8.1: Use ProductCard for Collections
                                     if (type === 'COLLECTIONS_ROOT') {
                                         return (
                                             <div key={sub.id}>
@@ -1592,6 +1532,7 @@ function CategoryRootView({ type, spaces, spaceContents, collections, materials,
                                         );
                                     }
 
+                                    // For Spaces and Materials, keep custom cards but unify styles
                                     return (
                                         <div 
                                             key={sub.id} 
@@ -1608,6 +1549,7 @@ function CategoryRootView({ type, spaces, spaceContents, collections, materials,
                                                     <SwatchDisplay color={sub} className="w-full h-full rounded-none scale-100"/>
                                                 )}
                                                 
+                                                {/* V 0.8.1: Unified Star Button for Spaces & Materials */}
                                                 <button onClick={(e) => onToggleFavorite(e, sub.id)} className="absolute top-2 right-2 p-1.5 bg-white/80 rounded-full text-zinc-300 hover:text-yellow-400 hover:scale-110 transition-all z-10">
                                                     <Star className={`w-3.5 h-3.5 ${favorites.includes(sub.id) ? 'fill-yellow-400 text-yellow-400' : ''}`}/>
                                                 </button>
@@ -1652,6 +1594,7 @@ function CompareView({ products, hiddenIds, onToggleVisibility, onRemove, onEdit
                 <table className="w-full table-fixed border-collapse">
                     <thead>
                         <tr>
+                            {/* Fixed Header Column */}
                             <th className="w-24 md:w-32 bg-zinc-50 border-b border-r border-zinc-100 p-2 md:p-3 text-left text-[10px] md:text-xs font-bold text-zinc-400 uppercase sticky top-0 left-0 z-30 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">Feature</th>
                             {visibleProducts.map(p => (
                                 <th key={p.id} className="w-40 md:w-64 bg-white border-b border-r border-zinc-100 p-2 md:p-3 align-top sticky top-0 z-10">
@@ -1661,6 +1604,7 @@ function CompareView({ products, hiddenIds, onToggleVisibility, onRemove, onEdit
                                     </div>
                                 </th>
                             ))}
+                            {/* Empty Placeholders to keep grid stable */}
                             {visibleProducts.length < 4 && Array(4 - visibleProducts.length).fill(0).map((_, i) => <th key={`ph-${i}`} className="w-40 md:w-64 bg-zinc-50/10 border-b border-zinc-50"></th>)}
                         </tr>
                     </thead>
@@ -1902,14 +1846,10 @@ function SwatchDisplay({ color, size = 'medium', className = '', onClick }) {
   );
 }
 
-function SwatchManager({ category, swatches, isAdmin, onSave, onDelete, onSelect, onDuplicate, searchTerm, searchTags, favorites, onToggleFavorite, onReorder }) {
+function SwatchManager({ category, swatches, isAdmin, onSave, onDelete, onSelect, onDuplicate, searchTerm, searchTags, favorites, onToggleFavorite }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingSwatch, setEditingSwatch] = useState(null);
   const [activeTag, setActiveTag] = useState('ALL');
-  
-  // V 0.8.72: Drag & Drop
-  const dragItem = useRef(null);
-  const dragOverItem = useRef(null);
 
   const allTags = Array.from(new Set(swatches.flatMap(s => s.tags || []))).sort();
 
@@ -1926,27 +1866,6 @@ function SwatchManager({ category, swatches, isAdmin, onSave, onDelete, onSelect
 
       return matchesTag && matchesSearch && matchesSearchTags;
   });
-  
-  // Sort by orderIndex
-  filteredSwatches.sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0));
-
-  // Drag Handlers
-  const handleDragStart = (e, index) => { dragItem.current = index; };
-  const handleDragEnter = (e, index) => { dragOverItem.current = index; };
-  const handleDragEnd = () => {
-     const _list = [...filteredSwatches];
-     const dragIndex = dragItem.current; 
-     const dragOverIndex = dragOverItem.current;
-     if(dragIndex === null || dragOverIndex === null || dragIndex === dragOverIndex) return;
-     
-     const draggedItemContent = _list[dragIndex]; 
-     _list.splice(dragIndex, 1); 
-     _list.splice(dragOverIndex, 0, draggedItemContent);
-     
-     onReorder('swatches', _list);
-     dragItem.current = null; 
-     dragOverItem.current = null;
-  };
 
   return (
     <div className="p-1 animate-in fade-in pb-32">
@@ -1973,19 +1892,13 @@ function SwatchManager({ category, swatches, isAdmin, onSave, onDelete, onSelect
        )}
 
        <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-4">
-          {filteredSwatches.map((swatch, idx) => (
-             <div 
-                key={swatch.id} 
-                draggable={isAdmin}
-                onDragStart={(e) => handleDragStart(e, idx)}
-                onDragEnter={(e) => handleDragEnter(e, idx)}
-                onDragEnd={handleDragEnd}
-                onClick={() => handleCardClick(swatch)} 
-                className={`bg-white rounded-xl border border-zinc-200 overflow-hidden group hover:shadow-lg transition-all relative cursor-pointer ${isAdmin ? 'cursor-move active:opacity-50' : ''}`}
-             >
+          {filteredSwatches.map(swatch => (
+             <div key={swatch.id} onClick={() => handleCardClick(swatch)} className="bg-white rounded-xl border border-zinc-200 overflow-hidden group hover:shadow-lg transition-all relative cursor-pointer">
                 <div className="aspect-square relative bg-zinc-100 flex items-center justify-center">
+                   {/* Fix: removed size prop, passed explicit w-full h-full rounded-none to ensure fill */}
                    <SwatchDisplay color={swatch} className="w-full h-full rounded-none scale-100"/>
                    
+                   {/* V 0.8.1: My Pick Button for Materials */}
                    <button onClick={(e) => onToggleFavorite(e, swatch.id)} className="absolute top-2 right-2 p-1.5 bg-white/80 rounded-full text-zinc-300 hover:text-yellow-400 hover:scale-110 transition-all z-10">
                        <Star className={`w-3.5 h-3.5 ${favorites.includes(swatch.id) ? 'fill-yellow-400 text-yellow-400' : ''}`}/>
                    </button>
@@ -2196,12 +2109,12 @@ function SwatchFormModal({ category, existingData, onClose, onSave }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[250] flex items-center justify-center p-4">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[160] flex items-center justify-center p-4">
        <div className="bg-white rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
           <div className="px-5 py-4 border-b border-zinc-100 font-bold text-lg flex-shrink-0">
              {existingData ? 'Edit Material' : 'Add Material'}
           </div>
-          <div className="p-6 space-y-4 overflow-y-auto custom-scrollbar pb-safe">
+          <div className="p-6 space-y-4 overflow-y-auto custom-scrollbar">
              {/* Preview */}
              <div className="flex justify-center mb-4">
                 <div onClick={() => fileRef.current.click()} className="w-24 h-24 rounded-full shadow-md border-4 border-white cursor-pointer overflow-hidden relative group bg-zinc-100 flex items-center justify-center">
@@ -2691,16 +2604,12 @@ function DashboardView({ products, favorites, awards, swatches, spaceContents, s
   );
 }
 
-function SpaceDetailView({ space, spaceContent, activeTag, setActiveTag, isAdmin, onBannerUpload, onEditInfo, onManageProducts, onAddScene, onViewScene, productCount, searchTerm, searchTags, products, onProductClick, favorites, onToggleFavorite, onCompareToggle, compareList, onReorder }) {
+function SpaceDetailView({ space, spaceContent, activeTag, setActiveTag, isAdmin, onBannerUpload, onEditInfo, onManageProducts, onAddScene, onViewScene, productCount, searchTerm, searchTags, products, onProductClick, favorites, onToggleFavorite, onCompareToggle, compareList }) {
   const banner = spaceContent.banner;
   const description = spaceContent.description || "이 공간에 대한 설명이 없습니다.";
   const trend = spaceContent.trend || "";
   const scenes = spaceContent.scenes || [];
   const tags = spaceContent.tags || space.defaultTags || []; 
-  
-  // V 0.8.72: Drag & Drop for Scenes
-  const dragItem = useRef(null);
-  const dragOverItem = useRef(null);
 
   // Filter Scenes based on Tag AND Search
   const filteredScenes = scenes.filter(s => {
@@ -2712,24 +2621,6 @@ function SpaceDetailView({ space, spaceContent, activeTag, setActiveTag, isAdmin
   });
 
   const copySpaceLink = () => { navigator.clipboard.writeText(`${window.location.origin}${window.location.pathname}?space=${space.id}`); window.alert("공간 공유 링크가 복사되었습니다."); };
-
-  // Drag Handlers for Scenes
-  const handleDragStart = (e, index) => { dragItem.current = index; };
-  const handleDragEnter = (e, index) => { dragOverItem.current = index; };
-  const handleDragEnd = () => {
-     const _list = [...filteredScenes];
-     const dragIndex = dragItem.current; 
-     const dragOverIndex = dragOverItem.current;
-     if(dragIndex === null || dragOverIndex === null || dragIndex === dragOverIndex) return;
-     
-     const draggedItemContent = _list[dragIndex]; 
-     _list.splice(dragIndex, 1); 
-     _list.splice(dragOverIndex, 0, draggedItemContent);
-     
-     onReorder('scenes', _list, space.id);
-     dragItem.current = null; 
-     dragOverItem.current = null;
-  };
 
   return (
     <div className="mb-12 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -2761,16 +2652,8 @@ function SpaceDetailView({ space, spaceContent, activeTag, setActiveTag, isAdmin
         {filteredScenes.length > 0 ? (
           // V 0.8.5: Sub-categories (Office, etc.) use 3-column grid (wider look)
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredScenes.map((scene, idx) => (
-              <div 
-                  key={scene.id} 
-                  draggable={isAdmin}
-                  onDragStart={(e) => handleDragStart(e, idx)}
-                  onDragEnter={(e) => handleDragEnter(e, idx)}
-                  onDragEnd={handleDragEnd}
-                  onClick={() => onViewScene(scene)} 
-                  className={`group cursor-pointer relative ${isAdmin ? 'cursor-move active:opacity-50' : ''}`}
-              >
+            {filteredScenes.map((scene) => (
+              <div key={scene.id} onClick={() => onViewScene(scene)} className="group cursor-pointer relative">
                 <div className="aspect-[4/3] bg-zinc-50 rounded-xl mb-2 overflow-hidden border border-zinc-100 relative">
                     <img src={scene.image} className="w-full h-full object-cover group-hover:scale-105 transition-transform" alt={scene.title} />
                     {/* V 0.8.1: Unified Star Button for Space Scenes */}
@@ -2785,7 +2668,7 @@ function SpaceDetailView({ space, spaceContent, activeTag, setActiveTag, isAdmin
         ) : (<div className="text-center py-12 bg-zinc-50 rounded-2xl border border-dashed border-zinc-200 text-zinc-400"><ImageIcon className="w-12 h-12 mx-auto mb-3 opacity-20" /><p className="text-sm">등록된 공간 장면이 없습니다.</p></div>)}
       </div>
       
-      {/* V 0.8.72: Fix duplicate product list and remove margin if empty */}
+      {/* V 0.8.71: Fix duplicate product list and remove margin if empty */}
       {products.length > 0 && (
           <>
               <div className="flex items-center justify-between mb-6 border-t border-zinc-100 pt-12 print:border-none print:pt-0">
@@ -3021,8 +2904,8 @@ function ProductDetailModal({ product, allProducts, swatches, spaceContents, awa
   };
 
   return (
-    // V 0.8.4: Increased Z-Index to 150
-    <div key={product.id} className="fixed inset-0 bg-black/60 backdrop-blur-md z-[150] flex items-center justify-center p-0 md:p-4 animate-in fade-in duration-300 slide-in-animation print:fixed print:inset-0 print:z-[100] print:bg-white print:h-auto print:overflow-visible">
+    // V 0.8.4: Increased Z-Index to 200 to ensure it sits on top of Award Modal
+    <div key={product.id} className="fixed inset-0 bg-black/60 backdrop-blur-md z-[200] flex items-center justify-center p-0 md:p-4 animate-in fade-in duration-300 slide-in-animation print:fixed print:inset-0 print:z-[100] print:bg-white print:h-auto print:overflow-visible">
       <canvas ref={canvasRef} style={{ display: 'none' }} />
       
       {/* Full Screen Image View - Long-edge fit */}
@@ -3291,31 +3174,19 @@ function ProductDetailModal({ product, allProducts, swatches, spaceContents, awa
 }
 
 function SpaceInfoEditModal({ spaceId, currentData = {}, defaultTags, onClose, onSave }) {
-  const [data, setData] = useState({ description: '', trend: '', tags: [] });
-  const [tagInput, setTagInput] = useState('');
-
+  const [data, setData] = useState({ description: '', trend: '', tagsString: '' });
   useEffect(() => { 
      const tags = currentData.tags || defaultTags || [];
      setData({ 
         description: currentData.description || '', 
         trend: currentData.trend || '',
-        tags: tags
+        tagsString: tags.join(', ')
      }); 
   }, [currentData, defaultTags]);
 
   const handleSave = () => {
-     onSave(data);
-  };
-
-  const addTag = () => {
-      if(tagInput.trim()) {
-          setData(prev => ({ ...prev, tags: [...prev.tags, tagInput.trim()] }));
-          setTagInput('');
-      }
-  };
-
-  const removeTag = (idx) => {
-      setData(prev => ({ ...prev, tags: prev.tags.filter((_, i) => i !== idx) }));
+     const tags = data.tagsString.split(',').map(t => t.trim()).filter(Boolean);
+     onSave({ ...data, tags });
   };
 
   return (
@@ -3325,23 +3196,7 @@ function SpaceInfoEditModal({ spaceId, currentData = {}, defaultTags, onClose, o
         <div className="p-6 space-y-4">
            <div><label className="block text-xs font-bold text-zinc-500 uppercase mb-2">Description</label><textarea className="w-full border border-zinc-300 rounded-xl p-3 text-sm focus:ring-2 focus:ring-zinc-900 outline-none" rows={4} value={data.description} onChange={(e) => setData({...data, description: e.target.value})} /></div>
            <div><label className="block text-xs font-bold text-zinc-500 uppercase mb-2">Design Trend Keywords</label><input type="text" className="w-full border border-zinc-300 rounded-xl p-3 text-sm focus:ring-2 focus:ring-zinc-900 outline-none" value={data.trend} onChange={(e) => setData({...data, trend: e.target.value})} placeholder="e.g. Minimalist, Eco-friendly, Open Plan" /></div>
-           
-           {/* V 0.8.72: Enhanced Tag Management */}
-           <div>
-               <label className="block text-xs font-bold text-zinc-500 uppercase mb-2">Space Tags</label>
-               <div className="flex gap-2 mb-2">
-                   <input type="text" className="flex-1 border border-zinc-300 rounded-xl p-2 text-sm outline-none" value={tagInput} onChange={(e) => setTagInput(e.target.value)} placeholder="Add new tag..." onKeyDown={e => e.key === 'Enter' && addTag()} />
-                   <button onClick={addTag} className="bg-zinc-900 text-white px-4 rounded-xl text-xs font-bold">Add</button>
-               </div>
-               <div className="flex flex-wrap gap-2">
-                   {data.tags.map((tag, idx) => (
-                       <span key={idx} className="bg-zinc-100 text-zinc-700 px-3 py-1 rounded-lg text-xs font-bold flex items-center">
-                           {tag}
-                           <button onClick={() => removeTag(idx)} className="ml-2 text-zinc-400 hover:text-red-500"><X className="w-3 h-3"/></button>
-                       </span>
-                   ))}
-               </div>
-           </div>
+           <div><label className="block text-xs font-bold text-zinc-500 uppercase mb-2">Space Tags (comma separated)</label><input type="text" className="w-full border border-zinc-300 rounded-xl p-3 text-sm focus:ring-2 focus:ring-zinc-900 outline-none" value={data.tagsString} onChange={(e) => setData({...data, tagsString: e.target.value})} placeholder="Task, Executive, Meeting..." /></div>
         </div>
         <div className="px-6 py-4 border-t border-zinc-100 bg-zinc-50 flex justify-end"><button onClick={handleSave} className="px-6 py-2 bg-zinc-900 text-white rounded-xl text-sm font-bold hover:bg-black shadow-lg">Save Changes</button></div>
       </div>
@@ -3469,14 +3324,13 @@ function ProductFormModal({ categories, swatches = [], allProducts = [], awards 
   };
 
   return (
-    // V 0.8.72: Z-Index increased to 250 to be above ProductDetailModal (150)
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[250] flex items-center justify-center p-4">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[180] flex items-center justify-center p-4">
       <div className="bg-white w-full max-w-3xl rounded-2xl overflow-hidden shadow-2xl flex flex-col max-h-[95vh] animate-in slide-in-from-bottom-4 duration-200">
         <div className="px-8 py-5 border-b border-zinc-100 flex justify-between items-center">
           <h2 className="text-xl font-bold text-zinc-900">{isEditMode ? 'Edit Product' : 'New Product'}</h2>
           <button onClick={onClose}><X className="w-6 h-6 text-zinc-400 hover:text-zinc-900" /></button>
         </div>
-        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-8 space-y-6 pb-safe">
+        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-8 space-y-6">
           <div className="bg-zinc-50 p-6 rounded-xl border border-zinc-200">
              <div className="flex justify-between mb-4"><span className="font-bold text-sm">Product Images (Main)</span><div className="space-x-2"><button type="button" onClick={() => fileInputRef.current.click()} className="text-xs bg-white border px-3 py-1 rounded-lg font-medium hover:bg-zinc-100">Upload</button></div><input ref={fileInputRef} type="file" multiple className="hidden" onChange={handleImageUpload} accept="image/*"/></div>
              <div className="grid grid-cols-3 sm:grid-cols-5 gap-3">
@@ -3961,14 +3815,10 @@ function SpaceSceneModal({ scene, products, allProducts, isAdmin, onClose, onEdi
   );
 }
 
-function AwardsManager({ awards, products, isAdmin, onSave, onDelete, onSelect, searchTerm, searchTags, favorites, onToggleFavorite, onReorder }) {
+function AwardsManager({ awards, products, isAdmin, onSave, onDelete, onSelect, searchTerm, searchTags, favorites, onToggleFavorite }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingAward, setEditingAward] = useState(null);
   const [activeTag, setActiveTag] = useState('ALL');
-  
-  // V 0.8.72: Drag & Drop
-  const dragItem = useRef(null);
-  const dragOverItem = useRef(null);
 
   const allTags = Array.from(new Set(awards.flatMap(a => a.tags || []))).sort();
 
@@ -3982,27 +3832,6 @@ function AwardsManager({ awards, products, isAdmin, onSave, onDelete, onSelect, 
       const matchesSearchTags = searchTags.every(t => fullText.includes(t.toLowerCase()));
       return matchesTag && matchesSearch && matchesSearchTags;
   });
-  
-  // Sort by orderIndex
-  filteredAwards.sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0));
-
-  // Drag Handlers
-  const handleDragStart = (e, index) => { dragItem.current = index; };
-  const handleDragEnter = (e, index) => { dragOverItem.current = index; };
-  const handleDragEnd = () => {
-     const _list = [...filteredAwards];
-     const dragIndex = dragItem.current; 
-     const dragOverIndex = dragOverItem.current;
-     if(dragIndex === null || dragOverIndex === null || dragIndex === dragOverIndex) return;
-     
-     const draggedItemContent = _list[dragIndex]; 
-     _list.splice(dragIndex, 1); 
-     _list.splice(dragOverIndex, 0, draggedItemContent);
-     
-     onReorder('awards', _list);
-     dragItem.current = null; 
-     dragOverItem.current = null;
-  };
 
   return (
     <div className="p-1 animate-in fade-in pb-32">
@@ -4029,16 +3858,8 @@ function AwardsManager({ awards, products, isAdmin, onSave, onDelete, onSelect, 
 
        {/* V 0.8.71: Mobile Optimized Grid (2 cols) & Square Image Ratio */}
        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-          {filteredAwards.map((award, idx) => (
-             <div 
-                key={award.id} 
-                draggable={isAdmin}
-                onDragStart={(e) => handleDragStart(e, idx)}
-                onDragEnter={(e) => handleDragEnter(e, idx)}
-                onDragEnd={handleDragEnd}
-                onClick={() => handleCardClick(award)} 
-                className={`bg-white rounded-xl border border-zinc-200 overflow-hidden group hover:shadow-lg transition-all relative cursor-pointer flex flex-col ${isAdmin ? 'cursor-move active:opacity-50' : ''}`}
-             >
+          {filteredAwards.map(award => (
+             <div key={award.id} onClick={() => handleCardClick(award)} className="bg-white rounded-xl border border-zinc-200 overflow-hidden group hover:shadow-lg transition-all relative cursor-pointer flex flex-col">
                 <div className="aspect-square relative bg-white flex items-center justify-center p-6">
                    {award.image ? <img src={award.image} className="w-full h-full object-contain" /> : <Trophy className="w-12 h-12 text-zinc-300"/>}
                    <button onClick={(e) => onToggleFavorite(e, award.id)} className="absolute top-2 right-2 p-1.5 bg-white/80 rounded-full text-zinc-300 hover:text-yellow-400 hover:scale-110 transition-all z-10">
