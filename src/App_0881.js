@@ -38,7 +38,7 @@ const YOUR_FIREBASE_CONFIG = {
 // ----------------------------------------------------------------------
 // 상수 및 설정
 // ----------------------------------------------------------------------
-const APP_VERSION = "v0.8.82";
+const APP_VERSION = "v0.8.81";
 const BUILD_DATE = "2026.01.27";
 const ADMIN_PASSWORD = "adminlcg1";
 
@@ -222,7 +222,6 @@ export default function App() {
     const [bannerData, setBannerData] = useState({ url: null, logoUrl: null, title: 'Design Lab DB', subtitle: 'Integrated Product Database & Archives' });
     const [appSettings, setAppSettings] = useState({ logo: null, title: 'PATRA', subtitle: 'Design Lab DB' });
     const [spaceContents, setSpaceContents] = useState({});
-    const [scenes, setScenes] = useState([]); // V 0.8.82: Individual scene documents
 
     // Space/Scene Editing
     const [editingSpaceInfoId, setEditingSpaceInfoId] = useState(null);
@@ -402,15 +401,7 @@ export default function App() {
                     }
                 });
             });
-
-            // V 0.8.82: Listen to individual scenes collection
-            const qScenes = collection(db, 'artifacts', appId, 'public', 'data', 'scenes');
-            const unsubScenes = onSnapshot(qScenes, (snapshot) => {
-                const loadedScenes = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                setScenes(loadedScenes);
-            });
-
-            return () => { unsubProducts(); unsubSwatches(); unsubAwards(); unsubScenes(); };
+            return () => { unsubProducts(); unsubSwatches(); unsubAwards(); };
         } else {
             const localBanner = localStorage.getItem('patra_banner_data');
             if (localBanner) setBannerData(JSON.parse(localBanner));
@@ -586,44 +577,67 @@ export default function App() {
     const handleSpaceBannerUpload = async (e, spaceId) => { if (!isAdmin) return; const file = e.target.files[0]; if (!file) return; try { const resizedImage = await processImage(file); const currentContent = spaceContents[spaceId] || {}; const newContent = { ...currentContent, banner: resizedImage }; if (isFirebaseAvailable && db) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'space_contents', spaceId), newContent, { merge: true }); showToast("공간 배너가 업데이트되었습니다."); } catch (error) { showToast("이미지 처리 실패", "error"); } };
     const handleSpaceInfoSave = async (spaceId, info) => { const currentContent = spaceContents[spaceId] || {}; const newContent = { ...currentContent, ...info }; if (isFirebaseAvailable && db) { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'space_contents', spaceId), newContent, { merge: true }); } showToast("공간 정보가 저장되었습니다."); };
 
-    // V 0.8.82: Completely rewritten to save scenes as individual documents (like swatches/products)
-    // This fixes the 1MB document size limit that was causing save failures
+    // V 0.8.73: Improved Scene Save Logic (Safe Array Merge & Redirect)
     const handleSceneSave = async (targetSpaceId, sceneData) => {
         try {
-            const docId = sceneData.id ? String(sceneData.id) : String(Date.now());
-            const isEdit = !!sceneData.id;
+            let originalSpaceId = targetSpaceId;
+            let isMove = false;
 
-            const payload = sanitizeForFirebase({
-                ...sceneData,
-                id: docId,
-                spaceId: targetSpaceId,
-                updatedAt: Date.now(),
-                createdAt: isEdit ? (sceneData.createdAt || Date.now()) : Date.now(),
-                orderIndex: isEdit ? (sceneData.orderIndex || Date.now()) : Date.now()
-            });
-
-            if (isFirebaseAvailable && db) {
-                // Save scene as individual document in 'scenes' collection
-                await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'scenes', docId), payload, { merge: true });
+            // Check if moving from another space
+            if (sceneData.id) {
+                for (const [sId, content] of Object.entries(spaceContents)) {
+                    if (content.scenes?.some(s => s.id === sceneData.id)) {
+                        originalSpaceId = sId;
+                        break;
+                    }
+                }
+            }
+            if (originalSpaceId !== targetSpaceId && sceneData.id) {
+                isMove = true;
             }
 
-            showToast(isEdit ? "장면이 수정되었습니다." : "장면이 저장되었습니다.");
+            const targetContent = spaceContents[targetSpaceId] || { scenes: [] };
+            let targetScenes = [...(targetContent.scenes || [])];
+
+            if (isMove) {
+                const originalContent = spaceContents[originalSpaceId] || { scenes: [] };
+                const originalScenes = (originalContent.scenes || []).filter(s => s.id !== sceneData.id);
+                if (isFirebaseAvailable && db) {
+                    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'space_contents', originalSpaceId), { scenes: originalScenes }, { merge: true });
+                }
+                targetScenes.push(sceneData);
+            } else {
+                if (sceneData.id) {
+                    const idx = targetScenes.findIndex(s => s.id === sceneData.id);
+                    if (idx >= 0) targetScenes[idx] = sceneData; else targetScenes.push(sceneData);
+                } else {
+                    sceneData.id = Date.now().toString();
+                    targetScenes.push(sceneData);
+                }
+            }
+
+            if (isFirebaseAvailable && db) {
+                const sanitizedScenes = targetScenes.map(s => sanitizeForFirebase(s));
+                await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'space_contents', targetSpaceId), { scenes: sanitizedScenes }, { merge: true });
+            }
+
+            showToast(isMove ? "장면이 이동되었습니다." : "장면이 저장되었습니다.");
+
+            // If moved, redirect to the new space category
+            if (isMove) {
+                setActiveCategory(targetSpaceId);
+            }
+
+            // V 0.8.81: Don't set selectedScene after save to prevent modal popup bug
+            // setSelectedScene({ ...sceneData, spaceId: targetSpaceId });
             setEditingScene(null);
         } catch (e) {
             console.error("Save Scene Error:", e);
-            showToast(`저장 실패: ${e.message || '알 수 없는 오류'}`, "error");
+            showToast("저장 중 오류가 발생했습니다.", "error");
         }
     };
 
-
-    // V 0.8.82: Updated to delete from individual scenes collection
-    const handleSceneDelete = async (spaceId, sceneId) => {
-        if (!window.confirm("이 장면을 삭제하시겠습니까?")) return;
-        if (isFirebaseAvailable && db) {
-            await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'scenes', String(sceneId)));
-        }
-        showToast("장면이 삭제되었습니다.");
-    };
+    const handleSceneDelete = async (spaceId, sceneId) => { if (!window.confirm("이 장면을 삭제하시겠습니까?")) return; const currentContent = spaceContents[spaceId] || { scenes: [] }; const newScenes = (currentContent.scenes || []).filter(s => s.id !== sceneId); if (isFirebaseAvailable && db) { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'space_contents', spaceId), { scenes: newScenes }, { merge: true }); } showToast("장면이 삭제되었습니다."); };
     const handleSpaceProductToggle = async (spaceId, productId, isAdded) => { const product = products.find(p => p.id === productId); if (!product) return; let newSpaces = product.spaces || []; if (isAdded) { if (!newSpaces.includes(spaceId)) newSpaces.push(spaceId); } else { newSpaces = newSpaces.filter(s => s !== spaceId); } if (isFirebaseAvailable && db) { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'products', product.id), { spaces: newSpaces }, { merge: true }); } else { const idx = products.findIndex(p => p.id === productId); const newProds = [...products]; newProds[idx] = { ...product, spaces: newSpaces }; saveToLocalStorage(newProds); } };
     const logActivity = async (action, productName, details = "") => { if (!isFirebaseAvailable || !db) return; try { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'logs'), { action, productName, details, timestamp: Date.now(), adminId: 'admin' }); } catch (e) { console.error(e); } };
     const fetchLogs = async () => { if (!isFirebaseAvailable || !db) return; const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'logs'), orderBy('timestamp', 'desc'), limit(100)); onSnapshot(q, (snapshot) => { setActivityLogs(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))); }); };
@@ -1202,7 +1216,6 @@ export default function App() {
                                 <SpaceDetailView
                                     space={SPACES.find(s => s.id === activeCategory)}
                                     spaceContent={spaceContents[activeCategory] || {}}
-                                    additionalScenes={scenes}
                                     isAdmin={isAdmin}
                                     activeTag={activeSpaceTag}
                                     setActiveTag={setActiveSpaceTag}
@@ -2786,18 +2799,11 @@ function DashboardView({ products, favorites, awards, swatches, spaceContents, s
     );
 }
 
-function SpaceDetailView({ space, spaceContent, additionalScenes = [], activeTag, setActiveTag, isAdmin, onBannerUpload, onEditInfo, onManageProducts, onAddScene, onViewScene, productCount, searchTerm, searchTags, products, onProductClick, favorites, onToggleFavorite, onCompareToggle, compareList, onReorder }) {
+function SpaceDetailView({ space, spaceContent, activeTag, setActiveTag, isAdmin, onBannerUpload, onEditInfo, onManageProducts, onAddScene, onViewScene, productCount, searchTerm, searchTags, products, onProductClick, favorites, onToggleFavorite, onCompareToggle, compareList, onReorder }) {
     const banner = spaceContent.banner;
     const description = spaceContent.description || "이 공간에 대한 설명이 없습니다.";
     const trend = spaceContent.trend || "";
-    // V 0.8.82: Merge scenes from old space_contents and new individual scenes collection
-    const oldScenes = spaceContent.scenes || [];
-    const newScenes = additionalScenes.filter(s => s.spaceId === space.id);
-    // Merge and deduplicate by id (prefer new scenes)
-    const scenesMap = new Map();
-    oldScenes.forEach(s => scenesMap.set(s.id, s));
-    newScenes.forEach(s => scenesMap.set(s.id, s));
-    const scenes = Array.from(scenesMap.values());
+    const scenes = spaceContent.scenes || [];
     const tags = spaceContent.tags || space.defaultTags || [];
 
     // Filter Scenes based on Tag AND Search
