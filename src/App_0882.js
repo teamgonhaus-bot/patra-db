@@ -38,7 +38,7 @@ const YOUR_FIREBASE_CONFIG = {
 // ----------------------------------------------------------------------
 // 상수 및 설정
 // ----------------------------------------------------------------------
-const APP_VERSION = "v0.8.83";
+const APP_VERSION = "v0.8.82";
 const BUILD_DATE = "2026.01.27";
 const ADMIN_PASSWORD = "adminlcg1";
 
@@ -1490,53 +1490,27 @@ function CollapsibleSection({ title, count, children, defaultExpanded = true }) 
     );
 }
 
-// V 0.8.83: Unified Search Logic Helper
-const checkSearchMatch = (item, type, searchTerm, searchTags, filters = {}) => {
-    // 1. Text Search Construction
-    let textFields = [];
-    if (type === 'product' || !type) {
-        textFields = [
-            item.name, item.category, item.specs, item.materialCode, item.designer,
-            ...(item.features || []), ...(item.options || []), ...(item.tags || []),
-            item.description // Add description
-        ];
-    } else if (type === 'scene') {
-        textFields = [item.title, item.description, ...(item.tags || [])];
-    } else if (type === 'material' || type === 'swatch') {
-        textFields = [item.name, item.materialCode, item.group, item.category, ...(item.tags || [])];
-    } else if (type === 'award') {
-        textFields = [item.title, item.organization, ...(item.tags || [])];
-    }
-
-    const fullText = textFields.filter(Boolean).join(' ').toLowerCase();
-
-    // 2. Search Term Match
-    const matchesSearch = !searchTerm || fullText.includes(searchTerm.toLowerCase());
-
-    // 3. Search Tags Match
-    const matchesTags = !searchTags || searchTags.length === 0 || searchTags.every(t => fullText.includes(t.toLowerCase()));
-
-    // 4. Product Filters (only if type is product)
-    let matchesFilter = true;
-    if (type === 'product' && filters) {
-        if (filters.isNew && !item.isNew) matchesFilter = false;
-        if (filters.year && !item.launchDate?.startsWith(filters.year)) matchesFilter = false;
-        if (filters.color) {
-            const colorMatch = [...(item.bodyColors || []), ...(item.upholsteryColors || [])].some(c => {
-                const name = typeof c === 'object' ? c.name : c;
-                return name?.toLowerCase().includes(filters.color.toLowerCase());
-            });
-            if (!colorMatch) matchesFilter = false;
-        }
-    }
-
-    return matchesSearch && matchesTags && matchesFilter;
-};
-
 function TotalView({ products, categories, spaces, spaceContents, materials, materialCategories, onProductClick, onSceneClick, onSwatchClick, searchTerm, searchTags, filters, favorites, onToggleFavorite, onCompareToggle, compareList }) {
     // Filter Logic
-    // Filter Logic - V 0.8.83: Uses unified checkSearchMatch
-    const filterItem = (item, type) => checkSearchMatch(item, type, searchTerm, searchTags, filters);
+    const filterItem = (item, type) => {
+        const text = type === 'product' ? [item.name, item.category, item.specs, ...(item.features || []), ...(item.options || [])].join(' ') :
+            type === 'scene' ? [item.title, item.description].join(' ') :
+                [item.name, item.materialCode].join(' ');
+        const fullText = text.toLowerCase();
+        const matchesSearch = !searchTerm || fullText.includes(searchTerm.toLowerCase());
+        const matchesTags = searchTags.every(t => fullText.includes(t.toLowerCase()));
+
+        let matchesFilter = true;
+        if (type === 'product') {
+            if (filters.isNew && !item.isNew) matchesFilter = false;
+            if (filters.year && !item.launchDate?.startsWith(filters.year)) matchesFilter = false;
+            if (filters.color) {
+                const colorMatch = [...(item.bodyColors || []), ...(item.upholsteryColors || [])].some(c => { const name = typeof c === 'object' ? c.name : c; return name.toLowerCase().includes(filters.color.toLowerCase()); });
+                if (!colorMatch) matchesFilter = false;
+            }
+        }
+        return matchesSearch && matchesTags && matchesFilter;
+    };
 
     return (
         <div className="animate-in fade-in slide-in-from-bottom-4 pb-32">
@@ -1647,8 +1621,25 @@ function CategoryRootView({ type, spaces, spaceContents, collections, materials,
     let isMaterial = false;
 
     // Filter Logic
-    // Filter Logic - V 0.8.83: Uses unified checkSearchMatch
-    const filterItem = (item, itemType) => checkSearchMatch(item, itemType, searchTerm, searchTags, filters);
+    const filterItem = (item, itemType) => {
+        const text = itemType === 'product' ? [item.name, item.category, item.specs, ...(item.features || []), ...(item.options || [])].join(' ') :
+            itemType === 'scene' ? [item.title, item.description].join(' ') :
+                [item.name, item.materialCode].join(' ');
+        const fullText = text.toLowerCase();
+        const matchesSearch = !searchTerm || fullText.includes(searchTerm.toLowerCase());
+        const matchesTags = searchTags.every(t => fullText.includes(t.toLowerCase()));
+
+        let matchesFilter = true;
+        if (itemType === 'product') {
+            if (filters.isNew && !item.isNew) matchesFilter = false;
+            if (filters.year && !item.launchDate?.startsWith(filters.year)) matchesFilter = false;
+            if (filters.color) {
+                const colorMatch = [...(item.bodyColors || []), ...(item.upholsteryColors || [])].some(c => { const name = typeof c === 'object' ? c.name : c; return name.toLowerCase().includes(filters.color.toLowerCase()); });
+                if (!colorMatch) matchesFilter = false;
+            }
+        }
+        return matchesSearch && matchesTags && matchesFilter;
+    };
 
     if (type === 'SPACES_ROOT') {
         title = "Spaces";
@@ -2037,17 +2028,19 @@ function SwatchManager({ category, swatches, isAdmin, onSave, onDelete, onSelect
     // Filter Logic including search
     const filteredSwatches = swatches.filter(s => {
         const matchesTag = activeTag === 'ALL' || (s.tags && s.tags.includes(activeTag));
-        // V 0.8.83: Unified Search
-        const matchesSearch = checkSearchMatch(s, 'swatch', searchTerm, searchTags);
 
-        return matchesTag && matchesSearch;
+        const fullText = [s.name, s.materialCode, ...(s.tags || [])].join(' ').toLowerCase();
+        const matchesSearch = !searchTerm || fullText.includes(searchTerm.toLowerCase());
+        const matchesSearchTags = searchTags.every(t => fullText.includes(t.toLowerCase()));
+
+        return matchesTag && matchesSearch && matchesSearchTags;
     });
 
     // Sort by orderIndex
     filteredSwatches.sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0));
 
     return (
-        <div className="p-1 animate-in fade-in pb-24 md:pb-32">
+        <div className="p-1 animate-in fade-in pb-32">
             {/* Adjusted Header Style to match Scenes/Collections */}
             <div className="flex items-center justify-between mb-6">
                 <h3 className="text-2xl font-extrabold text-zinc-900 flex items-center tracking-tight">
@@ -2070,7 +2063,7 @@ function SwatchManager({ category, swatches, isAdmin, onSave, onDelete, onSelect
                 </div>
             )}
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3 md:gap-4">
+            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3 md:gap-4">
                 {filteredSwatches.map((swatch, idx) => (
                     <div
                         key={swatch.id}
@@ -2426,7 +2419,10 @@ function PieChartComponent({ data, total, selectedIndex, onSelect }) {
                     const isSelected = selectedIndex === idx;
                     const isHovered = hoveredIndex === idx;
                     const midAngle = startAngle + (endAngle - startAngle) / 2;
-                    const opacity = (hoveredIndex !== null && hoveredIndex !== idx) || (selectedIndex !== null && selectedIndex !== idx) ? 0.3 : 1;
+                    const explodeDist = isSelected ? 0.15 : (isHovered ? 0.05 : 0);
+                    const tx = Math.cos(midAngle) * explodeDist;
+                    const ty = Math.sin(midAngle) * explodeDist;
+
                     const strokeWidth = isSelected ? 0.22 : 0.2;
 
                     return (
@@ -2436,8 +2432,8 @@ function PieChartComponent({ data, total, selectedIndex, onSelect }) {
                                 fill="none"
                                 stroke={item.color}
                                 strokeWidth={strokeWidth}
-                                opacity={opacity}
-                                className="transition-all duration-300 cursor-pointer"
+                                transform={`translate(${tx}, ${ty})`}
+                                className="transition-all duration-500 cursor-pointer"
                                 onClick={(e) => { e.stopPropagation(); onSelect(isSelected ? null : idx); }}
                                 onMouseEnter={() => setHoveredIndex(idx)}
                                 onMouseLeave={() => setHoveredIndex(null)}
@@ -2532,10 +2528,9 @@ function DashboardView({ products, favorites, awards, swatches, spaceContents, s
     const logoInputRef = useRef(null);
 
     const [selectedSlice, setSelectedSlice] = useState(null);
-    // V 0.8.83: Dropdown states for dashboard report items
-    const [openReportDropdown, setOpenReportDropdown] = useState(null); // 'PRODUCTS', 'NEW', 'AWARDS', 'LAUNCH'
-    const [isListExpanded, setIsListExpanded] = useState(false);
-    const [expandedAwardId, setExpandedAwardId] = useState(null);
+    const [isListExpanded, setIsListExpanded] = useState(false); // For Dropdown
+    const [isLaunchExpanded, setIsLaunchExpanded] = useState(false); // For Launching Dropdown
+    const [expandedAwardId, setExpandedAwardId] = useState(null); // V 0.8.2
 
     // Helper for Selected Slice Data
     const getSelectedSliceDetails = () => {
@@ -2632,64 +2627,33 @@ function DashboardView({ products, favorites, awards, swatches, spaceContents, s
                                 <div className="animate-in fade-in slide-in-from-left-4 h-full flex flex-col justify-center">
                                     <div className="flex items-center gap-3 mb-4 pb-2 border-b border-zinc-100">
                                         <div className="w-4 h-4 rounded-full" style={{ backgroundColor: chartData[selectedSlice].color }}></div>
-                                        <h4 className="text-2xl font-black text-zinc-900 hover:text-blue-600 cursor-pointer" onClick={() => setActiveCategory(chartData[selectedSlice].id)}>{chartData[selectedSlice].label}</h4>
+                                        <h4 className="text-2xl font-black text-zinc-900">{chartData[selectedSlice].label}</h4>
                                         <button onClick={() => setActiveCategory(chartData[selectedSlice].id)} className="ml-auto text-xs font-bold text-blue-600 hover:underline flex items-center">Explore <ArrowRight className="w-3 h-3 ml-1" /></button>
                                     </div>
 
                                     <div className="grid grid-cols-2 gap-4 mb-6">
-                                        <div className="bg-zinc-50 p-3 rounded-xl border border-zinc-100 relative group cursor-pointer" onClick={() => setOpenReportDropdown(openReportDropdown === 'PRODUCTS' ? null : 'PRODUCTS')}>
-                                            <div className="flex justify-between items-center">
-                                                <span className="text-[10px] text-zinc-400 uppercase font-bold block mb-1">Products</span>
-                                                <ChevronDown className={`w-3 h-3 text-zinc-400 transition-transform ${openReportDropdown === 'PRODUCTS' ? 'rotate-180' : ''}`} />
-                                            </div>
+                                        <div className="bg-zinc-50 p-3 rounded-xl border border-zinc-100">
+                                            <span className="text-[10px] text-zinc-400 uppercase font-bold block mb-1">Products</span>
                                             <span className="text-xl font-black text-zinc-900">{chartData[selectedSlice].count}</span>
-                                            {openReportDropdown === 'PRODUCTS' && (
-                                                <div className="absolute top-full left-0 w-full bg-white border border-zinc-200 shadow-xl rounded-lg p-2 z-20 text-xs mt-1 max-h-48 overflow-y-auto custom-scrollbar">
-                                                    {sliceDetails.products.map(p => (
-                                                        <div key={p.id} className="p-1 hover:bg-zinc-100 rounded truncate cursor-pointer" onClick={(e) => { e.stopPropagation(); setSelectedProduct(p); }}>{p.name}</div>
-                                                    ))}
-                                                </div>
-                                            )}
                                         </div>
-
-                                        <div className="bg-zinc-50 p-3 rounded-xl border border-zinc-100 relative group cursor-pointer" onClick={() => setOpenReportDropdown(openReportDropdown === 'NEW' ? null : 'NEW')}>
-                                            <div className="flex justify-between items-center">
-                                                <span className="text-[10px] text-zinc-400 uppercase font-bold block mb-1">New Gen</span>
-                                                <ChevronDown className={`w-3 h-3 text-zinc-400 transition-transform ${openReportDropdown === 'NEW' ? 'rotate-180' : ''}`} />
-                                            </div>
+                                        <div className="bg-zinc-50 p-3 rounded-xl border border-zinc-100">
+                                            <span className="text-[10px] text-zinc-400 uppercase font-bold block mb-1">New Arrivals</span>
                                             <span className="text-xl font-black text-zinc-900">{sliceDetails.products.filter(p => p.isNew).length}</span>
-                                            {openReportDropdown === 'NEW' && (
-                                                <div className="absolute top-full left-0 w-full bg-white border border-zinc-200 shadow-xl rounded-lg p-2 z-20 text-xs mt-1 max-h-48 overflow-y-auto custom-scrollbar">
-                                                    {sliceDetails.products.filter(p => p.isNew).length > 0 ? sliceDetails.products.filter(p => p.isNew).map(p => (
-                                                        <div key={p.id} className="p-1 hover:bg-zinc-100 rounded truncate cursor-pointer" onClick={(e) => { e.stopPropagation(); setSelectedProduct(p); }}>{p.name}</div>
-                                                    )) : <div className="text-zinc-400 p-1">No new items</div>}
-                                                </div>
-                                            )}
                                         </div>
-
-                                        <div className="bg-zinc-50 p-3 rounded-xl border border-zinc-100 relative group cursor-pointer" onClick={() => setOpenReportDropdown(openReportDropdown === 'AWARDS' ? null : 'AWARDS')}>
-                                            <div className="flex justify-between items-center">
-                                                <span className="text-[10px] text-zinc-400 uppercase font-bold block mb-1">Awards</span>
-                                                <ChevronDown className={`w-3 h-3 text-zinc-400 transition-transform ${openReportDropdown === 'AWARDS' ? 'rotate-180' : ''}`} />
-                                            </div>
+                                        <div className="bg-zinc-50 p-3 rounded-xl border border-zinc-100">
+                                            <span className="text-[10px] text-zinc-400 uppercase font-bold block mb-1">Total Awards</span>
                                             <span className="text-xl font-black text-zinc-900">{sliceDetails.awardCount}</span>
-                                            {openReportDropdown === 'AWARDS' && (
-                                                <div className="absolute top-full left-0 w-full bg-white border border-zinc-200 shadow-xl rounded-lg p-2 z-20 text-xs mt-1 max-h-48 overflow-y-auto custom-scrollbar">
-                                                    {sliceDetails.products.filter(p => p.awards?.length || p.awardHistory?.length).length > 0 ? sliceDetails.products.filter(p => p.awards?.length || p.awardHistory?.length).map(p => (
-                                                        <div key={p.id} className="p-1 hover:bg-zinc-100 rounded truncate cursor-pointer" onClick={(e) => { e.stopPropagation(); setSelectedProduct(p); }}>{p.name} ({p.awards?.length || p.awardHistory?.length})</div>
-                                                    )) : <div className="text-zinc-400 p-1">No awards</div>}
-                                                </div>
-                                            )}
                                         </div>
 
-                                        <div className="bg-zinc-50 p-3 rounded-xl border border-zinc-100 relative group cursor-pointer" onClick={() => setOpenReportDropdown(openReportDropdown === 'LAUNCH' ? null : 'LAUNCH')}>
+                                        {/* Dropdown for Launch Years if many */}
+                                        <div className="bg-zinc-50 p-3 rounded-xl border border-zinc-100 relative group cursor-pointer" onClick={() => setIsLaunchExpanded(!isLaunchExpanded)}>
                                             <div className="flex justify-between items-center">
-                                                <span className="text-[10px] text-zinc-400 uppercase font-bold block mb-1">Make Year</span>
-                                                <ChevronDown className={`w-3 h-3 text-zinc-400 transition-transform ${openReportDropdown === 'LAUNCH' ? 'rotate-180' : ''}`} />
+                                                <span className="text-[10px] text-zinc-400 uppercase font-bold block mb-1">Launching</span>
+                                                <ChevronDown className={`w-3 h-3 text-zinc-400 transition-transform ${isLaunchExpanded ? 'rotate-180' : ''}`} />
                                             </div>
-                                            <span className="text-xs font-bold text-zinc-900 truncate block mt-1">{sliceDetails.years.substring(0, 12)}...</span>
-                                            {openReportDropdown === 'LAUNCH' && (
-                                                <div className="absolute top-full left-0 w-full bg-white border border-zinc-200 shadow-xl rounded-lg p-2 z-20 text-xs mt-1 max-h-48 overflow-y-auto custom-scrollbar">
+                                            <span className="text-xs font-bold text-zinc-900 truncate block">{sliceDetails.years.substring(0, 15)}...</span>
+                                            {isLaunchExpanded && (
+                                                <div className="absolute top-full left-0 w-full bg-white border border-zinc-200 shadow-lg rounded-lg p-2 z-10 text-xs mt-1 max-h-32 overflow-y-auto custom-scrollbar">
                                                     {sliceDetails.years}
                                                 </div>
                                             )}
@@ -2836,12 +2800,13 @@ function SpaceDetailView({ space, spaceContent, additionalScenes = [], activeTag
     const scenes = Array.from(scenesMap.values());
     const tags = spaceContent.tags || space.defaultTags || [];
 
-    // Filter Scenes based on Tag AND Search - V 0.8.83: Unified unified checkSearchMatch
+    // Filter Scenes based on Tag AND Search
     const filteredScenes = scenes.filter(s => {
         const matchesTag = activeTag === 'ALL' || (s.tags && s.tags.includes(activeTag));
-        // V 0.8.83: Unified Search
-        const matchesSearch = checkSearchMatch(s, 'scene', searchTerm, searchTags);
-        return matchesTag && matchesSearch;
+        const fullText = [s.title, s.description].join(' ').toLowerCase();
+        const matchesSearch = !searchTerm || fullText.includes(searchTerm.toLowerCase());
+        const matchesTags = searchTags.every(t => fullText.includes(t.toLowerCase()));
+        return matchesTag && matchesSearch && matchesTags;
     });
 
     const copySpaceLink = () => { navigator.clipboard.writeText(`${window.location.origin}${window.location.pathname}?space=${space.id}`); window.alert("공간 공유 링크가 복사되었습니다."); };
@@ -2857,7 +2822,7 @@ function SpaceDetailView({ space, spaceContent, additionalScenes = [], activeTag
     }, [products]);
 
     return (
-        <div className="mb-12 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-24 md:pb-32">
+        <div className="mb-12 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-32">
             <div className="relative rounded-3xl overflow-hidden h-72 md:h-96 shadow-lg group mb-8 bg-zinc-900 print:hidden">
                 <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent z-10"></div>
                 {banner ? <img src={banner} className="w-full h-full object-cover transition-transform duration-1000" alt="Space Banner" /> : <div className="w-full h-full flex items-center justify-center opacity-30"><span className="text-white text-4xl font-bold uppercase">{space.label}</span></div>}
@@ -2873,7 +2838,14 @@ function SpaceDetailView({ space, spaceContent, additionalScenes = [], activeTag
                 </div>
             </div>
 
-
+            {tags.length > 0 && (
+                <div className="mb-8 flex gap-2 overflow-x-auto pb-2 custom-scrollbar">
+                    <button onClick={() => setActiveTag('ALL')} className={`px-4 py-2 rounded-full text-sm font-bold whitespace-nowrap transition-colors border ${activeTag === 'ALL' ? 'bg-black text-white border-black' : 'bg-white text-zinc-500 border-zinc-200 hover:bg-zinc-100'}`}>ALL</button>
+                    {tags.map((tag, idx) => (
+                        <button key={idx} onClick={() => setActiveTag(tag)} className={`px-4 py-2 rounded-full text-sm font-bold whitespace-nowrap transition-colors border ${activeTag === tag ? 'bg-black text-white border-black' : 'bg-white text-zinc-500 border-zinc-200 hover:bg-zinc-100'}`}>{tag}</button>
+                    ))}
+                </div>
+            )}
 
             <div className={`${filteredScenes.length === 0 ? '' : 'mb-12'} print:hidden`}>
                 <div className="flex items-center justify-between mb-6"><h3 className="text-2xl font-extrabold text-zinc-900 flex items-center"><ImageIcon className="w-6 h-6 mr-2 text-indigo-500" /> Space Scenes ({filteredScenes.length})</h3>{isAdmin && (<button onClick={onAddScene} className="flex items-center text-sm font-bold bg-zinc-900 text-white px-4 py-2 rounded-lg hover:bg-black transition-colors shadow-lg"><Plus className="w-4 h-4 mr-2" /> Add Scene</button>)}</div>
@@ -2906,7 +2878,29 @@ function SpaceDetailView({ space, spaceContent, additionalScenes = [], activeTag
             </div>
 
             {/* V 0.8.73: Fix duplicate product list and remove margin if empty */}
-            {/* V 0.8.83: Removed All Curated Products List & Margin Adjustment */}
+            {uniqueProducts.length > 0 && (
+                <>
+                    <div className="flex items-center justify-between mb-6 border-t border-zinc-100 pt-12 print:border-none print:pt-0">
+                        <h3 className="text-xl font-bold text-zinc-900 flex items-center"><Tag className="w-5 h-5 mr-2 text-zinc-400" /> All Curated Products <span className="ml-2 text-sm font-medium text-zinc-400 bg-zinc-100 px-2 py-0.5 rounded-full">{uniqueProducts.length}</span></h3>
+                        {isAdmin && (<button onClick={onManageProducts} className="flex items-center text-sm font-bold text-zinc-500 hover:text-zinc-900 bg-white border border-zinc-200 px-4 py-2 rounded-lg hover:border-zinc-400 transition-colors"><Settings className="w-4 h-4 mr-2" /> Manage List</button>)}
+                    </div>
+
+                    <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-6 pb-32 print:grid-cols-3 print:gap-4">
+                        {uniqueProducts.map((product) => (
+                            <div key={product.id}>
+                                <ProductCard
+                                    product={product}
+                                    onClick={() => onProductClick(product)}
+                                    isFavorite={favorites.includes(product.id)}
+                                    onToggleFavorite={(e) => onToggleFavorite(e, product.id)}
+                                    onCompareToggle={(e) => onCompareToggle(e, product)}
+                                    isCompared={!!compareList.find(p => p.id === product.id)}
+                                />
+                            </div>
+                        ))}
+                    </div>
+                </>
+            )}
         </div>
     );
 }
@@ -3977,7 +3971,7 @@ function SpaceSceneModal({ scene, products, allProducts, isAdmin, onClose, onEdi
     }, [products]);
 
     return (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[150] flex items-center justify-center p-0 md:p-6 animate-in zoom-in-95 duration-200 print:hidden">
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[60] flex items-center justify-center p-0 md:p-6 animate-in zoom-in-95 duration-200 print:hidden">
             {isZoomed && currentImgUrl && (<div className="fixed inset-0 z-[120] bg-black flex items-center justify-center p-0 cursor-zoom-out print:hidden" onClick={() => setIsZoomed(false)}><img src={currentImgUrl} className="w-full h-full object-contain max-w-none max-h-none" style={{ maxWidth: '100vw', maxHeight: '100vh' }} alt="Zoomed" /><button className="absolute top-6 right-6 text-white/50 hover:text-white"><X className="w-10 h-10" /></button></div>)}
 
             <div className="bg-white w-full h-[100dvh] md:h-[90vh] md:max-w-6xl md:rounded-3xl overflow-hidden shadow-2xl flex flex-col md:flex-row relative">
