@@ -38,7 +38,7 @@ const YOUR_FIREBASE_CONFIG = {
 // ----------------------------------------------------------------------
 // 상수 및 설정
 // ----------------------------------------------------------------------
-const APP_VERSION = "v0.8.85";
+const APP_VERSION = "v0.8.84";
 const BUILD_DATE = "2026.01.27";
 const ADMIN_PASSWORD = "adminlcg1";
 
@@ -2152,71 +2152,69 @@ function SwatchDetailModal({ swatch, allProducts, swatches, onClose, onNavigateP
                     <button onClick={onClose} className="p-2 bg-white/50 hover:bg-zinc-100 rounded-full backdrop-blur shadow-sm"><X className="w-6 h-6 text-zinc-900" /></button>
                 </div>
 
-                <div className="flex-1 overflow-y-auto custom-scrollbar flex flex-col md:flex-row h-full pb-safe print:overflow-visible print:h-auto">
-                    <div className="w-full md:w-5/12 bg-zinc-50 flex items-center justify-center p-8 border-b md:border-b-0 md:border-r border-zinc-100 md:sticky md:top-0 print:static print:bg-white print:border-none min-h-[40vh]">
-                        <div className="w-48 h-48 md:w-64 md:h-64 rounded-full shadow-2xl overflow-hidden border-4 border-white ring-1 ring-black/5 flex items-center justify-center bg-white">
-                            <SwatchDisplay color={swatch} size="large" className="w-full h-full scale-100 rounded-full" />
+                <div className="w-full md:w-5/12 bg-zinc-50 flex items-center justify-center p-8 relative min-h-[40vh]">
+                    <div className="w-48 h-48 md:w-64 md:h-64 rounded-full shadow-2xl overflow-hidden border-4 border-white ring-1 ring-black/5 flex items-center justify-center bg-white">
+                        <SwatchDisplay color={swatch} size="large" className="w-full h-full scale-100 rounded-full" />
+                    </div>
+                </div>
+
+                <div className="w-full md:w-7/12 bg-white p-8 md:p-10 flex flex-col overflow-y-auto pb-safe">
+                    <div className="mb-6">
+                        <div className="flex gap-2 mb-2">
+                            <span className="inline-block px-2.5 py-0.5 bg-zinc-900 text-white text-[10px] font-bold rounded uppercase tracking-widest">{swatch.category}</span>
+                            {swatch.tags?.map(t => <span key={t} className="inline-block px-2 py-0.5 bg-zinc-100 text-zinc-600 text-[10px] font-bold rounded uppercase tracking-widest">{t}</span>)}
+                        </div>
+                        <div className="flex flex-col">
+                            <span className="text-4xl font-black text-zinc-900 tracking-tighter mb-1">{swatch.materialCode || 'NO CODE'}</span>
+                            <h2 className="text-xl font-bold text-zinc-500">{swatch.name}</h2>
+                        </div>
+                        <div className="flex items-center mt-3 text-zinc-400 font-mono text-xs">
+                            <span className="w-3 h-3 rounded-full mr-2 border border-zinc-200" style={{ backgroundColor: swatch.hex }}></span>
+                            {swatch.hex}
                         </div>
                     </div>
 
-                    <div className="w-full md:w-7/12 bg-white p-6 md:p-10 flex flex-col pb-24 md:pb-10">
-                        <div className="mb-6">
-                            <div className="flex gap-2 mb-2">
-                                <span className="inline-block px-2.5 py-0.5 bg-zinc-900 text-white text-[10px] font-bold rounded uppercase tracking-widest">{swatch.category}</span>
-                                {swatch.tags?.map(t => <span key={t} className="inline-block px-2 py-0.5 bg-zinc-100 text-zinc-600 text-[10px] font-bold rounded uppercase tracking-widest">{t}</span>)}
+                    <div className="space-y-6 flex-1">
+                        <div>
+                            <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2">Description</h3>
+                            <p className="text-sm text-zinc-600 leading-relaxed whitespace-pre-wrap">
+                                {swatch.description || "No description provided for this material."}
+                            </p>
+                        </div>
+
+                        {swatch.textureType && (
+                            <div>
+                                <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2">Finish Type</h3>
+                                <p className="text-sm font-bold text-zinc-800">{swatch.textureType}</p>
                             </div>
-                            <div className="flex flex-col">
-                                <span className="text-4xl font-black text-zinc-900 tracking-tighter mb-1">{swatch.materialCode || 'NO CODE'}</span>
-                                <h2 className="text-xl font-bold text-zinc-500">{swatch.name}</h2>
-                            </div>
-                            <div className="flex items-center mt-3 text-zinc-400 font-mono text-xs">
-                                <span className="w-3 h-3 rounded-full mr-2 border border-zinc-200" style={{ backgroundColor: swatch.hex }}></span>
-                                {swatch.hex}
+                        )}
+
+                        <div className="pt-6 border-t border-zinc-100">
+                            <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-3 flex justify-between items-center">
+                                Applied Products
+                                <span className="bg-zinc-100 text-zinc-600 px-2 py-0.5 rounded-full text-[10px]">{relatedProducts.length}</span>
+                            </h3>
+                            <div className="grid grid-cols-2 gap-3 max-h-60 overflow-y-auto custom-scrollbar p-1">
+                                {relatedProducts.length > 0 ? relatedProducts.map(p => (
+                                    <button key={p.id} onClick={() => onNavigateProduct(p)} className="flex items-center p-2 rounded-lg border border-zinc-100 hover:border-zinc-300 hover:bg-zinc-50 transition-all text-left group">
+                                        <div className="w-10 h-10 rounded-md bg-zinc-100 overflow-hidden mr-3 flex-shrink-0">
+                                            {p.images?.[0] ? <img src={typeof p.images[0] === 'object' ? p.images[0].url : p.images[0]} className="w-full h-full object-cover" /> : <div className="w-full h-full bg-zinc-200"></div>}
+                                        </div>
+                                        <div className="min-w-0">
+                                            <div className="text-xs font-bold text-zinc-900 truncate group-hover:text-blue-600">{p.name}</div>
+                                            <div className="text-[10px] text-zinc-500 truncate">{p.category}</div>
+                                        </div>
+                                    </button>
+                                )) : (
+                                    <div className="col-span-2 text-center py-6 text-zinc-300 text-xs">No products currently use this finish.</div>
+                                )}
                             </div>
                         </div>
 
-                        <div className="space-y-6 flex-1">
-                            <div>
-                                <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2">Description</h3>
-                                <p className="text-sm text-zinc-600 leading-relaxed whitespace-pre-wrap">
-                                    {swatch.description || "No description provided for this material."}
-                                </p>
-                            </div>
-
-                            {swatch.textureType && (
-                                <div>
-                                    <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2">Finish Type</h3>
-                                    <p className="text-sm font-bold text-zinc-800">{swatch.textureType}</p>
-                                </div>
-                            )}
-
-                            <div className="pt-6 border-t border-zinc-100">
-                                <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-3 flex justify-between items-center">
-                                    Applied Products
-                                    <span className="bg-zinc-100 text-zinc-600 px-2 py-0.5 rounded-full text-[10px]">{relatedProducts.length}</span>
-                                </h3>
-                                <div className="grid grid-cols-2 gap-3 max-h-60 overflow-y-auto custom-scrollbar p-1">
-                                    {relatedProducts.length > 0 ? relatedProducts.map(p => (
-                                        <button key={p.id} onClick={() => onNavigateProduct(p)} className="flex items-center p-2 rounded-lg border border-zinc-100 hover:border-zinc-300 hover:bg-zinc-50 transition-all text-left group">
-                                            <div className="w-10 h-10 rounded-md bg-zinc-100 overflow-hidden mr-3 flex-shrink-0">
-                                                {p.images?.[0] ? <img src={typeof p.images[0] === 'object' ? p.images[0].url : p.images[0]} className="w-full h-full object-cover" /> : <div className="w-full h-full bg-zinc-200"></div>}
-                                            </div>
-                                            <div className="min-w-0">
-                                                <div className="text-xs font-bold text-zinc-900 truncate group-hover:text-blue-600">{p.name}</div>
-                                                <div className="text-[10px] text-zinc-500 truncate">{p.category}</div>
-                                            </div>
-                                        </button>
-                                    )) : (
-                                        <div className="col-span-2 text-center py-6 text-zinc-300 text-xs">No products currently use this finish.</div>
-                                    )}
-                                </div>
-                            </div>
-
-                            {/* Share & Print - V 0.8.85: Match Material Modal Design */}
-                            <div className="pt-8 border-t border-zinc-100 flex gap-3 print:hidden mb-safe mb-8">
-                                <button onClick={handleShareImage} className="flex-1 py-3 bg-zinc-100 text-zinc-600 rounded-xl text-xs font-bold hover:bg-zinc-200 flex items-center justify-center"><ImgIcon className="w-4 h-4 mr-2" /> Share</button>
-                                <button onClick={() => window.print()} className="flex-1 py-3 bg-zinc-100 text-zinc-600 rounded-xl text-xs font-bold hover:bg-zinc-200 flex items-center justify-center"><Printer className="w-4 h-4 mr-2" /> PDF</button>
-                            </div>
+                        {/* Share & Print for Mobile Consistency - V 0.8.4: Added mb-8 for spacing */}
+                        <div className="pt-6 border-t border-zinc-100 flex gap-3 print:hidden mb-safe mb-8">
+                            <button onClick={handleShareImage} className="flex-1 py-3 bg-zinc-100 text-zinc-600 rounded-xl text-xs font-bold hover:bg-zinc-200 flex items-center justify-center"><ImgIcon className="w-4 h-4 mr-2" /> Share</button>
+                            <button onClick={() => window.print()} className="flex-1 py-3 bg-zinc-100 text-zinc-600 rounded-xl text-xs font-bold hover:bg-zinc-200 flex items-center justify-center"><Printer className="w-4 h-4 mr-2" /> PDF</button>
                         </div>
                     </div>
                 </div>
@@ -2455,7 +2453,7 @@ function PieChartComponent({ data, total, selectedIndex, onSelect }) {
                 })}
             </svg>
 
-            {/* Labels with Connecting Lines - V 0.8.85: Fixed position, bigger font, connecting lines */}
+            {/* Labels Outside - Adjusted to avoid overlap with pulled out slice */}
             {data.map((item, idx) => {
                 let prevPercent = 0;
                 for (let i = 0; i < idx; i++) prevPercent += data[i].count / total;
@@ -2463,47 +2461,26 @@ function PieChartComponent({ data, total, selectedIndex, onSelect }) {
                 const midPercent = prevPercent + percent / 2;
                 const angleRad = (midPercent * 2 * Math.PI) - (Math.PI / 2);
 
+                const isSelected = selectedIndex === idx;
+                // Push label further out if selected
+                const labelRadius = isSelected ? 1.25 : 1.05;
+
+                const lx = Math.cos(angleRad) * labelRadius;
+                const ly = Math.sin(angleRad) * labelRadius;
+
                 if (percent < 0.03) return null;
 
-                const isSelected = selectedIndex === idx;
-                const isHovered = hoveredIndex === idx;
-
-                // Label & Line Coordinates
-                const innerR = radius; // 0.7
-                const outerR = 0.9;
-                const textR = 1.05; // Closer to chart
-
-                const x1 = Math.cos(angleRad) * innerR;
-                const y1 = Math.sin(angleRad) * innerR;
-                const x2 = Math.cos(angleRad) * outerR;
-                const y2 = Math.sin(angleRad) * outerR;
-
-                // Text Position
-                const tx = Math.cos(angleRad) * textR;
-                const ty = Math.sin(angleRad) * textR;
-
                 return (
-                    <React.Fragment key={`label-group-${item.id}`}>
-                        {/* Connecting Line */}
-                        <svg viewBox="-1.2 -1.2 2.4 2.4" className="absolute inset-0 w-full h-full pointer-events-none transform -rotate-90">
-                            <line
-                                x1={x1} y1={y1} x2={x2} y2={y2}
-                                stroke={isSelected ? "#000" : "#e4e4e7"}
-                                strokeWidth={0.01}
-                            />
-                        </svg>
-
-                        {/* Label */}
-                        <div
-                            className={`absolute text-[10px] md:text-xs font-bold pointer-events-none whitespace-nowrap transition-colors duration-300 ${isSelected ? 'text-black' : 'text-zinc-400'}`}
-                            style={{
-                                left: '50%', top: '50%',
-                                transform: `translate(calc(-50% + ${tx * 140}px), calc(-50% + ${ty * 140}px))`
-                            }}
-                        >
-                            {item.label}
-                        </div>
-                    </React.Fragment>
+                    <div
+                        key={`label-${item.id}`}
+                        className={`absolute text-[9px] font-bold pointer-events-none whitespace-nowrap transition-all duration-500 ${isSelected ? 'text-zinc-900 scale-110' : 'text-zinc-500'}`}
+                        style={{
+                            left: '50%', top: '50%',
+                            transform: `translate(calc(-50% + ${lx * 140}px), calc(-50% + ${ly * 140}px))`
+                        }}
+                    >
+                        {item.label}
+                    </div>
                 );
             })}
 
@@ -2886,7 +2863,7 @@ function SpaceDetailView({ space, spaceContent, additionalScenes = [], activeTag
     }, [products]);
 
     return (
-        <div className="mb-12 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20">
+        <div className="mb-12 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-24 md:pb-32">
             <div className="relative rounded-3xl overflow-hidden h-72 md:h-96 shadow-lg group mb-8 bg-zinc-900 print:hidden">
                 <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent z-10"></div>
                 {banner ? <img src={banner} className="w-full h-full object-cover transition-transform duration-1000" alt="Space Banner" /> : <div className="w-full h-full flex items-center justify-center opacity-30"><span className="text-white text-4xl font-bold uppercase">{space.label}</span></div>}
@@ -4016,70 +3993,67 @@ function SpaceSceneModal({ scene, products, allProducts, isAdmin, onClose, onEdi
                     <button onClick={onClose} className="p-2 bg-white/50 hover:bg-zinc-100 rounded-full backdrop-blur shadow-sm"><X className="w-6 h-6 text-zinc-900" /></button>
                 </div>
 
-                <div className="flex-1 overflow-y-auto custom-scrollbar flex flex-col md:flex-row h-full pb-safe print:overflow-visible print:h-auto">
-                    <div className="w-full md:w-2/3 bg-black relative flex flex-col justify-center shrink-0 md:sticky md:top-0 md:h-full min-h-[40vh]">
-                        <div className="relative w-full h-full min-h-[40vh] md:min-h-0">
-                            <img src={currentImgUrl} className="w-full h-full object-contain cursor-zoom-in" alt="Scene" onClick={() => setIsZoomed(true)} />
-                            <button onClick={onToggleFavorite} className="absolute top-4 left-4 p-2 bg-black/40 backdrop-blur rounded-full text-white hover:text-yellow-400 z-30"><Star className={`w-6 h-6 ${isFavorite ? 'fill-yellow-400 text-yellow-400' : ''}`} /></button>
+                <div className="w-full md:w-2/3 bg-black relative flex flex-col justify-center shrink-0 md:h-full">
+                    <div className="relative w-full h-full min-h-[40vh] md:min-h-0">
+                        <img src={currentImgUrl} className="w-full h-full object-contain cursor-zoom-in" alt="Scene" onClick={() => setIsZoomed(true)} />
+                        <button onClick={onToggleFavorite} className="absolute top-4 left-4 p-2 bg-black/40 backdrop-blur rounded-full text-white hover:text-yellow-400 z-30"><Star className={`w-6 h-6 ${isFavorite ? 'fill-yellow-400 text-yellow-400' : ''}`} /></button>
+                    </div>
+                    {currentImgCaption && <div className="absolute bottom-20 left-0 right-0 text-center text-white/90 text-sm bg-black/40 backdrop-blur-sm p-2 mx-auto max-w-md rounded-xl z-20">{currentImgCaption}</div>}
+                    {images.length > 1 && (
+                        <>
+                            <button onClick={(e) => { e.stopPropagation(); handlePrev() }} className="absolute left-4 top-1/2 -translate-y-1/2 p-2 bg-white/10 hover:bg-white/30 rounded-full text-white backdrop-blur-sm disabled:opacity-30" disabled={currentImageIndex === 0}><ChevronLeft className="w-6 h-6" /></button>
+                            <button onClick={(e) => { e.stopPropagation(); handleNext() }} className="absolute right-4 top-1/2 -translate-y-1/2 p-2 bg-white/10 hover:bg-white/30 rounded-full text-white backdrop-blur-sm disabled:opacity-30" disabled={currentImageIndex === images.length - 1}><ChevronRight className="w-6 h-6" /></button>
+                        </>
+                    )}
+                    {images.length > 1 && (
+                        <div className="absolute bottom-4 left-0 right-0 flex justify-center space-x-2 px-4 overflow-x-auto custom-scrollbar z-20">
+                            {images.map((img, idx) => (
+                                <button key={idx} onClick={() => setCurrentImageIndex(idx)} className={`w-10 h-10 rounded-lg overflow-hidden border-2 transition-all flex-shrink-0 ${currentImageIndex === idx ? 'border-white scale-110' : 'border-transparent opacity-50 hover:opacity-100'}`}>
+                                    <img src={typeof img === 'object' ? img.url : img} className="w-full h-full object-cover" />
+                                </button>
+                            ))}
                         </div>
-                        {currentImgCaption && <div className="absolute bottom-20 left-0 right-0 text-center text-white/90 text-sm bg-black/40 backdrop-blur-sm p-2 mx-auto max-w-md rounded-xl z-20">{currentImgCaption}</div>}
-                        {images.length > 1 && (
-                            <>
-                                <button onClick={(e) => { e.stopPropagation(); handlePrev() }} className="absolute left-4 top-1/2 -translate-y-1/2 p-2 bg-white/10 hover:bg-white/30 rounded-full text-white backdrop-blur-sm disabled:opacity-30" disabled={currentImageIndex === 0}><ChevronLeft className="w-6 h-6" /></button>
-                                <button onClick={(e) => { e.stopPropagation(); handleNext() }} className="absolute right-4 top-1/2 -translate-y-1/2 p-2 bg-white/10 hover:bg-white/30 rounded-full text-white backdrop-blur-sm disabled:opacity-30" disabled={currentImageIndex === images.length - 1}><ChevronRight className="w-6 h-6" /></button>
-                            </>
+                    )}
+                </div>
+
+                <div className="w-full md:w-1/3 bg-white flex flex-col border-l border-zinc-100 md:h-full relative">
+                    <div className="p-6 md:p-8 border-b border-zinc-50 pt-8 md:pt-16 flex-shrink-0">
+                        <div className="mb-4">
+                            <h2 className="text-2xl md:text-3xl font-black text-zinc-900 mb-2">{scene.title}</h2>
+                            <p className="text-zinc-500 text-sm leading-relaxed">{scene.description}</p>
+                        </div>
+                    </div>
+                    <div className="flex-1 p-6 md:p-8 custom-scrollbar bg-zinc-50/50 pb-safe md:overflow-y-auto">
+                        <div className="flex justify-between items-center mb-4"><h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Tagged Products</h3>{isAdmin && <button onClick={() => setProductManagerOpen(!isProductManagerOpen)} className="text-xs font-bold text-indigo-600 hover:text-indigo-800">+ Add Tag</button>}</div>
+                        {isAdmin && isProductManagerOpen && (
+                            <div className="mb-4 bg-white p-3 rounded-xl border border-indigo-100 shadow-sm animate-in slide-in-from-top-2">
+                                <input type="text" placeholder="Search to tag..." className="w-full text-xs p-2 bg-zinc-50 rounded-lg border border-zinc-200 mb-2 outline-none focus:border-indigo-500" value={productFilter} onChange={(e) => setProductFilter(e.target.value)} />
+                                <div className="max-h-32 overflow-y-auto space-y-1 custom-scrollbar">{allProducts.filter(p => p.name.toLowerCase().includes(productFilter.toLowerCase())).map(p => { const isTagged = scene.productIds?.some(id => String(id) === String(p.id)); return (<div key={p.id} onClick={() => onProductToggle(p.id, !isTagged)} className={`flex items-center p-1.5 rounded cursor-pointer ${isTagged ? 'bg-indigo-50 text-indigo-700' : 'hover:bg-zinc-50'}`}><div className={`w-3 h-3 border rounded mr-2 flex items-center justify-center ${isTagged ? 'bg-indigo-500 border-indigo-500' : 'border-zinc-300'}`}>{isTagged && <Check className="w-2 h-2 text-white" />}</div><span className="text-xs truncate">{p.name}</span></div>) })}</div>
+                            </div>
                         )}
-                        {images.length > 1 && (
-                            <div className="absolute bottom-4 left-0 right-0 flex justify-center space-x-2 px-4 overflow-x-auto custom-scrollbar z-20">
-                                {images.map((img, idx) => (
-                                    <button key={idx} onClick={() => setCurrentImageIndex(idx)} className={`w-10 h-10 rounded-lg overflow-hidden border-2 transition-all flex-shrink-0 ${currentImageIndex === idx ? 'border-white scale-110' : 'border-transparent opacity-50 hover:opacity-100'}`}>
-                                        <img src={typeof img === 'object' ? img.url : img} className="w-full h-full object-cover" />
-                                    </button>
+
+                        {uniqueProducts.length > 0 ? (
+                            <div className="space-y-3 mb-8">
+                                {uniqueProducts.map(product => (
+                                    <div key={product.id} onClick={() => onNavigateProduct(product)} className="flex items-center p-3 bg-white rounded-xl border border-zinc-100 shadow-sm hover:border-zinc-300 transition-all cursor-pointer group">
+                                        <div className="w-12 h-12 bg-zinc-50 rounded-lg flex-shrink-0 flex items-center justify-center mr-3 overflow-hidden">
+                                            {product.images?.[0] ? <img src={typeof product.images[0] === 'object' ? product.images[0].url : product.images[0]} className="w-full h-full object-cover" /> : <ImageIcon className="w-5 h-5 text-zinc-300" />}
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <h4 className="text-sm font-bold text-zinc-900 truncate group-hover:text-blue-600">{product.name}</h4>
+                                            <p className="text-xs text-zinc-500">{product.category}</p>
+                                        </div>
+                                        <ChevronRight className="w-4 h-4 text-zinc-300 group-hover:text-zinc-600" />
+                                    </div>
                                 ))}
                             </div>
+                        ) : (
+                            <div className="text-center py-8 text-zinc-400 text-xs">연관된 제품이 없습니다.</div>
                         )}
-                    </div>
 
-                    <div className="w-full md:w-1/3 bg-white flex flex-col border-l border-zinc-100 md:h-auto relative pb-24 md:pb-0">
-                        <div className="p-6 md:p-8 border-b border-zinc-50 pt-8 flex-shrink-0">
-                            <div className="mb-4">
-                                <h2 className="text-2xl md:text-3xl font-black text-zinc-900 mb-2">{scene.title}</h2>
-                                <p className="text-zinc-500 text-sm leading-relaxed">{scene.description}</p>
-                            </div>
-                        </div>
-                        <div className="flex-1 p-6 md:p-8 custom-scrollbar bg-zinc-50/50">
-                            <div className="flex justify-between items-center mb-4"><h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Tagged Products</h3>{isAdmin && <button onClick={() => setProductManagerOpen(!isProductManagerOpen)} className="text-xs font-bold text-indigo-600 hover:text-indigo-800">+ Add Tag</button>}</div>
-                            {isAdmin && isProductManagerOpen && (
-                                <div className="mb-4 bg-white p-3 rounded-xl border border-indigo-100 shadow-sm animate-in slide-in-from-top-2">
-                                    <input type="text" placeholder="Search to tag..." className="w-full text-xs p-2 bg-zinc-50 rounded-lg border border-zinc-200 mb-2 outline-none focus:border-indigo-500" value={productFilter} onChange={(e) => setProductFilter(e.target.value)} />
-                                    <div className="max-h-32 overflow-y-auto space-y-1 custom-scrollbar">{allProducts.filter(p => p.name.toLowerCase().includes(productFilter.toLowerCase())).map(p => { const isTagged = scene.productIds?.some(id => String(id) === String(p.id)); return (<div key={p.id} onClick={() => onProductToggle(p.id, !isTagged)} className={`flex items-center p-1.5 rounded cursor-pointer ${isTagged ? 'bg-indigo-50 text-indigo-700' : 'hover:bg-zinc-50'}`}><div className={`w-3 h-3 border rounded mr-2 flex items-center justify-center ${isTagged ? 'bg-indigo-500 border-indigo-500' : 'border-zinc-300'}`}>{isTagged && <Check className="w-2 h-2 text-white" />}</div><span className="text-xs truncate">{p.name}</span></div>) })}</div>
-                                </div>
-                            )}
-
-                            {uniqueProducts.length > 0 ? (
-                                <div className="space-y-3 mb-8">
-                                    {uniqueProducts.map(product => (
-                                        <div key={product.id} onClick={() => onNavigateProduct(product)} className="flex items-center p-3 bg-white rounded-xl border border-zinc-100 shadow-sm hover:border-zinc-300 transition-all cursor-pointer group">
-                                            <div className="w-12 h-12 bg-zinc-50 rounded-lg flex-shrink-0 flex items-center justify-center mr-3 overflow-hidden">
-                                                {product.images?.[0] ? <img src={typeof product.images[0] === 'object' ? product.images[0].url : product.images[0]} className="w-full h-full object-cover" /> : <ImageIcon className="w-5 h-5 text-zinc-300" />}
-                                            </div>
-                                            <div className="flex-1 min-w-0">
-                                                <h4 className="text-sm font-bold text-zinc-900 truncate group-hover:text-blue-600">{product.name}</h4>
-                                                <p className="text-xs text-zinc-500">{product.category}</p>
-                                            </div>
-                                            <ChevronRight className="w-4 h-4 text-zinc-300 group-hover:text-zinc-600" />
-                                        </div>
-                                    ))}
-                                </div>
-                            ) : (
-                                <div className="text-center py-8 text-zinc-400 text-xs">연관된 제품이 없습니다.</div>
-                            )}
-
-                            {/* V 0.8.85: Match Material Modal Design and Spacing */}
-                            <div className="pt-4 border-t border-zinc-100 flex gap-3 print:hidden mb-safe mb-8">
-                                <button onClick={handleShareImage} className="flex-1 py-3 bg-zinc-100 text-zinc-600 rounded-xl text-xs font-bold hover:bg-zinc-200 flex items-center justify-center"><ImgIcon className="w-4 h-4 mr-2" /> Share</button>
-                                <button onClick={() => window.print()} className="flex-1 py-3 bg-zinc-100 text-zinc-600 rounded-xl text-xs font-bold hover:bg-zinc-200 flex items-center justify-center"><Printer className="w-4 h-4 mr-2" /> PDF</button>
-                            </div>
+                        <div className="pt-4 border-t border-zinc-100 flex gap-3 print:hidden mb-safe">
+                            <button onClick={handleShareImage} className="flex-1 py-3 bg-white border border-zinc-200 text-zinc-600 rounded-xl text-xs font-bold hover:bg-zinc-50 flex items-center justify-center"><ImgIcon className="w-4 h-4 mr-2" /> Share</button>
+                            <button onClick={() => window.print()} className="flex-1 py-3 bg-white border border-zinc-200 text-zinc-600 rounded-xl text-xs font-bold hover:bg-zinc-50 flex items-center justify-center"><Printer className="w-4 h-4 mr-2" /> PDF</button>
                         </div>
                     </div>
                 </div>
