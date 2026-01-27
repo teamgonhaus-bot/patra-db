@@ -38,7 +38,7 @@ const YOUR_FIREBASE_CONFIG = {
 // ----------------------------------------------------------------------
 // 상수 및 설정
 // ----------------------------------------------------------------------
-const APP_VERSION = "v0.8.87";
+const APP_VERSION = "v0.8.86";
 const BUILD_DATE = "2026.01.27";
 const ADMIN_PASSWORD = "adminlcg1";
 
@@ -2145,7 +2145,7 @@ function SwatchDetailModal({ swatch, allProducts, swatches, onClose, onNavigateP
     const handleShareImage = async () => { /* Placeholder */ };
 
     return (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[250] flex items-center justify-center p-0 md:p-4 animate-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[150] flex items-center justify-center p-0 md:p-4 animate-in zoom-in-95 duration-200">
             <div className="bg-white w-full h-full md:h-auto md:max-w-4xl rounded-none md:rounded-3xl overflow-hidden shadow-2xl flex flex-col md:flex-row md:max-h-[90vh] relative">
                 <div className="absolute top-4 right-4 z-[100] flex gap-2">
                     {isAdmin && <button onClick={onEdit} className="p-2 bg-white/50 hover:bg-zinc-100 rounded-full backdrop-blur shadow-sm"><Edit3 className="w-6 h-6 text-zinc-900" /></button>}
@@ -2212,8 +2212,8 @@ function SwatchDetailModal({ swatch, allProducts, swatches, onClose, onNavigateP
                                 </div>
                             </div>
 
-                            {/* Share & Print - V 0.8.85: Match Material Modal Design - V 0.8.87: More space on desktop */}
-                            <div className="pt-8 border-t border-zinc-100 flex gap-3 print:hidden mb-safe mb-8 md:mb-10">
+                            {/* Share & Print - V 0.8.85: Match Material Modal Design */}
+                            <div className="pt-8 border-t border-zinc-100 flex gap-3 print:hidden mb-safe mb-8">
                                 <button onClick={handleShareImage} className="flex-1 py-3 bg-zinc-100 text-zinc-600 rounded-xl text-xs font-bold hover:bg-zinc-200 flex items-center justify-center"><ImgIcon className="w-4 h-4 mr-2" /> Share</button>
                                 <button onClick={() => window.print()} className="flex-1 py-3 bg-zinc-100 text-zinc-600 rounded-xl text-xs font-bold hover:bg-zinc-200 flex items-center justify-center"><Printer className="w-4 h-4 mr-2" /> PDF</button>
                             </div>
@@ -2569,39 +2569,19 @@ function DashboardView({ products, favorites, awards, swatches, spaceContents, s
 
     // Helper for Selected Slice Data
     const getSelectedSliceDetails = () => {
-        if (selectedSlice === null) return { count: 0, products: [], uniqueColors: [], awardCount: 0, years: '', top3Years: '', hasMoreYears: false };
-        const data = chartData[selectedSlice];
-        const subset = products.filter(p => p.category === data.id);
-        const uniqueColors = [...new Set([
-            ...subset.flatMap(p => p.bodyColors || []),
-            ...subset.flatMap(p => p.upholsteryColors || [])
-        ].filter(c => typeof c === 'object').map(c => c.materialCode).filter(Boolean))];
+        if (selectedSlice === null) return null;
+        const catId = chartData[selectedSlice].id;
+        const catProducts = products.filter(p => p.category === catId);
 
-        const awardCount = subset.reduce((acc, p) => acc + (p.awards?.length || 0) + (p.awardHistory?.length || 0), 0);
-
-        // V 0.8.87: Make Year - Descending Sort
-        const yearCounts = {};
-        subset.forEach(p => {
-            const y = p.launchDate?.substring(0, 4);
-            if (y) yearCounts[y] = (yearCounts[y] || 0) + 1;
+        const years = [...new Set(catProducts.map(p => p.launchDate ? p.launchDate.substring(0, 4) : 'Unknown'))].sort().join(', ');
+        const awardCount = catProducts.reduce((acc, curr) => acc + (curr.awards?.length || 0), 0);
+        const uniqueColors = new Set();
+        catProducts.forEach(p => {
+            (p.bodyColors || []).forEach(c => uniqueColors.add(c));
+            (p.upholsteryColors || []).forEach(c => uniqueColors.add(c));
         });
 
-        // Sort descending (b - a)
-        const sortedYears = Object.entries(yearCounts).sort((a, b) => Number(b[0]) - Number(a[0]));
-
-        // Format strings
-        const fullYears = sortedYears.map(([y, c]) => `${y} (${c})`).join(', ');
-        const top3Years = sortedYears.slice(0, 3).map(([y, c]) => `${y} (${c})`).join(', ');
-
-        return {
-            count: data.count,
-            products: subset,
-            uniqueColors,
-            awardCount,
-            years: fullYears,
-            top3Years: top3Years, // For preview
-            hasMoreYears: sortedYears.length > 3
-        };
+        return { products: catProducts, years, awardCount, uniqueColors: Array.from(uniqueColors) };
     };
 
     const sliceDetails = getSelectedSliceDetails();
@@ -2737,7 +2717,7 @@ function DashboardView({ products, favorites, awards, swatches, spaceContents, s
                                                 <span className="text-[10px] text-zinc-400 uppercase font-bold block mb-1">Make Year</span>
                                                 <ChevronDown className={`w-3 h-3 text-zinc-400 transition-transform ${openReportDropdown === 'LAUNCH' ? 'rotate-180' : ''}`} />
                                             </div>
-                                            <span className="text-xs font-bold text-zinc-900 truncate block mt-1">{sliceDetails.top3Years}{sliceDetails.hasMoreYears ? '...' : ''}</span>
+                                            <span className="text-xs font-bold text-zinc-900 truncate block mt-1">{sliceDetails.years.substring(0, 12)}...</span>
                                             {openReportDropdown === 'LAUNCH' && (
                                                 <div className="absolute top-full left-0 w-full bg-white border border-zinc-200 shadow-xl rounded-lg p-2 z-20 text-xs mt-1 max-h-48 overflow-y-auto custom-scrollbar">
                                                     {sliceDetails.years}
@@ -2874,7 +2854,7 @@ function DashboardView({ products, favorites, awards, swatches, spaceContents, s
 
 function SpaceDetailView({ space, spaceContent, additionalScenes = [], activeTag, setActiveTag, isAdmin, onBannerUpload, onEditInfo, onManageProducts, onAddScene, onViewScene, productCount, searchTerm, searchTags, products, onProductClick, favorites, onToggleFavorite, onCompareToggle, compareList, onReorder }) {
     const banner = spaceContent.banner;
-    const description = spaceContent.description || "No description provided.";
+    const description = spaceContent.description || "이 공간에 대한 설명이 없습니다.";
     const trend = spaceContent.trend || "";
     // V 0.8.82: Merge scenes from old space_contents and new individual scenes collection
     const oldScenes = spaceContent.scenes || [];
@@ -2952,7 +2932,7 @@ function SpaceDetailView({ space, spaceContent, additionalScenes = [], activeTag
                             </div>
                         ))}
                     </div>
-                ) : (<div className="text-center py-12 bg-zinc-50 rounded-2xl border border-dashed border-zinc-200 text-zinc-400"><ImageIcon className="w-12 h-12 mx-auto mb-3 opacity-20" /><p className="text-sm">No scenes registered.</p></div>)}
+                ) : (<div className="text-center py-12 bg-zinc-50 rounded-2xl border border-dashed border-zinc-200 text-zinc-400"><ImageIcon className="w-12 h-12 mx-auto mb-3 opacity-20" /><p className="text-sm">등록된 공간 장면이 없습니다.</p></div>)}
             </div>
 
             {/* V 0.8.73: Fix duplicate product list and remove margin if empty */}
@@ -3283,24 +3263,14 @@ function ProductDetailModal({ product, allProducts, swatches, spaceContents, awa
                             <div className="grid grid-cols-2 gap-4 md:gap-8">
                                 <div>
                                     <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2">Body Color</h3>
-                                    <div className="flex flex-wrap gap-3">
-                                        {product.bodyColors?.map((c, i) => (
-                                            <div key={i} className="flex flex-col items-center gap-1 group cursor-pointer" onClick={(e) => handleSwatchClick(e, c)}>
-                                                <div className="transition-transform group-hover:scale-110"><SwatchDisplay color={c} size="medium" /></div>
-                                                <span className="text-[9px] font-mono text-zinc-400 group-hover:text-black transition-colors">{typeof c === 'object' ? c.materialCode : ''}</span>
-                                            </div>
-                                        ))}
+                                    <div className="flex flex-wrap gap-2">
+                                        {product.bodyColors?.map((c, i) => <SwatchDisplay key={i} color={c} size="medium" onClick={(e) => handleSwatchClick(e, c)} />)}
                                     </div>
                                 </div>
                                 <div>
-                                    <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2">Upholstery Color</h3>
-                                    <div className="flex flex-wrap gap-3">
-                                        {product.upholsteryColors?.map((c, i) => (
-                                            <div key={i} className="flex flex-col items-center gap-1 group cursor-pointer" onClick={(e) => handleSwatchClick(e, c)}>
-                                                <div className="transition-transform group-hover:scale-110"><SwatchDisplay color={c} size="medium" /></div>
-                                                <span className="text-[9px] font-mono text-zinc-400 group-hover:text-black transition-colors">{typeof c === 'object' ? c.materialCode : ''}</span>
-                                            </div>
-                                        ))}
+                                    <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2">Upholstery</h3>
+                                    <div className="flex flex-wrap gap-2">
+                                        {product.upholsteryColors?.map((c, i) => <SwatchDisplay key={i} color={c} size="medium" onClick={(e) => handleSwatchClick(e, c)} />)}
                                     </div>
                                 </div>
                             </div>
@@ -4093,7 +4063,7 @@ function SpaceSceneModal({ scene, products, allProducts, isAdmin, onClose, onEdi
                                     ))}
                                 </div>
                             ) : (
-                                <div className="text-center py-8 text-zinc-400 text-xs">No related products.</div>
+                                <div className="text-center py-8 text-zinc-400 text-xs">연관된 제품이 없습니다.</div>
                             )}
 
                             {/* V 0.8.85: Match Material Modal Design and Spacing */}
