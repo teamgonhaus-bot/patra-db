@@ -38,7 +38,7 @@ const YOUR_FIREBASE_CONFIG = {
 // ----------------------------------------------------------------------
 // 상수 및 설정
 // ----------------------------------------------------------------------
-const APP_VERSION = "v0.8.81";
+const APP_VERSION = "v0.8.73";
 const BUILD_DATE = "2026.01.27";
 const ADMIN_PASSWORD = "adminlcg1";
 
@@ -155,24 +155,6 @@ function useScrollLock() {
         };
     }, []);
 }
-
-// V 0.8.81: Utility to remove undefined values before Firebase save
-const sanitizeForFirebase = (obj) => {
-    if (obj === null || obj === undefined) return null;
-    if (Array.isArray(obj)) {
-        return obj.map(item => sanitizeForFirebase(item)).filter(item => item !== undefined);
-    }
-    if (typeof obj === 'object') {
-        const result = {};
-        for (const [key, value] of Object.entries(obj)) {
-            if (value !== undefined) {
-                result[key] = sanitizeForFirebase(value);
-            }
-        }
-        return result;
-    }
-    return obj;
-};
 
 export default function App() {
     const [user, setUser] = useState(null);
@@ -617,8 +599,7 @@ export default function App() {
             }
 
             if (isFirebaseAvailable && db) {
-                const sanitizedScenes = targetScenes.map(s => sanitizeForFirebase(s));
-                await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'space_contents', targetSpaceId), { scenes: sanitizedScenes }, { merge: true });
+                await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'space_contents', targetSpaceId), { scenes: targetScenes }, { merge: true });
             }
 
             showToast(isMove ? "장면이 이동되었습니다." : "장면이 저장되었습니다.");
@@ -628,8 +609,7 @@ export default function App() {
                 setActiveCategory(targetSpaceId);
             }
 
-            // V 0.8.81: Don't set selectedScene after save to prevent modal popup bug
-            // setSelectedScene({ ...sceneData, spaceId: targetSpaceId });
+            setSelectedScene({ ...sceneData, spaceId: targetSpaceId });
             setEditingScene(null);
         } catch (e) {
             console.error("Save Scene Error:", e);
@@ -736,10 +716,7 @@ export default function App() {
         };
 
         if (isFirebaseAvailable && db) {
-            try {
-                const sanitizedPayload = sanitizeForFirebase(payload);
-                await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'products', docId), sanitizedPayload, { merge: true });
-            }
+            try { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'products', docId), payload, { merge: true }); }
             catch (error) {
                 console.error("Product Save Error:", error);
                 showToast(`저장 실패: ${error.message || '알 수 없는 오류'}`, "error");
@@ -3725,13 +3702,9 @@ function SwatchSelector({ label, selected, swatches, onChange }) {
         if (hex) onChange([...selected, hex]);
     };
 
-    // V 0.8.81: Allow searching by materialCode as well as name
     const filteredSwatches = swatches.filter(s => {
         if (activeTab !== 'ALL' && s.category !== activeTab) return false;
-        const searchLower = filter.toLowerCase();
-        const matchesName = s.name?.toLowerCase().includes(searchLower);
-        const matchesMaterialCode = s.materialCode?.toLowerCase().includes(searchLower);
-        return matchesName || matchesMaterialCode || !filter;
+        return s.name.toLowerCase().includes(filter.toLowerCase());
     });
 
     return (
@@ -4106,8 +4079,8 @@ function AwardsManager({ awards, products, isAdmin, onSave, onDelete, onSelect, 
                         onClick={() => handleCardClick(award)}
                         className="bg-white rounded-xl border border-zinc-200 overflow-hidden group hover:shadow-lg transition-all relative cursor-pointer flex flex-col"
                     >
-                        <div className="aspect-square relative bg-white flex items-center justify-center overflow-hidden">
-                            {award.image ? <img src={award.image} className="w-full h-full object-cover" alt={award.title} /> : <Trophy className="w-12 h-12 text-zinc-300" />}
+                        <div className="aspect-square relative bg-white flex items-center justify-center p-6">
+                            {award.image ? <img src={award.image} className="w-full h-full object-contain" /> : <Trophy className="w-12 h-12 text-zinc-300" />}
                             <button onClick={(e) => onToggleFavorite(e, award.id)} className="absolute top-2 right-2 p-1.5 bg-white/80 rounded-full text-zinc-300 hover:text-yellow-400 hover:scale-110 transition-all z-10">
                                 <Star className={`w-3.5 h-3.5 ${favorites.includes(award.id) ? 'fill-yellow-400 text-yellow-400' : ''}`} />
                             </button>
