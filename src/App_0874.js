@@ -717,11 +717,7 @@ export default function App() {
 
         if (isFirebaseAvailable && db) {
             try { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'products', docId), payload, { merge: true }); }
-            catch (error) {
-                console.error("Product Save Error:", error);
-                showToast(`저장 실패: ${error.message || '알 수 없는 오류'}`, "error");
-                return;
-            }
+            catch (error) { showToast("저장 실패", "error"); return; }
         } else {
             const idx = products.findIndex(p => String(p.id) === docId);
             let newProducts = [...products];
@@ -4084,18 +4080,12 @@ function AwardsManager({ awards, products, isAdmin, onSave, onDelete, onSelect, 
                             <button onClick={(e) => onToggleFavorite(e, award.id)} className="absolute top-2 right-2 p-1.5 bg-white/80 rounded-full text-zinc-300 hover:text-yellow-400 hover:scale-110 transition-all z-10">
                                 <Star className={`w-3.5 h-3.5 ${favorites.includes(award.id) ? 'fill-yellow-400 text-yellow-400' : ''}`} />
                             </button>
-                            {/* V 0.8.8: Admin Controls - Edit, Delete, Move */}
+                            {/* V 0.8.73: Admin Move Buttons for Awards */}
                             {isAdmin && (
-                                <>
-                                    <div className="absolute bottom-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
-                                        <button onClick={(e) => { e.stopPropagation(); setEditingAward(award); setIsModalOpen(true); }} className="p-1.5 bg-white rounded-full shadow hover:text-blue-600"><Edit2 className="w-3 h-3" /></button>
-                                        <button onClick={(e) => { e.stopPropagation(); onDelete(award.id); }} className="p-1.5 bg-white rounded-full shadow hover:text-red-600"><Trash2 className="w-3 h-3" /></button>
-                                    </div>
-                                    <div className="absolute bottom-2 left-2 flex gap-1 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
-                                        <button onClick={(e) => { e.stopPropagation(); onReorder('awards', filteredAwards, idx, 'left') }} className="p-1 bg-white rounded-full shadow hover:bg-black hover:text-white"><ArrowLeft className="w-3 h-3" /></button>
-                                        <button onClick={(e) => { e.stopPropagation(); onReorder('awards', filteredAwards, idx, 'right') }} className="p-1 bg-white rounded-full shadow hover:bg-black hover:text-white"><ArrowRight className="w-3 h-3" /></button>
-                                    </div>
-                                </>
+                                <div className="absolute bottom-2 left-2 flex gap-1 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <button onClick={(e) => { e.stopPropagation(); onReorder('awards', filteredAwards, idx, 'left') }} className="p-1 bg-white rounded-full shadow hover:bg-black hover:text-white"><ArrowLeft className="w-3 h-3" /></button>
+                                    <button onClick={(e) => { e.stopPropagation(); onReorder('awards', filteredAwards, idx, 'right') }} className="p-1 bg-white rounded-full shadow hover:bg-black hover:text-white"><ArrowRight className="w-3 h-3" /></button>
+                                </div>
                             )}
                         </div>
                         <div className="p-3 border-t border-zinc-100 flex-1 flex flex-col justify-center bg-zinc-50/30">
