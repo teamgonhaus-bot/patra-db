@@ -38,7 +38,7 @@ const YOUR_FIREBASE_CONFIG = {
 // ----------------------------------------------------------------------
 // 상수 및 설정
 // ----------------------------------------------------------------------
-const APP_VERSION = "v0.8.86";
+const APP_VERSION = "v0.8.85";
 const BUILD_DATE = "2026.01.27";
 const ADMIN_PASSWORD = "adminlcg1";
 
@@ -2455,7 +2455,7 @@ function PieChartComponent({ data, total, selectedIndex, onSelect }) {
                 })}
             </svg>
 
-            {/* Labels with Connecting Lines - V 0.8.86: Centered guide lines, matching colors, bigger font */}
+            {/* Labels with Connecting Lines - V 0.8.85: Fixed position, bigger font, connecting lines */}
             {data.map((item, idx) => {
                 let prevPercent = 0;
                 for (let i = 0; i < idx; i++) prevPercent += data[i].count / total;
@@ -2466,39 +2466,38 @@ function PieChartComponent({ data, total, selectedIndex, onSelect }) {
                 if (percent < 0.03) return null;
 
                 const isSelected = selectedIndex === idx;
+                const isHovered = hoveredIndex === idx;
 
-                // Coordinates for Guide Line
-                // Slice Center (on the ring)
-                const rSlice = 0.8;
-                const x1 = Math.cos(angleRad) * rSlice;
-                const y1 = Math.sin(angleRad) * rSlice;
+                // Label & Line Coordinates
+                const innerR = radius; // 0.7
+                const outerR = 0.9;
+                const textR = 1.05; // Closer to chart
 
-                // Label Position
-                const rLabel = 1.1;
-                const x2 = Math.cos(angleRad) * rLabel;
-                const y2 = Math.sin(angleRad) * rLabel;
+                const x1 = Math.cos(angleRad) * innerR;
+                const y1 = Math.sin(angleRad) * innerR;
+                const x2 = Math.cos(angleRad) * outerR;
+                const y2 = Math.sin(angleRad) * outerR;
 
-                // Text Position (slightly further)
-                const tx = Math.cos(angleRad) * 1.25;
-                const ty = Math.sin(angleRad) * 1.25;
+                // Text Position
+                const tx = Math.cos(angleRad) * textR;
+                const ty = Math.sin(angleRad) * textR;
 
                 return (
                     <React.Fragment key={`label-group-${item.id}`}>
                         {/* Connecting Line */}
-                        <line
-                            x1={x1} y1={y1} x2={x2} y2={y2}
-                            stroke={item.color}
-                            strokeWidth={0.005}
-                            opacity={0.8}
-                            className="pointer-events-none transition-all duration-300"
-                        />
+                        <svg viewBox="-1.2 -1.2 2.4 2.4" className="absolute inset-0 w-full h-full pointer-events-none transform -rotate-90">
+                            <line
+                                x1={x1} y1={y1} x2={x2} y2={y2}
+                                stroke={isSelected ? "#000" : "#e4e4e7"}
+                                strokeWidth={0.01}
+                            />
+                        </svg>
 
                         {/* Label */}
                         <div
-                            className="absolute text-xs md:text-sm font-bold pointer-events-none whitespace-nowrap transition-all duration-300"
+                            className={`absolute text-[10px] md:text-xs font-bold pointer-events-none whitespace-nowrap transition-colors duration-300 ${isSelected ? 'text-black' : 'text-zinc-400'}`}
                             style={{
                                 left: '50%', top: '50%',
-                                color: item.color,
                                 transform: `translate(calc(-50% + ${tx * 140}px), calc(-50% + ${ty * 140}px))`
                             }}
                         >
@@ -3137,7 +3136,7 @@ function ProductDetailModal({ product, allProducts, swatches, spaceContents, awa
     };
 
     return (
-        <div key={product.id} className="fixed inset-0 bg-black/60 backdrop-blur-md z-[200] flex items-center justify-center p-0 md:p-4 animate-in fade-in duration-300 slide-in-animation print:fixed print:inset-0 print:z-[100] print:bg-white print:h-auto print:overflow-visible">
+        <div key={product.id} className="fixed inset-0 bg-black/60 backdrop-blur-md z-[150] flex items-center justify-center p-0 md:p-4 animate-in fade-in duration-300 slide-in-animation print:fixed print:inset-0 print:z-[100] print:bg-white print:h-auto print:overflow-visible">
             <canvas ref={canvasRef} style={{ display: 'none' }} />
 
             {isZoomed && currentImageUrl && (
@@ -3370,16 +3369,26 @@ function ProductDetailModal({ product, allProducts, swatches, spaceContents, awa
                                 </div>
                             ))}</div></div>)}
 
-                            <div className="md:hidden pt-4 border-t border-zinc-100 flex gap-3 print:hidden mb-safe">
-                                <button onClick={handleShareImage} className="flex-1 py-3 bg-zinc-100 text-zinc-600 rounded-xl text-xs font-bold hover:bg-zinc-200 flex items-center justify-center"><ImgIcon className="w-4 h-4 mr-2" /> Share</button>
-                                <button onClick={() => window.print()} className="flex-1 py-3 bg-zinc-100 text-zinc-600 rounded-xl text-xs font-bold hover:bg-zinc-200 flex items-center justify-center"><Printer className="w-4 h-4 mr-2" /> PDF</button>
+                            <div className="md:hidden mt-4 pt-4 border-t border-zinc-100 pb-4 print:hidden mb-safe">
+                                <div className="flex justify-center gap-4">
+                                    <button onClick={handleShareImage} className="flex flex-col items-center justify-center w-14 h-14 bg-zinc-50 rounded-2xl text-zinc-600 active:scale-95 transition-transform border border-zinc-100">
+                                        <ImgIcon className="w-5 h-5 mb-1" />
+                                        <span className="text-[9px] font-bold"></span>
+                                    </button>
+                                    <button onClick={() => window.print()} className="flex flex-col items-center justify-center w-14 h-14 bg-zinc-50 rounded-2xl text-zinc-600 active:scale-95 transition-transform border border-zinc-100">
+                                        <Printer className="w-5 h-5 mb-1" />
+                                        <span className="text-[9px] font-bold">PDF</span>
+                                    </button>
+                                </div>
                             </div>
 
                         </div>
 
-                        <div className="hidden md:flex pt-6 border-t border-zinc-100 justify-end gap-3 print:hidden">
-                            <button onClick={handleShareImage} className="px-6 py-3 bg-zinc-100 text-zinc-600 rounded-xl text-sm font-bold hover:bg-zinc-200 transition-colors shadow-sm flex items-center"><ImgIcon className="w-4 h-4 mr-2" /> Share</button>
-                            <button onClick={() => window.print()} className="px-6 py-3 bg-zinc-100 text-zinc-600 rounded-xl text-sm font-bold hover:bg-zinc-200 transition-colors shadow-sm flex items-center"><Printer className="w-4 h-4 mr-2" /> PDF</button>
+                        <div className="hidden md:flex mt-12 pt-6 border-t border-zinc-100 justify-between items-center pb-8 print:hidden">
+                            <div className="flex gap-3">
+                                <button onClick={handleShareImage} className="flex items-center px-5 py-2.5 bg-zinc-100 text-zinc-600 rounded-xl text-sm font-bold hover:bg-zinc-200 transition-colors shadow-sm"><ImgIcon className="w-4 h-4 mr-2" /> Share Image</button>
+                                <button onClick={() => window.print()} className="flex items-center px-5 py-2.5 bg-zinc-100 text-zinc-600 rounded-xl text-sm font-bold hover:bg-zinc-200 transition-colors shadow-sm"><Printer className="w-4 h-4 mr-2" /> Print PDF</button>
+                            </div>
                         </div>
                     </div>
                 </div>
