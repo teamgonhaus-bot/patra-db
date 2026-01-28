@@ -38,7 +38,7 @@ const YOUR_FIREBASE_CONFIG = {
 // ----------------------------------------------------------------------
 // 상수 및 설정
 // ----------------------------------------------------------------------
-const APP_VERSION = "v0.8.87";
+const APP_VERSION = "v0.8.88";
 const BUILD_DATE = "2026.01.27";
 const ADMIN_PASSWORD = "adminlcg1";
 
@@ -226,7 +226,7 @@ export default function App() {
 
     // Space/Scene Editing
     const [editingSpaceInfoId, setEditingSpaceInfoId] = useState(null);
-    const [managingSpaceProductsId, setManagingSpaceProductsId] = useState(null);
+    // V 0.8.88: Removed managingSpaceProductsId
     const [editingScene, setEditingScene] = useState(null);
     const [selectedScene, setSelectedScene] = useState(null);
 
@@ -262,6 +262,7 @@ export default function App() {
     };
 
     const mainContentRef = useRef(null);
+    const urlParamHandledRef = useRef(false); // V 0.8.88: Track if URL param has been handled
     const sidebarLogoInputRef = useRef(null);
 
     // --- Effects ---
@@ -272,7 +273,7 @@ export default function App() {
                 if (editingAwardFromModal) { setEditingAwardFromModal(null); return; }
                 if (isFormOpen) { setIsFormOpen(false); setEditingProduct(null); return; }
                 if (editingScene) { setEditingScene(null); return; }
-                if (managingSpaceProductsId) { setManagingSpaceProductsId(null); return; }
+                // V 0.8.88: Removed Space Product Manager
                 if (editingSpaceInfoId) { setEditingSpaceInfoId(null); return; }
                 if (showAdminDashboard) { setShowAdminDashboard(false); return; }
 
@@ -284,7 +285,7 @@ export default function App() {
         };
         window.addEventListener('keydown', handleEsc);
         return () => window.removeEventListener('keydown', handleEsc);
-    }, [editingSwatchFromModal, editingAwardFromModal, selectedSwatch, selectedProduct, selectedScene, selectedAward, editingScene, isFormOpen, managingSpaceProductsId, editingSpaceInfoId, showAdminDashboard]);
+    }, [editingSwatchFromModal, editingAwardFromModal, selectedSwatch, selectedProduct, selectedScene, selectedAward, editingScene, isFormOpen, editingSpaceInfoId, showAdminDashboard]);
 
     useEffect(() => {
         const handleScroll = () => {
@@ -331,18 +332,26 @@ export default function App() {
         setActiveSpaceTag('ALL');
     }, [activeCategory]);
 
-    // V 0.8.73: Fix URL param parsing to ensure products are loaded
+    // V 0.8.88: Fix URL param parsing - only handle once to prevent modal reopen on refresh
     useEffect(() => {
+        if (urlParamHandledRef.current) return; // Skip if already handled
+
         const params = new URLSearchParams(window.location.search);
         const sharedId = params.get('id');
         const sharedSpace = params.get('space');
 
         if (sharedId && products.length > 0) {
             const found = products.find(p => String(p.id) === String(sharedId));
-            if (found) setSelectedProduct(found);
+            if (found) {
+                setSelectedProduct(found);
+                urlParamHandledRef.current = true;
+                // Clear URL param to prevent reopen
+                window.history.replaceState(null, '', window.location.pathname);
+            }
         }
         if (sharedSpace && SPACES.find(s => s.id === sharedSpace)) {
             setActiveCategory(sharedSpace);
+            urlParamHandledRef.current = true;
         }
     }, [products]);
 
@@ -1101,7 +1110,7 @@ export default function App() {
                     </div>
                 )}
 
-                <div ref={mainContentRef} className="flex-1 overflow-y-auto p-4 md:p-8 custom-scrollbar relative print:overflow-visible print:p-0 pb-48 md:pb-40">
+                <div ref={mainContentRef} className="flex-1 overflow-y-auto p-4 md:p-8 custom-scrollbar relative print:overflow-visible print:p-0 pb-20 md:pb-16">
                     {activeCategory === 'DASHBOARD' && !searchTerm && searchTags.length === 0 && !filters.year && !filters.color ? (
                         <DashboardView
                             products={products}
@@ -1208,7 +1217,7 @@ export default function App() {
                                     setActiveTag={setActiveSpaceTag}
                                     onBannerUpload={(e) => handleSpaceBannerUpload(e, activeCategory)}
                                     onEditInfo={() => setEditingSpaceInfoId(activeCategory)}
-                                    onManageProducts={() => setManagingSpaceProductsId(activeCategory)}
+                                    // V 0.8.88: Removed onManageProducts
                                     onAddScene={() => setEditingScene({ isNew: true, spaceId: activeCategory })}
                                     onViewScene={(scene) => setSelectedScene({ ...scene, spaceId: activeCategory })}
                                     productCount={processedProducts.length}
@@ -1280,7 +1289,7 @@ export default function App() {
                                                     {isAdmin && activeCategory !== 'MY_PICK' && !SPACES.find(s => s.id === activeCategory) && (<button onClick={() => { setEditingProduct(null); setIsFormOpen(true); }} className="border-2 border-dashed border-zinc-200 rounded-2xl flex flex-col items-center justify-center min-h-[250px] md:min-h-[300px] text-zinc-400 hover:border-zinc-400 hover:text-zinc-600 hover:bg-zinc-50 transition-all group print:hidden"><div className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-zinc-100 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform"><Plus className="w-6 h-6" /></div><span className="text-xs md:text-sm font-bold">Add Product</span></button>)}
                                                 </div>
                                             )}
-                                            {processedProducts.length === 0 && (isAdmin && SPACES.find(s => s.id === activeCategory) && (<button onClick={() => setManagingSpaceProductsId(activeCategory)} className="mt-4 px-4 py-2 bg-blue-50 text-blue-600 rounded-lg text-sm font-bold hover:bg-blue-100 transition-colors">+ Select Products</button>))}
+                                            {/* V 0.8.88: Removed Select Products Button */}
                                         </>
                                     )}
                                 </>
@@ -1341,7 +1350,7 @@ export default function App() {
                     swatches={swatches}
                     isAdmin={isAdmin}
                     onClose={() => setSelectedSwatch(null)}
-                    onNavigateProduct={(product) => { setSelectedSwatch(null); setSelectedProduct(product); }}
+                    onNavigateProduct={(product) => { setSelectedProduct(product); /* V 0.8.88: Keep swatch modal open for smooth stacking */ }}
                     onNavigateSwatch={(swatch) => setSelectedSwatch(swatch)}
                     onEdit={() => { setSelectedSwatch(null); setEditingSwatchFromModal(selectedSwatch); }}
                 />
@@ -1389,14 +1398,7 @@ export default function App() {
                 />
             )}
 
-            {managingSpaceProductsId && (
-                <SpaceProductManager
-                    spaceId={managingSpaceProductsId}
-                    products={products}
-                    onClose={() => setManagingSpaceProductsId(null)}
-                    onToggle={(pid, add) => handleSpaceProductToggle(managingSpaceProductsId, pid, add)}
-                />
-            )}
+            {/* V 0.8.88: Removed SpaceProductManager Usage */}
 
             {editingScene && (
                 <SceneEditModal
@@ -2455,58 +2457,61 @@ function PieChartComponent({ data, total, selectedIndex, onSelect }) {
                 })}
             </svg>
 
-            {/* Labels with Connecting Lines - V 0.8.86: Centered guide lines, matching colors, bigger font */}
-            {data.map((item, idx) => {
-                let prevPercent = 0;
-                for (let i = 0; i < idx; i++) prevPercent += data[i].count / total;
-                const percent = item.count / total;
-                const midPercent = prevPercent + percent / 2;
-                const angleRad = (midPercent * 2 * Math.PI) - (Math.PI / 2);
+            {/* Labels with Connecting Lines - V 0.8.88: Mobile optimized - closer labels, all categories shown */}
+            {(() => {
+                // V 0.8.88: Pre-calculate all label positions to prevent overlap
+                const labelPositions = data.map((item, idx) => {
+                    let prevPercent = 0;
+                    for (let i = 0; i < idx; i++) prevPercent += data[i].count / total;
+                    const percent = item.count / total;
+                    const midPercent = prevPercent + percent / 2;
+                    const angleRad = (midPercent * 2 * Math.PI) - (Math.PI / 2);
+                    return { item, idx, percent, angleRad };
+                });
 
-                if (percent < 0.03) return null;
+                return labelPositions.map(({ item, idx, percent, angleRad }) => {
+                    const isSelected = selectedIndex === idx;
 
-                const isSelected = selectedIndex === idx;
+                    // Coordinates for Guide Line - closer to ring
+                    const rSlice = 0.82;
+                    const x1 = Math.cos(angleRad) * rSlice;
+                    const y1 = Math.sin(angleRad) * rSlice;
 
-                // Coordinates for Guide Line
-                // Slice Center (on the ring)
-                const rSlice = 0.8;
-                const x1 = Math.cos(angleRad) * rSlice;
-                const y1 = Math.sin(angleRad) * rSlice;
+                    // V 0.8.88: Responsive label distance - closer on mobile
+                    // Mobile: 0.95, Desktop: 1.05 (closer to donut)
+                    const rLabel = 0.95;
+                    const x2 = Math.cos(angleRad) * rLabel;
+                    const y2 = Math.sin(angleRad) * rLabel;
 
-                // Label Position
-                const rLabel = 1.1;
-                const x2 = Math.cos(angleRad) * rLabel;
-                const y2 = Math.sin(angleRad) * rLabel;
+                    // V 0.8.88: Responsive text offset - 90px mobile, 120px desktop
+                    // Smaller offset = closer to donut
+                    const tx = Math.cos(angleRad) * 1.08;
+                    const ty = Math.sin(angleRad) * 1.08;
 
-                // Text Position (slightly further)
-                const tx = Math.cos(angleRad) * 1.25;
-                const ty = Math.sin(angleRad) * 1.25;
+                    // V 0.8.88: Dynamic font size based on percentage
+                    const fontSize = percent < 0.05 ? 'text-[9px] md:text-[10px]' : 'text-[10px] md:text-xs';
 
-                return (
-                    <React.Fragment key={`label-group-${item.id}`}>
-                        {/* Connecting Line */}
-                        <line
-                            x1={x1} y1={y1} x2={x2} y2={y2}
-                            stroke={item.color}
-                            strokeWidth={0.005}
-                            opacity={0.8}
-                            className="pointer-events-none transition-all duration-300"
-                        />
+                    return (
+                        <React.Fragment key={`label-group-${item.id}`}>
+                            {/* Connecting Line - shorter for small slices */}
+                            {/* Connecting Line - Removed V 0.8.88 */}
 
-                        {/* Label */}
-                        <div
-                            className="absolute text-xs md:text-sm font-bold pointer-events-none whitespace-nowrap transition-all duration-300"
-                            style={{
-                                left: '50%', top: '50%',
-                                color: item.color,
-                                transform: `translate(calc(-50% + ${tx * 140}px), calc(-50% + ${ty * 140}px))`
-                            }}
-                        >
-                            {item.label}
-                        </div>
-                    </React.Fragment>
-                );
-            })}
+                            {/* Label - V 0.8.88: Responsive positioning - No Guide Lines */}
+                            <div
+                                className={`absolute ${fontSize} font-bold pointer-events-none whitespace-nowrap transition-all duration-300`}
+                                style={{
+                                    left: '50%', top: '50%',
+                                    color: item.color,
+                                    transform: `translate(calc(-50% + ${tx * 115}px), calc(-50% + ${ty * 115}px))`,
+                                    opacity: isSelected || selectedIndex === null ? 1 : 0.4
+                                }}
+                            >
+                                {item.label}
+                            </div>
+                        </React.Fragment>
+                    );
+                });
+            })()}
 
             <div className="absolute inset-0 flex items-center justify-center flex-col pointer-events-none transition-all duration-300">
                 {selectedIndex !== null ? (
@@ -2625,7 +2630,7 @@ function DashboardView({ products, favorites, awards, swatches, spaceContents, s
     const totalAwardWinners = awardStats.reduce((acc, stat) => acc + stat.winners.length, 0);
 
     return (
-        <div className="max-w-7xl mx-auto space-y-6 md:space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-32 print:hidden" onClick={() => setSelectedSlice(null)}>
+        <div className="max-w-7xl mx-auto space-y-6 md:space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-16 print:hidden" onClick={() => setSelectedSlice(null)}>
 
             <div className="relative w-full h-48 md:h-80 rounded-3xl overflow-hidden shadow-lg border border-zinc-200 group bg-zinc-900">
                 <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/40 to-transparent z-10"></div>
@@ -2907,7 +2912,7 @@ function SpaceDetailView({ space, spaceContent, additionalScenes = [], activeTag
     }, [products]);
 
     return (
-        <div className="mb-12 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20">
+        <div className="mb-12 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-0">
             <div className="relative rounded-3xl overflow-hidden h-72 md:h-96 shadow-lg group mb-8 bg-zinc-900 print:hidden">
                 <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent z-10"></div>
                 {banner ? <img src={banner} className="w-full h-full object-cover transition-transform duration-1000" alt="Space Banner" /> : <div className="w-full h-full flex items-center justify-center opacity-30"><span className="text-white text-4xl font-bold uppercase">{space.label}</span></div>}
@@ -3838,19 +3843,7 @@ function SwatchSelector({ label, selected, swatches, onChange }) {
     );
 }
 
-function SpaceProductManager({ spaceId, products, onClose, onToggle }) {
-    useScrollLock(); // V 0.8.74: Added scroll lock
-    const [filter, setFilter] = useState('');
-    return (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[80] flex items-center justify-center p-4">
-            <div className="bg-white w-full max-w-3xl rounded-2xl overflow-hidden shadow-2xl flex flex-col max-h-[85vh]">
-                <div className="px-6 py-4 border-b border-zinc-100 flex justify-between items-center bg-indigo-50"><div><h3 className="text-lg font-bold text-indigo-900">Manage Products</h3><p className="text-xs text-indigo-600">Select products to display in {spaceId}</p></div><button onClick={onClose}><X className="w-5 h-5 text-indigo-400" /></button></div>
-                <div className="p-4 border-b border-zinc-100"><input type="text" placeholder="Filter products..." className="w-full px-4 py-2 bg-zinc-50 rounded-lg border border-zinc-200 text-sm focus:outline-none focus:border-indigo-500" value={filter} onChange={(e) => setFilter(e.target.value)} /></div>
-                <div className="flex-1 overflow-y-auto p-4 grid grid-cols-1 md:grid-cols-2 gap-3 custom-scrollbar">{products.filter(p => p.name.toLowerCase().includes(filter.toLowerCase())).map(product => { const isAdded = product.spaces && product.spaces.includes(spaceId); return (<div key={product.id} className={`flex items-center p-3 rounded-xl border cursor-pointer transition-all ${isAdded ? 'border-indigo-500 bg-indigo-50' : 'border-zinc-200 hover:border-zinc-300'}`} onClick={() => onToggle(product.id, !isAdded)}><div className={`w-5 h-5 rounded border flex items-center justify-center mr-3 ${isAdded ? 'bg-indigo-500 border-indigo-500' : 'bg-white border-zinc-300'}`}>{isAdded && <Check className="w-3.5 h-3.5 text-white" />}</div>{product.images?.[0] && <img src={typeof product.images[0] === 'object' ? product.images[0].url : product.images[0]} className="w-10 h-10 rounded-lg object-cover mr-3" />}<div><div className="text-sm font-bold text-zinc-900">{product.name}</div><div className="text-xs text-zinc-500">{product.category}</div></div></div>); })}</div>
-            </div>
-        </div>
-    );
-}
+// V 0.8.88: Removed SpaceProductManager Component Definition
 
 function SceneEditModal({ initialData, allProducts, spaceTags = [], spaceOptions = [], onClose, onSave, onDelete }) {
     useScrollLock(); // V 0.8.74: Added scroll lock
