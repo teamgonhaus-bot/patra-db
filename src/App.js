@@ -1158,6 +1158,7 @@ export default function App() {
                             products={processedProducts}
                             categories={CATEGORIES.filter(c => !c.isSpecial)}
                             spaces={SPACES}
+                            scenes={scenes}
                             spaceContents={spaceContents}
                             materials={swatches}
                             materialCategories={SWATCH_CATEGORIES}
@@ -1545,7 +1546,7 @@ const checkSearchMatch = (item, type, searchTerm, searchTags, filters = {}) => {
     return matchesSearch && matchesTags && matchesFilter;
 };
 
-function TotalView({ products, categories, spaces, spaceContents, materials, materialCategories, onProductClick, onSceneClick, onSwatchClick, searchTerm, searchTags, filters, favorites, onToggleFavorite, onCompareToggle, compareList }) {
+function TotalView({ products, categories, spaces, scenes, spaceContents, materials, materialCategories, onProductClick, onSceneClick, onSwatchClick, searchTerm, searchTags, filters, favorites, onToggleFavorite, onCompareToggle, compareList }) {
     // Filter Logic
     // Filter Logic - V 0.8.83: Uses unified checkSearchMatch
     const filterItem = (item, type) => checkSearchMatch(item, type, searchTerm, searchTags, filters);
@@ -1564,14 +1565,14 @@ function TotalView({ products, categories, spaces, spaceContents, materials, mat
                 <h3 className="text-2xl font-black text-zinc-900 mb-6 flex items-center"><Briefcase className="w-6 h-6 mr-2" /> SPACES</h3>
                 <div className="space-y-4">
                     {spaces.map(space => {
-                        const content = spaceContents[space.id] || {};
-                        const scenes = (content.scenes || []).filter(s => filterItem(s, 'scene'));
-                        if (scenes.length === 0) return null;
+                        // V 0.8.9: Use scenes array for accurate aggregation
+                        const spaceScenes = scenes.filter(s => s.spaceId === space.id).filter(s => filterItem(s, 'scene'));
+                        if (spaceScenes.length === 0) return null;
 
                         return (
-                            <CollapsibleSection key={space.id} title={space.label} count={scenes.length}>
+                            <CollapsibleSection key={space.id} title={space.label} count={spaceScenes.length}>
                                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                                    {scenes.map(scene => (
+                                    {spaceScenes.map(scene => (
                                         <div key={scene.id} onClick={() => onSceneClick({ ...scene, spaceId: space.id })} className="group cursor-pointer relative">
                                             <div className="aspect-[4/3] bg-zinc-50 rounded-xl mb-2 overflow-hidden border border-zinc-100 relative">
                                                 <img src={scene.image} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
