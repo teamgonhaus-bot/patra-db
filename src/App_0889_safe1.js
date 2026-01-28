@@ -3935,7 +3935,17 @@ function SceneEditModal({ initialData, allProducts, spaceTags = [], spaceOptions
                             </div>
                         )}
 
-
+                        {/* V 0.8.73: Dynamic Tags based on selected space */}
+                        <div>
+                            <label className="block text-xs font-bold text-zinc-500 uppercase mb-2">Space Tags (Filter)</label>
+                            <div className="flex flex-wrap gap-2">
+                                {(spaceOptions.find(s => s.id === data.spaceId)?.defaultTags || spaceTags).map(tag => (
+                                    <button key={tag} onClick={() => toggleTag(tag)} className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-colors ${data.tags?.includes(tag) ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-500 border-zinc-200'}`}>
+                                        {tag}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
 
                         <div>
                             <div className="flex justify-between items-center mb-2"><label className="block text-xs font-bold text-zinc-500 uppercase">Additional Images</label><button type="button" onClick={() => galleryInputRef.current.click()} className="text-[10px] bg-white border px-2 py-1 rounded hover:bg-zinc-100">+ Add</button><input type="file" ref={galleryInputRef} multiple className="hidden" accept="image/*" onChange={handleGalleryUpload} /></div>
