@@ -38,7 +38,7 @@ const YOUR_FIREBASE_CONFIG = {
 // ----------------------------------------------------------------------
 // 상수 및 설정
 // ----------------------------------------------------------------------
-const APP_VERSION = "v0.8.89";
+const APP_VERSION = "v0.8.9";
 const BUILD_DATE = "2026.01.27";
 const ADMIN_PASSWORD = "adminlcg1";
 
@@ -1120,6 +1120,8 @@ export default function App() {
                             spaceContents={spaceContents}
                             setActiveCategory={setActiveCategory}
                             setSelectedProduct={setSelectedProduct}
+                            setSelectedAward={setSelectedAward}
+                            scenes={scenes}
                             isAdmin={isAdmin}
                             bannerData={bannerData}
                             onBannerUpload={handleBannerUpload}
@@ -1218,7 +1220,8 @@ export default function App() {
                                     onBannerUpload={(e) => handleSpaceBannerUpload(e, activeCategory)}
                                     onEditInfo={() => setEditingSpaceInfoId(activeCategory)}
                                     // V 0.8.88: Removed onManageProducts
-                                    onAddScene={() => setEditingScene({ isNew: true, spaceId: activeCategory })}
+                                    // V 0.8.9: Auto-tag scene with active filter
+                                    onAddScene={() => setEditingScene({ isNew: true, spaceId: activeCategory, tags: activeSpaceTag !== 'ALL' ? [activeSpaceTag] : [] })}
                                     onViewScene={(scene) => setSelectedScene({ ...scene, spaceId: activeCategory })}
                                     productCount={processedProducts.length}
                                     searchTerm={searchTerm}
@@ -2556,7 +2559,7 @@ function CompactStatsBar({ spacesCount, productsCount, materialsCount, awardsCou
     );
 }
 
-function DashboardView({ products, favorites, awards, swatches, spaceContents, setActiveCategory, setSelectedProduct, isAdmin, bannerData, onBannerUpload, onLogoUpload, onBannerTextChange, onSaveBannerText }) {
+function DashboardView({ products, favorites, awards, swatches, spaceContents, scenes, setActiveCategory, setSelectedProduct, setSelectedAward, isAdmin, bannerData, onBannerUpload, onLogoUpload, onBannerTextChange, onSaveBannerText }) {
     const totalCount = products.length; const newCount = products.filter(p => p.isNew).length; const pickCount = favorites.length;
     const categoryCounts = []; let totalStandardProducts = 0;
     CATEGORIES.filter(c => !c.isSpecial).forEach(c => { const count = products.filter(p => p.category === c.id).length; if (count > 0) { categoryCounts.push({ ...c, count }); totalStandardProducts += count; } });
@@ -2626,8 +2629,8 @@ function DashboardView({ products, favorites, awards, swatches, spaceContents, s
         }).filter(a => a.winners.length > 0);
     }, [awards, products]);
 
-    // V 0.8.5: Calculate Counts for Stats Bar
-    const spacesCount = Object.values(spaceContents).reduce((acc, content) => acc + (content.scenes?.length || 0), 0);
+    // V 0.8.5: Calculate Counts for Stats Bar - V 0.8.9: Use scenes array for accurate count
+    const spacesCount = scenes.length;
     const materialsCount = swatches.length;
     const totalAwardWinners = awardStats.reduce((acc, stat) => acc + stat.winners.length, 0);
 
@@ -2814,7 +2817,7 @@ function DashboardView({ products, favorites, awards, swatches, spaceContents, s
                     </div>
                     <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
                         {awardStats.map(stat => (
-                            <div key={stat.id} className="bg-zinc-50 rounded-xl border border-zinc-200 p-4">
+                            <div key={stat.id} onClick={() => setSelectedAward(stat)} className="bg-zinc-50 rounded-xl border border-zinc-200 p-4 cursor-pointer hover:border-zinc-300 hover:bg-zinc-100 transition-all group">
                                 <div className="flex items-center justify-between mb-3">
                                     <div className="flex items-center min-w-0">
                                         {stat.image ? <img src={stat.image} className="w-8 h-8 object-contain mr-2 flex-shrink-0" /> : <Trophy className="w-8 h-8 text-zinc-300 mr-2 flex-shrink-0" />}
