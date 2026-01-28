@@ -1158,7 +1158,6 @@ export default function App() {
                             products={processedProducts}
                             categories={CATEGORIES.filter(c => !c.isSpecial)}
                             spaces={SPACES}
-                            scenes={scenes}
                             spaceContents={spaceContents}
                             materials={swatches}
                             materialCategories={SWATCH_CATEGORIES}
@@ -1192,6 +1191,7 @@ export default function App() {
                             type={activeCategory}
                             spaces={SPACES}
                             spaceContents={spaceContents}
+                            scenes={scenes}
                             collections={CATEGORIES.filter(c => !c.isSpecial)}
                             materials={SWATCH_CATEGORIES}
                             products={products}
@@ -4104,7 +4104,6 @@ function SpaceSceneModal({ scene, products, allProducts, isAdmin, onClose, onEdi
                             )}
 
                             {/* V 0.8.85: Match Material Modal Design and Spacing */}
-                            {/* V 0.8.85: Match Material Modal Design and Spacing - V 0.8.9: Adjustable Margins */}
                             <div className="pt-4 border-t border-zinc-100 flex gap-3 print:hidden mb-safe mb-2 md:mb-10">
                                 <button onClick={handleShareImage} className="flex-1 py-3 bg-zinc-100 text-zinc-600 rounded-xl text-xs font-bold hover:bg-zinc-200 flex items-center justify-center"><ImgIcon className="w-4 h-4 mr-2" /> Share</button>
                                 <button onClick={() => window.print()} className="flex-1 py-3 bg-zinc-100 text-zinc-600 rounded-xl text-xs font-bold hover:bg-zinc-200 flex items-center justify-center"><Printer className="w-4 h-4 mr-2" /> PDF</button>
