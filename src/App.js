@@ -38,7 +38,7 @@ const YOUR_FIREBASE_CONFIG = {
 // ----------------------------------------------------------------------
 // 상수 및 설정
 // ----------------------------------------------------------------------
-const APP_VERSION = "v0.8.88";
+const APP_VERSION = "v0.8.89";
 const BUILD_DATE = "2026.01.27";
 const ADMIN_PASSWORD = "adminlcg1";
 
@@ -90,15 +90,15 @@ const SPACES = [
     },
     {
         id: 'TRAINING', label: 'Training', icon: GraduationCap,
-        defaultTags: ['Training room', 'classroom', 'Library', 'auditorium']
+        defaultTags: ['Training room', 'Classroom', 'Library', 'Auditorium']
     },
     {
         id: 'LIFESTYLE', label: 'Lifestyle', icon: Sofa,
-        defaultTags: ['Dining', 'Study', 'Living', 'Outdoor']
+        defaultTags: ['Dining', 'Living', 'Study', 'Home office']
     },
     {
         id: 'COMMERCIAL', label: 'Commercial', icon: ShoppingBag,
-        defaultTags: ['Cafe', 'Restaurant', 'Store', 'Outdoor']
+        defaultTags: ['Cafe', 'Restaurant', 'Lounge', 'Store', 'Healthcare']
     },
 ];
 
@@ -1404,7 +1404,7 @@ export default function App() {
                 <SceneEditModal
                     initialData={editingScene}
                     allProducts={products}
-                    spaceTags={SPACES.find(s => s.id === editingScene.spaceId)?.defaultTags || (spaceContents[editingScene.spaceId]?.tags) || []}
+                    spaceTags={(spaceContents[editingScene.spaceId]?.tags) || SPACES.find(s => s.id === editingScene.spaceId)?.defaultTags || []}
                     spaceOptions={SPACES}
                     onClose={() => setEditingScene(null)}
                     onSave={(data) => { handleSceneSave(editingScene.spaceId, data); }}
@@ -2147,7 +2147,7 @@ function SwatchDetailModal({ swatch, allProducts, swatches, onClose, onNavigateP
     const handleShareImage = async () => { /* Placeholder */ };
 
     return (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[250] flex items-center justify-center p-0 md:p-4 animate-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[250] flex items-center justify-center p-0 md:p-4 animate-in zoom-in-95 duration-300">
             <div className="bg-white w-full h-full md:h-auto md:max-w-4xl rounded-none md:rounded-3xl overflow-hidden shadow-2xl flex flex-col md:flex-row md:max-h-[90vh] relative">
                 <div className="absolute top-4 right-4 z-[100] flex gap-2">
                     {isAdmin && <button onClick={onEdit} className="p-2 bg-white/50 hover:bg-zinc-100 rounded-full backdrop-blur shadow-sm"><Edit3 className="w-6 h-6 text-zinc-900" /></button>}
@@ -2502,7 +2502,7 @@ function PieChartComponent({ data, total, selectedIndex, onSelect }) {
                                 style={{
                                     left: '50%', top: '50%',
                                     color: item.color,
-                                    transform: `translate(calc(-50% + ${tx * 115}px), calc(-50% + ${ty * 115}px))`,
+                                    transform: `translate(calc(-50% + ${tx * 155}px), calc(-50% + ${ty * 155}px))`,
                                     opacity: isSelected || selectedIndex === null ? 1 : 0.4
                                 }}
                             >
@@ -2531,23 +2531,25 @@ function PieChartComponent({ data, total, selectedIndex, onSelect }) {
 }
 
 // V 0.8.5: Compact Stats Bar Component
-function CompactStatsBar({ spacesCount, productsCount, materialsCount, awardsCount }) {
+// V 0.8.89: Compact Stats Bar Component with Navigation
+function CompactStatsBar({ spacesCount, productsCount, materialsCount, awardsCount, onNavigate }) {
     return (
         <div className="grid grid-cols-4 gap-2 md:gap-4 mb-6">
-            <div className="bg-white p-3 rounded-xl border border-zinc-100 shadow-sm flex flex-col items-center justify-center text-center">
-                <span className="text-[10px] text-zinc-400 uppercase font-bold mb-1">Spaces</span>
+            <div onClick={() => onNavigate && onNavigate('SPACES_ROOT')} className="bg-white p-3 rounded-xl border border-zinc-100 shadow-sm flex flex-col items-center justify-center text-center cursor-pointer hover:bg-zinc-50 transition-colors group">
+                <span className="text-[10px] text-zinc-400 uppercase font-bold mb-1 group-hover:text-zinc-600 transition-colors">Spaces</span>
                 <span className="text-lg md:text-xl font-black text-zinc-900">{spacesCount}</span>
             </div>
-            <div className="bg-white p-3 rounded-xl border border-zinc-100 shadow-sm flex flex-col items-center justify-center text-center">
-                <span className="text-[10px] text-zinc-400 uppercase font-bold mb-1">Products</span>
+            <div onClick={() => onNavigate && onNavigate('COLLECTIONS_ROOT')} className="bg-white p-3 rounded-xl border border-zinc-100 shadow-sm flex flex-col items-center justify-center text-center cursor-pointer hover:bg-zinc-50 transition-colors group">
+                {/* V 0.8.89: Renamed Products to Collections */}
+                <span className="text-[10px] text-zinc-400 uppercase font-bold mb-1 group-hover:text-zinc-600 transition-colors">Collections</span>
                 <span className="text-lg md:text-xl font-black text-zinc-900">{productsCount}</span>
             </div>
-            <div className="bg-white p-3 rounded-xl border border-zinc-100 shadow-sm flex flex-col items-center justify-center text-center">
-                <span className="text-[10px] text-zinc-400 uppercase font-bold mb-1">Materials</span>
+            <div onClick={() => onNavigate && onNavigate('MATERIALS_ROOT')} className="bg-white p-3 rounded-xl border border-zinc-100 shadow-sm flex flex-col items-center justify-center text-center cursor-pointer hover:bg-zinc-50 transition-colors group">
+                <span className="text-[10px] text-zinc-400 uppercase font-bold mb-1 group-hover:text-zinc-600 transition-colors">Materials</span>
                 <span className="text-lg md:text-xl font-black text-zinc-900">{materialsCount}</span>
             </div>
-            <div className="bg-white p-3 rounded-xl border border-zinc-100 shadow-sm flex flex-col items-center justify-center text-center">
-                <span className="text-[10px] text-zinc-400 uppercase font-bold mb-1">Awards</span>
+            <div onClick={() => onNavigate && onNavigate('AWARDS_ROOT')} className="bg-white p-3 rounded-xl border border-zinc-100 shadow-sm flex flex-col items-center justify-center text-center cursor-pointer hover:bg-zinc-50 transition-colors group">
+                <span className="text-[10px] text-zinc-400 uppercase font-bold mb-1 group-hover:text-zinc-600 transition-colors">Awards</span>
                 <span className="text-lg md:text-xl font-black text-zinc-900">{awardsCount}</span>
             </div>
         </div>
@@ -2669,6 +2671,7 @@ function DashboardView({ products, favorites, awards, swatches, spaceContents, s
                 productsCount={totalCount}
                 materialsCount={materialsCount}
                 awardsCount={totalAwardWinners}
+                onNavigate={setActiveCategory}
             />
 
             {/* V 0.8.5: Reordered - Category Contribution First */}
@@ -2932,6 +2935,14 @@ function SpaceDetailView({ space, spaceContent, additionalScenes = [], activeTag
 
             <div className={`${filteredScenes.length === 0 ? '' : 'mb-12'} print:hidden`}>
                 <div className="flex items-center justify-between mb-6"><h3 className="text-2xl font-extrabold text-zinc-900 flex items-center"><ImageIcon className="w-6 h-6 mr-2 text-indigo-500" /> Space Scenes ({filteredScenes.length})</h3>{isAdmin && (<button onClick={onAddScene} className="flex items-center text-sm font-bold bg-zinc-900 text-white px-4 py-2 rounded-lg hover:bg-black transition-colors shadow-lg"><Plus className="w-4 h-4 mr-2" /> Add Scene</button>)}</div>
+
+                {/* V 0.8.89: Space Tags Filter */}
+                <div className="mb-8 flex flex-wrap gap-2">
+                    <button onClick={() => setActiveTag('ALL')} className={`px-4 py-2 rounded-full text-sm font-bold transition-all ${activeTag === 'ALL' ? 'bg-zinc-900 text-white shadow-lg' : 'bg-white text-zinc-500 hover:text-zinc-900'}`}>All Scenes</button>
+                    {(spaceContent.tags || space.defaultTags || []).map(tag => (
+                        <button key={tag} onClick={() => setActiveTag(tag)} className={`px-4 py-2 rounded-full text-sm font-bold transition-all ${activeTag === tag ? 'bg-zinc-900 text-white shadow-lg' : 'bg-white text-zinc-500 hover:text-zinc-900'}`}>{tag}</button>
+                    ))}
+                </div>
                 {filteredScenes.length > 0 ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         {filteredScenes.map((scene, idx) => (
@@ -3162,7 +3173,7 @@ function ProductDetailModal({ product, allProducts, swatches, spaceContents, awa
     };
 
     return (
-        <div key={product.id} className="fixed inset-0 bg-black/60 backdrop-blur-md z-[200] flex items-center justify-center p-0 md:p-4 animate-in fade-in duration-300 slide-in-animation print:fixed print:inset-0 print:z-[100] print:bg-white print:h-auto print:overflow-visible">
+        <div key={product.id} className="fixed inset-0 bg-black/60 backdrop-blur-md z-[200] flex items-center justify-center p-0 md:p-4 animate-in fade-in zoom-in-95 duration-300 print:fixed print:inset-0 print:z-[100] print:bg-white print:h-auto print:overflow-visible">
             <canvas ref={canvasRef} style={{ display: 'none' }} />
 
             {isZoomed && currentImageUrl && (
@@ -3900,7 +3911,7 @@ function SceneEditModal({ initialData, allProducts, spaceTags = [], spaceOptions
     };
 
     return (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[80] flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[80] flex items-center justify-center p-4 animate-in fade-in zoom-in-95 duration-300">
             <div className="bg-white w-full max-w-2xl rounded-2xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
                 <div className="px-6 py-4 border-b border-zinc-100 flex justify-between items-center bg-white z-10">
                     <h3 className="text-lg font-bold text-zinc-900">{!initialData.id ? 'New Scene' : 'Edit Scene'}</h3>
@@ -3946,6 +3957,15 @@ function SceneEditModal({ initialData, allProducts, spaceTags = [], spaceOptions
                                 </div>
                             ))}</div>}
                         </div>
+                        <div className="mb-4">
+                            <label className="block text-xs font-bold text-zinc-500 uppercase mb-2">Scene Tags</label>
+                            <div className="flex flex-wrap gap-2">
+                                {spaceTags.map(tag => (
+                                    <button key={tag} onClick={() => toggleTag(tag)} className={`px-3 py-1 rounded-full text-xs font-bold border transition-all ${data.tags?.includes(tag) ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-600 border-zinc-200 hover:border-zinc-400'}`}>{tag}</button>
+                                ))}
+                            </div>
+                        </div>
+
                         <div className="grid grid-cols-1 gap-4">
                             <div><label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Title</label><input className="w-full border border-zinc-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-zinc-900 outline-none" value={data.title} onChange={e => setData({ ...data, title: e.target.value })} placeholder="e.g. Modern Office Lounge" /></div>
                             <div><label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Description</label><textarea className="w-full border border-zinc-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-zinc-900 outline-none" rows={2} value={data.description} onChange={e => setData({ ...data, description: e.target.value })} placeholder="Short description..." /></div>
@@ -4021,7 +4041,7 @@ function SpaceSceneModal({ scene, products, allProducts, isAdmin, onClose, onEdi
     }, [products]);
 
     return (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[150] flex items-center justify-center p-0 md:p-6 animate-in zoom-in-95 duration-200 print:hidden">
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[150] flex items-center justify-center p-0 md:p-6 animate-in zoom-in-95 duration-300 print:hidden">
             {isZoomed && currentImgUrl && (<div className="fixed inset-0 z-[120] bg-black flex items-center justify-center p-0 cursor-zoom-out print:hidden" onClick={() => setIsZoomed(false)}><img src={currentImgUrl} className="w-full h-full object-contain max-w-none max-h-none" style={{ maxWidth: '100vw', maxHeight: '100vh' }} alt="Zoomed" /><button className="absolute top-6 right-6 text-white/50 hover:text-white"><X className="w-10 h-10" /></button></div>)}
 
             <div className="bg-white w-full h-[100dvh] md:h-[90vh] md:max-w-6xl md:rounded-3xl overflow-hidden shadow-2xl flex flex-col md:flex-row relative">
@@ -4220,7 +4240,7 @@ function AwardDetailModal({ award, products, onClose, onNavigateProduct, onSaveP
     };
 
     return (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[150] flex items-center justify-center p-0 md:p-4 animate-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[150] flex items-center justify-center p-0 md:p-4 animate-in zoom-in-95 duration-300">
             <div className="bg-white w-full h-full md:h-auto md:max-w-6xl rounded-none md:rounded-3xl overflow-hidden shadow-2xl flex flex-col md:flex-row md:max-h-[90vh] relative">
                 <div className="absolute top-4 right-4 z-[100] flex gap-2">
                     {isAdmin && <button onClick={onEdit} className="p-2 bg-white/50 hover:bg-zinc-100 rounded-full backdrop-blur shadow-sm"><Edit3 className="w-6 h-6 text-zinc-900" /></button>}
