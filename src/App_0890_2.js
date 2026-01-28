@@ -962,21 +962,6 @@ export default function App() {
     };
     const processedProducts = getProcessedProducts();
 
-    // V 0.8.9: Merge scenes from both sources (new scenes collection + legacy spaceContents)
-    const allScenes = useMemo(() => {
-        const scenesMap = new Map();
-        // Add legacy scenes from spaceContents (keyed by spaceId)
-        SPACES.forEach(space => {
-            const content = spaceContents[space.id] || {};
-            (content.scenes || []).forEach(s => {
-                scenesMap.set(s.id, { ...s, spaceId: space.id });
-            });
-        });
-        // Add/override with new scenes collection (these have spaceId field)
-        scenes.forEach(s => scenesMap.set(s.id, s));
-        return Array.from(scenesMap.values());
-    }, [scenes, spaceContents]);
-
     // --- Navigation ---
     const handleNavigateNext = () => { if (!selectedProduct) return; const currentIndex = processedProducts.findIndex(p => p.id === selectedProduct.id); if (currentIndex >= 0 && currentIndex < processedProducts.length - 1) { setSelectedProduct(processedProducts[currentIndex + 1]); } };
     const handleNavigatePrev = () => { if (!selectedProduct) return; const currentIndex = processedProducts.findIndex(p => p.id === selectedProduct.id); if (currentIndex > 0) { setSelectedProduct(processedProducts[currentIndex - 1]); } };
@@ -1173,7 +1158,7 @@ export default function App() {
                             products={processedProducts}
                             categories={CATEGORIES.filter(c => !c.isSpecial)}
                             spaces={SPACES}
-                            scenes={allScenes}
+                            scenes={scenes}
                             spaceContents={spaceContents}
                             materials={swatches}
                             materialCategories={SWATCH_CATEGORIES}
@@ -1207,7 +1192,7 @@ export default function App() {
                             type={activeCategory}
                             spaces={SPACES}
                             spaceContents={spaceContents}
-                            scenes={allScenes}
+                            scenes={scenes}
                             collections={CATEGORIES.filter(c => !c.isSpecial)}
                             materials={SWATCH_CATEGORIES}
                             products={products}
@@ -1230,7 +1215,7 @@ export default function App() {
                                 <SpaceDetailView
                                     space={SPACES.find(s => s.id === activeCategory)}
                                     spaceContent={spaceContents[activeCategory] || {}}
-                                    additionalScenes={allScenes}
+                                    additionalScenes={scenes}
                                     isAdmin={isAdmin}
                                     activeTag={activeSpaceTag}
                                     setActiveTag={setActiveSpaceTag}
@@ -2646,7 +2631,7 @@ function DashboardView({ products, favorites, awards, swatches, spaceContents, s
         }).filter(a => a.winners.length > 0);
     }, [awards, products]);
 
-    // V 0.8.5: Calculate Counts for Stats Bar - V 0.8.9: Use allScenes for accurate count
+    // V 0.8.5: Calculate Counts for Stats Bar - V 0.8.9: Use scenes array for accurate count
     const spacesCount = scenes.length;
     const materialsCount = swatches.length;
     const totalAwardWinners = awardStats.reduce((acc, stat) => acc + stat.winners.length, 0);
