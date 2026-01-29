@@ -133,44 +133,50 @@ const TEXTURE_TYPES = [
     { id: 'MATTE', label: 'Matte' }
 ];
 
-// V 0.8.92: Enhanced scroll lock - locks ALL scrollable elements
+// V 0.8.92: Scroll lock - only locks main page, NOT modal content
+// Uses reference counting for nested modals
+let scrollLockCount = 0;
+let savedScrollY = 0;
+
 function useScrollLock() {
     useEffect(() => {
-        const scrollY = window.scrollY;
+        scrollLockCount++;
 
-        // Create a style element that locks all scrolling
-        const styleId = 'scroll-lock-style';
-        let styleEl = document.getElementById(styleId);
-        if (!styleEl) {
-            styleEl = document.createElement('style');
-            styleEl.id = styleId;
-            styleEl.textContent = `
-                body.scroll-locked,
-                body.scroll-locked * {
-                    touch-action: none !important;
-                }
-                body.scroll-locked {
-                    overflow: hidden !important;
-                    position: fixed !important;
-                    width: 100% !important;
-                    height: 100% !important;
-                }
-                body.scroll-locked .overflow-y-auto,
-                body.scroll-locked .custom-scrollbar {
-                    overflow: hidden !important;
-                }
-            `;
-            document.head.appendChild(styleEl);
+        if (scrollLockCount === 1) {
+            // First modal - save scroll position and lock
+            savedScrollY = window.scrollY;
+
+            // Create style if not exists
+            const styleId = 'scroll-lock-style';
+            let styleEl = document.getElementById(styleId);
+            if (!styleEl) {
+                styleEl = document.createElement('style');
+                styleEl.id = styleId;
+                // Only lock body and main content, NOT modal overlays (z-index > 100)
+                styleEl.textContent = `
+                    body.scroll-locked {
+                        overflow: hidden !important;
+                        position: fixed !important;
+                        width: 100% !important;
+                        height: 100% !important;
+                    }
+                `;
+                document.head.appendChild(styleEl);
+            }
+
+            document.body.classList.add('scroll-locked');
+            document.body.style.top = `-${savedScrollY}px`;
         }
 
-        // Apply the lock class
-        document.body.classList.add('scroll-locked');
-        document.body.style.top = `-${scrollY}px`;
-
         return () => {
-            document.body.classList.remove('scroll-locked');
-            document.body.style.top = '';
-            window.scrollTo(0, scrollY);
+            scrollLockCount--;
+
+            if (scrollLockCount === 0) {
+                // Last modal closed - restore scroll
+                document.body.classList.remove('scroll-locked');
+                document.body.style.top = '';
+                window.scrollTo(0, savedScrollY);
+            }
         };
     }, []);
 }
@@ -1410,7 +1416,7 @@ export default function App() {
                     onClose={() => setSelectedSwatch(null)}
                     onNavigateProduct={(product) => { setSelectedProduct(product); /* V 0.8.88: Keep swatch modal open for smooth stacking */ }}
                     onNavigateSwatch={(swatch) => setSelectedSwatch(swatch)}
-                    onEdit={() => { setSelectedSwatch(null); setEditingSwatchFromModal(selectedSwatch); }}
+                    onEdit={() => { setEditingSwatchFromModal(selectedSwatch); /* V 0.8.92: Keep modal open */ }}
                 />
             )}
 
@@ -1433,7 +1439,7 @@ export default function App() {
                         setSelectedProduct(p);
                     }}
                     onSaveProduct={handleSaveProduct}
-                    onEdit={() => { setSelectedAward(null); setEditingAwardFromModal(selectedAward); }}
+                    onEdit={() => { setEditingAwardFromModal(selectedAward); /* V 0.8.92: Keep modal open */ }}
                 />
             )}
 
@@ -1477,7 +1483,7 @@ export default function App() {
                     allProducts={products}
                     isAdmin={isAdmin}
                     onClose={() => setSelectedScene(null)}
-                    onEdit={() => { setEditingScene({ ...selectedScene, isNew: false }); setSelectedScene(null); }}
+                    onEdit={() => { setEditingScene({ ...selectedScene, isNew: false }); /* V 0.8.92: Keep modal open */ }}
                     onProductToggle={async (pid, add) => {
                         const newPids = add ? [...(selectedScene.productIds || []), pid] : (selectedScene.productIds || []).filter(id => id !== pid);
                         const updatedScene = { ...selectedScene, productIds: newPids };
