@@ -133,36 +133,24 @@ const TEXTURE_TYPES = [
     { id: 'MATTE', label: 'Matte' }
 ];
 
-// V 0.8.92: Enhanced scroll lock to completely prevent background scroll
+// Hook for scroll locking - V 0.8.73 Fixed to prevent background drag
 function useScrollLock() {
     useEffect(() => {
+        const originalStyle = window.getComputedStyle(document.body).overflow;
+        const originalPosition = window.getComputedStyle(document.body).position;
+        const originalWidth = window.getComputedStyle(document.body).width;
         const scrollY = window.scrollY;
 
-        // Store original styles
-        const originalBodyOverflow = document.body.style.overflow;
-        const originalBodyPosition = document.body.style.position;
-        const originalBodyTop = document.body.style.top;
-        const originalBodyWidth = document.body.style.width;
-        const originalHtmlOverflow = document.documentElement.style.overflow;
-
-        // Lock body
         document.body.style.overflow = 'hidden';
         document.body.style.position = 'fixed';
-        document.body.style.top = `-${scrollY}px`;
         document.body.style.width = '100%';
-
-        // Also lock html element for complete prevention
-        document.documentElement.style.overflow = 'hidden';
+        document.body.style.top = `-${scrollY}px`;
 
         return () => {
-            // Restore original styles
-            document.body.style.overflow = originalBodyOverflow;
-            document.body.style.position = originalBodyPosition;
-            document.body.style.top = originalBodyTop;
-            document.body.style.width = originalBodyWidth;
-            document.documentElement.style.overflow = originalHtmlOverflow;
-
-            // Restore scroll position
+            document.body.style.overflow = originalStyle;
+            document.body.style.position = originalPosition;
+            document.body.style.width = originalWidth;
+            document.body.style.top = '';
             window.scrollTo(0, scrollY);
         };
     }, []);
@@ -856,7 +844,6 @@ export default function App() {
         }
     };
 
-    // V 0.8.92: Fixed - properly swap orderIndex values
     const handleMoveItem = async (collectionName, items, index, direction, parentId = null) => {
         const targetIndex = direction === 'left' ? index - 1 : index + 1;
         if (targetIndex < 0 || targetIndex >= items.length) return;
@@ -864,11 +851,9 @@ export default function App() {
         const itemA = items[index];
         const itemB = items[targetIndex];
 
-        // V 0.8.92: Get current orderIndex, use index*10 as fallback for proper spacing
-        const orderA = itemA.orderIndex !== undefined ? itemA.orderIndex : index * 10;
-        const orderB = itemB.orderIndex !== undefined ? itemB.orderIndex : targetIndex * 10;
-
-        // Simply swap the orderIndex values
+        // Swap orderIndex values between the two items
+        const orderA = itemA.orderIndex ?? index;
+        const orderB = itemB.orderIndex ?? targetIndex;
         const newOrderA = orderB;
         const newOrderB = orderA;
 
@@ -4285,105 +4270,102 @@ function AwardDetailModal({ award, products, onClose, onNavigateProduct, onSaveP
 
     return (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[150] flex items-center justify-center p-0 md:p-4 animate-in zoom-in-95 duration-300">
-            <div className="bg-white w-full h-full md:h-auto md:max-w-6xl rounded-none md:rounded-3xl overflow-hidden shadow-2xl flex flex-col md:max-h-[90vh] relative">
+            <div className="bg-white w-full h-full md:h-auto md:max-w-6xl rounded-none md:rounded-3xl overflow-hidden shadow-2xl flex flex-col md:flex-row md:max-h-[90vh] relative">
                 <div className="absolute top-4 right-4 z-[100] flex gap-2">
                     {isAdmin && <button onClick={onEdit} className="p-2 bg-white/50 hover:bg-zinc-100 rounded-full backdrop-blur shadow-sm"><Edit3 className="w-6 h-6 text-zinc-900" /></button>}
                     <button onClick={onClose} className="p-2 bg-white/50 hover:bg-zinc-100 rounded-full backdrop-blur shadow-sm"><X className="w-6 h-6 text-zinc-900" /></button>
                 </div>
-                {/* V 0.8.92: Scrollable wrapper for mobile - whole card scrolls */}
-                <div className="flex-1 overflow-y-auto flex flex-col md:flex-row">
-                    <div className="w-full md:w-4/12 bg-zinc-50 flex items-center justify-center p-8 relative min-h-[30vh] shrink-0">
-                        <div className="w-48 h-48 md:w-64 md:h-64 flex items-center justify-center">
-                            {award.image ? <img src={award.image} className="w-full h-full object-contain" /> : <Trophy className="w-24 h-24 text-zinc-300" />}
-                        </div>
+                <div className="w-full md:w-4/12 bg-zinc-50 flex items-center justify-center p-8 relative min-h-[30vh]">
+                    <div className="w-48 h-48 md:w-64 md:h-64 flex items-center justify-center">
+                        {award.image ? <img src={award.image} className="w-full h-full object-contain" /> : <Trophy className="w-24 h-24 text-zinc-300" />}
                     </div>
-                    <div className="w-full md:w-8/12 bg-white p-8 md:p-12 flex flex-col pb-safe">
-                        <div className="mb-8">
-                            <div className="flex gap-2 mb-3">
-                                {award.tags?.map(t => <span key={t} className="inline-block px-2 py-0.5 bg-zinc-100 text-zinc-600 text-[10px] font-bold rounded uppercase tracking-widest">{t}</span>)}
-                            </div>
-                            <h2 className="text-4xl font-black text-zinc-900 tracking-tighter mb-2">{award.title}</h2>
-                            <p className="text-xl font-bold text-zinc-500 mb-4">{award.organization}</p>
-                            {award.link && (
-                                <a href={award.link} target="_blank" rel="noopener noreferrer" className="inline-flex items-center text-xs font-bold text-blue-600 hover:underline">
-                                    <ExternalLink className="w-3 h-3 mr-1" /> Official Website
-                                </a>
-                            )}
+                </div>
+                <div className="w-full md:w-8/12 bg-white p-8 md:p-12 flex flex-col overflow-y-auto pb-safe">
+                    <div className="mb-8">
+                        <div className="flex gap-2 mb-3">
+                            {award.tags?.map(t => <span key={t} className="inline-block px-2 py-0.5 bg-zinc-100 text-zinc-600 text-[10px] font-bold rounded uppercase tracking-widest">{t}</span>)}
                         </div>
-                        <div className="space-y-8 flex-1">
-                            <div>
-                                <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-3">About Award</h3>
-                                <p className="text-sm text-zinc-600 leading-relaxed whitespace-pre-wrap">
-                                    {award.description || "No description provided."}
-                                </p>
-                            </div>
-                            <div className="pt-8 border-t border-zinc-100">
-                                <div className="flex justify-between items-center mb-4">
-                                    <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest flex items-center">
-                                        Winners Gallery
-                                        <span className="bg-zinc-100 text-zinc-600 px-2 py-0.5 rounded-full text-[10px] ml-2">{relatedProducts.length}</span>
-                                    </h3>
-                                    {isAdmin && (
-                                        <button onClick={() => setIsAddingProduct(!isAddingProduct)} className="text-[10px] font-bold text-indigo-600 border border-indigo-200 px-3 py-1.5 rounded hover:bg-indigo-50 transition-colors">
-                                            {isAddingProduct ? 'Done' : '+ Add Winner'}
-                                        </button>
-                                    )}
-                                </div>
-                                {isAdmin && isAddingProduct && (
-                                    <div className="mb-6 bg-zinc-50 p-4 rounded-xl border border-zinc-200 animate-in slide-in-from-top-2">
-                                        <div className="flex gap-2 mb-2">
-                                            <input
-                                                type="text"
-                                                placeholder="Search products..."
-                                                className="flex-1 text-xs p-2 bg-white rounded-lg border border-zinc-200 outline-none"
-                                                value={productFilter}
-                                                onChange={(e) => setProductFilter(e.target.value)}
-                                            />
-                                            <input
-                                                type="number"
-                                                className="w-20 text-xs p-2 bg-white rounded-lg border border-zinc-200 outline-none text-center"
-                                                value={awardYear}
-                                                onChange={(e) => setAwardYear(e.target.value)}
-                                                placeholder="Year"
-                                            />
-                                        </div>
-                                        <div className="max-h-40 overflow-y-auto space-y-1 custom-scrollbar">
-                                            {products.filter(p => p.name.toLowerCase().includes(productFilter.toLowerCase())).map(p => {
-                                                const isAdded = p.awardHistory?.some(h => h.awardId === award.id);
-                                                return (
-                                                    <div key={p.id} onClick={() => !isAdded && addProductToAward(p)} className={`flex items-center p-2 rounded cursor-pointer ${isAdded ? 'opacity-50 cursor-default' : 'hover:bg-white'}`}>
-                                                        <div className={`w-4 h-4 border rounded mr-3 flex items-center justify-center ${isAdded ? 'bg-zinc-300 border-zinc-300' : 'border-zinc-300 bg-white'}`}>
-                                                            {isAdded && <Check className="w-3 h-3 text-white" />}
-                                                        </div>
-                                                        <span className="text-xs font-bold text-zinc-700">{p.name}</span>
-                                                    </div>
-                                                );
-                                            })}
-                                        </div>
-                                    </div>
+                        <h2 className="text-4xl font-black text-zinc-900 tracking-tighter mb-2">{award.title}</h2>
+                        <p className="text-xl font-bold text-zinc-500 mb-4">{award.organization}</p>
+                        {award.link && (
+                            <a href={award.link} target="_blank" rel="noopener noreferrer" className="inline-flex items-center text-xs font-bold text-blue-600 hover:underline">
+                                <ExternalLink className="w-3 h-3 mr-1" /> Official Website
+                            </a>
+                        )}
+                    </div>
+                    <div className="space-y-8 flex-1">
+                        <div>
+                            <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-3">About Award</h3>
+                            <p className="text-sm text-zinc-600 leading-relaxed whitespace-pre-wrap">
+                                {award.description || "No description provided."}
+                            </p>
+                        </div>
+                        <div className="pt-8 border-t border-zinc-100">
+                            <div className="flex justify-between items-center mb-4">
+                                <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest flex items-center">
+                                    Winners Gallery
+                                    <span className="bg-zinc-100 text-zinc-600 px-2 py-0.5 rounded-full text-[10px] ml-2">{relatedProducts.length}</span>
+                                </h3>
+                                {isAdmin && (
+                                    <button onClick={() => setIsAddingProduct(!isAddingProduct)} className="text-[10px] font-bold text-indigo-600 border border-indigo-200 px-3 py-1.5 rounded hover:bg-indigo-50 transition-colors">
+                                        {isAddingProduct ? 'Done' : '+ Add Winner'}
+                                    </button>
                                 )}
-                                <div className="grid grid-cols-2 md:grid-cols-3 gap-4 max-h-80 overflow-y-auto custom-scrollbar p-1 pb-10">
-                                    {relatedProducts.length > 0 ? relatedProducts.map(p => {
-                                        const historyItem = p.awardHistory?.find(h => h.awardId === award.id);
-                                        const year = historyItem ? historyItem.year : (p.launchDate?.substring(0, 4) || '-');
-                                        return (
-                                            <button key={p.id} onClick={() => onNavigateProduct(p)} className="flex flex-col p-3 rounded-xl border border-zinc-100 hover:border-zinc-300 hover:bg-zinc-50 transition-all text-left group bg-white shadow-sm">
-                                                <div className="aspect-[4/3] w-full rounded-lg bg-zinc-50 overflow-hidden mb-3 flex items-center justify-center">
-                                                    {p.images?.[0] ? <img src={typeof p.images[0] === 'object' ? p.images[0].url : p.images[0]} className="w-full h-full object-contain mix-blend-multiply" /> : <div className="w-full h-full bg-zinc-200"></div>}
-                                                </div>
-                                                <div>
-                                                    <div className="text-sm font-bold text-zinc-900 truncate group-hover:text-blue-600">{p.name}</div>
-                                                    <div className="flex justify-between items-center mt-1">
-                                                        <span className="text-[10px] text-zinc-400 uppercase">{p.category}</span>
-                                                        <span className="text-[10px] font-bold text-yellow-600 bg-yellow-50 px-1.5 py-0.5 rounded">{year}</span>
+                            </div>
+                            {isAdmin && isAddingProduct && (
+                                <div className="mb-6 bg-zinc-50 p-4 rounded-xl border border-zinc-200 animate-in slide-in-from-top-2">
+                                    <div className="flex gap-2 mb-2">
+                                        <input
+                                            type="text"
+                                            placeholder="Search products..."
+                                            className="flex-1 text-xs p-2 bg-white rounded-lg border border-zinc-200 outline-none"
+                                            value={productFilter}
+                                            onChange={(e) => setProductFilter(e.target.value)}
+                                        />
+                                        <input
+                                            type="number"
+                                            className="w-20 text-xs p-2 bg-white rounded-lg border border-zinc-200 outline-none text-center"
+                                            value={awardYear}
+                                            onChange={(e) => setAwardYear(e.target.value)}
+                                            placeholder="Year"
+                                        />
+                                    </div>
+                                    <div className="max-h-40 overflow-y-auto space-y-1 custom-scrollbar">
+                                        {products.filter(p => p.name.toLowerCase().includes(productFilter.toLowerCase())).map(p => {
+                                            const isAdded = p.awardHistory?.some(h => h.awardId === award.id);
+                                            return (
+                                                <div key={p.id} onClick={() => !isAdded && addProductToAward(p)} className={`flex items-center p-2 rounded cursor-pointer ${isAdded ? 'opacity-50 cursor-default' : 'hover:bg-white'}`}>
+                                                    <div className={`w-4 h-4 border rounded mr-3 flex items-center justify-center ${isAdded ? 'bg-zinc-300 border-zinc-300' : 'border-zinc-300 bg-white'}`}>
+                                                        {isAdded && <Check className="w-3 h-3 text-white" />}
                                                     </div>
+                                                    <span className="text-xs font-bold text-zinc-700">{p.name}</span>
                                                 </div>
-                                            </button>
-                                        );
-                                    }) : (
-                                        <div className="col-span-full text-center py-12 text-zinc-300 text-sm border-2 border-dashed border-zinc-100 rounded-xl">No winners yet.</div>
-                                    )}
+                                            );
+                                        })}
+                                    </div>
                                 </div>
+                            )}
+                            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 max-h-80 overflow-y-auto custom-scrollbar p-1 pb-10">
+                                {relatedProducts.length > 0 ? relatedProducts.map(p => {
+                                    const historyItem = p.awardHistory?.find(h => h.awardId === award.id);
+                                    const year = historyItem ? historyItem.year : (p.launchDate?.substring(0, 4) || '-');
+                                    return (
+                                        <button key={p.id} onClick={() => onNavigateProduct(p)} className="flex flex-col p-3 rounded-xl border border-zinc-100 hover:border-zinc-300 hover:bg-zinc-50 transition-all text-left group bg-white shadow-sm">
+                                            <div className="aspect-[4/3] w-full rounded-lg bg-zinc-50 overflow-hidden mb-3 flex items-center justify-center">
+                                                {p.images?.[0] ? <img src={typeof p.images[0] === 'object' ? p.images[0].url : p.images[0]} className="w-full h-full object-contain mix-blend-multiply" /> : <div className="w-full h-full bg-zinc-200"></div>}
+                                            </div>
+                                            <div>
+                                                <div className="text-sm font-bold text-zinc-900 truncate group-hover:text-blue-600">{p.name}</div>
+                                                <div className="flex justify-between items-center mt-1">
+                                                    <span className="text-[10px] text-zinc-400 uppercase">{p.category}</span>
+                                                    <span className="text-[10px] font-bold text-yellow-600 bg-yellow-50 px-1.5 py-0.5 rounded">{year}</span>
+                                                </div>
+                                            </div>
+                                        </button>
+                                    );
+                                }) : (
+                                    <div className="col-span-full text-center py-12 text-zinc-300 text-sm border-2 border-dashed border-zinc-100 rounded-xl">No winners yet.</div>
+                                )}
                             </div>
                         </div>
                     </div>
