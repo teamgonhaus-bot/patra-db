@@ -38,8 +38,8 @@ const YOUR_FIREBASE_CONFIG = {
 // ----------------------------------------------------------------------
 // 상수 및 설정
 // ----------------------------------------------------------------------
-const APP_VERSION = "v0.8.91";
-const BUILD_DATE = "2026.01.29";
+const APP_VERSION = "v0.8.9";
+const BUILD_DATE = "2026.01.27";
 const ADMIN_PASSWORD = "adminlcg1";
 
 // Firebase 초기화
@@ -1136,7 +1136,7 @@ export default function App() {
                             setActiveCategory={setActiveCategory}
                             setSelectedProduct={setSelectedProduct}
                             setSelectedAward={setSelectedAward}
-                            scenes={allScenes}
+                            scenes={scenes}
                             isAdmin={isAdmin}
                             bannerData={bannerData}
                             onBannerUpload={handleBannerUpload}
@@ -1492,11 +1492,11 @@ export default function App() {
 // Helper Components
 // ----------------------------------------------------------------------
 
-// V 0.8.91: Conditional margin - mb-12 expanded, mb-4 collapsed for uniform spacing
+// V 0.8.91: Conditional margin - mb-4 when expanded, mb-2 when collapsed
 function CollapsibleSection({ title, count, children, defaultExpanded = true }) {
     const [isExpanded, setIsExpanded] = useState(defaultExpanded);
     return (
-        <div className={isExpanded ? 'mb-12' : 'mb-4'}>
+        <div className="mb-12">
             <div className={`flex items-center border-b border-zinc-100 pb-2 cursor-pointer hover:opacity-70 ${isExpanded ? 'mb-4' : 'mb-2'}`} onClick={() => setIsExpanded(!isExpanded)}>
                 <h4 className="text-lg font-bold text-zinc-800">{title}</h4>
                 <span className="ml-3 text-xs font-medium text-zinc-400 bg-zinc-50 px-2 py-0.5 rounded-full">{count}</span>
