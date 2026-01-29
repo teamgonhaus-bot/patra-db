@@ -38,7 +38,7 @@ const YOUR_FIREBASE_CONFIG = {
 // ----------------------------------------------------------------------
 // 상수 및 설정
 // ----------------------------------------------------------------------
-const APP_VERSION = "v0.8.92";
+const APP_VERSION = "v0.8.91";
 const BUILD_DATE = "2026.01.29";
 const ADMIN_PASSWORD = "adminlcg1";
 
@@ -1160,7 +1160,6 @@ export default function App() {
                             products={products}
                             spaces={SPACES}
                             spaceContents={spaceContents}
-                            scenes={allScenes}
                             swatches={swatches}
                             awards={awards}
                             onProductClick={(p) => setSelectedProduct(p)}
@@ -1885,12 +1884,16 @@ function CompareView({ products, hiddenIds, onToggleVisibility, onRemove, onEdit
     );
 }
 
-// V 0.8.92: Added scenes prop for correct scene favorites
-function MyPickView({ favorites, products, spaces, spaceContents, scenes = [], swatches, awards, onProductClick, onSceneClick, onSwatchClick, onAwardClick, onToggleFavorite }) {
+function MyPickView({ favorites, products, spaces, spaceContents, swatches, awards, onProductClick, onSceneClick, onSwatchClick, onAwardClick, onToggleFavorite }) {
     // Group favorites
     const favProducts = products.filter(p => favorites.includes(p.id));
-    // V 0.8.92: Use passed scenes (already merged) instead of legacy spaceContents
-    const favScenes = scenes.filter(s => favorites.includes(s.id));
+    const favScenes = [];
+    SPACES.forEach(space => {
+        const content = spaceContents[space.id] || {};
+        (content.scenes || []).forEach(scene => {
+            if (favorites.includes(scene.id)) favScenes.push({ ...scene, spaceId: space.id });
+        });
+    });
     const favSwatches = swatches.filter(s => favorites.includes(s.id));
     const favAwards = awards ? awards.filter(a => favorites.includes(a.id)) : [];
 
@@ -2123,10 +2126,10 @@ function SwatchManager({ category, swatches, isAdmin, onSave, onDelete, onSelect
                                         <button onClick={(e) => handleEditClick(e, swatch)} className="p-1.5 bg-white rounded-full shadow hover:text-blue-600"><Edit2 className="w-3 h-3" /></button>
                                         <button onClick={(e) => { e.stopPropagation(); onDelete(swatch.id); }} className="p-1.5 bg-white rounded-full shadow hover:text-red-600"><Trash2 className="w-3 h-3" /></button>
                                     </div>
-                                    {/* V 0.8.92: Fixed - use swatches (full list) with correct index lookup */}
+                                    {/* V 0.8.73: Admin Move Buttons */}
                                     <div className="absolute bottom-2 left-2 flex gap-1 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
-                                        <button onClick={(e) => { e.stopPropagation(); onReorder('swatches', swatches, swatches.findIndex(s => s.id === swatch.id), 'left') }} className="p-1 bg-white rounded-full shadow hover:bg-black hover:text-white"><ArrowLeft className="w-3 h-3" /></button>
-                                        <button onClick={(e) => { e.stopPropagation(); onReorder('swatches', swatches, swatches.findIndex(s => s.id === swatch.id), 'right') }} className="p-1 bg-white rounded-full shadow hover:bg-black hover:text-white"><ArrowRight className="w-3 h-3" /></button>
+                                        <button onClick={(e) => { e.stopPropagation(); onReorder('swatches', filteredSwatches, idx, 'left') }} className="p-1 bg-white rounded-full shadow hover:bg-black hover:text-white"><ArrowLeft className="w-3 h-3" /></button>
+                                        <button onClick={(e) => { e.stopPropagation(); onReorder('swatches', filteredSwatches, idx, 'right') }} className="p-1 bg-white rounded-full shadow hover:bg-black hover:text-white"><ArrowRight className="w-3 h-3" /></button>
                                     </div>
                                 </>
                             )}
@@ -3160,27 +3163,14 @@ function ProductDetailModal({ product, allProducts, swatches, spaceContents, awa
 
     const handleShareImage = async () => { /* ... */ };
 
-    // V 0.8.92: Bidirectional related products tagging
     const toggleRelatedProduct = async (pid) => {
         const currentIds = product.relatedProductIds || [];
-        const isRemoving = currentIds.includes(pid);
-        const newIds = isRemoving ? currentIds.filter(id => id !== pid) : [...currentIds, pid];
+        let newIds;
+        if (currentIds.includes(pid)) newIds = currentIds.filter(id => id !== pid);
+        else newIds = [...currentIds, pid];
 
-        // Update current product
         const updatedProduct = { ...product, relatedProductIds: newIds };
         await onSaveProduct(updatedProduct);
-
-        // V 0.8.92: Bidirectional update - update target product too
-        const targetProduct = allProducts.find(p => String(p.id) === String(pid));
-        if (targetProduct) {
-            const targetIds = targetProduct.relatedProductIds || [];
-            const updatedTargetIds = isRemoving
-                ? targetIds.filter(id => String(id) !== String(product.id))
-                : targetIds.some(id => String(id) === String(product.id)) ? targetIds : [...targetIds, product.id];
-            if (JSON.stringify(targetIds) !== JSON.stringify(updatedTargetIds)) {
-                await onSaveProduct({ ...targetProduct, relatedProductIds: updatedTargetIds });
-            }
-        }
     };
 
     const handleAddAward = async () => {
@@ -4213,10 +4203,9 @@ function AwardsManager({ awards, products, isAdmin, onSave, onDelete, onSelect, 
                                         <button onClick={(e) => { e.stopPropagation(); setEditingAward(award); setIsModalOpen(true); }} className="p-1.5 bg-white rounded-full shadow hover:text-blue-600"><Edit2 className="w-3 h-3" /></button>
                                         <button onClick={(e) => { e.stopPropagation(); onDelete(award.id); }} className="p-1.5 bg-white rounded-full shadow hover:text-red-600"><Trash2 className="w-3 h-3" /></button>
                                     </div>
-                                    {/* V 0.8.92: Fixed - use awards (full list) with correct index lookup */}
                                     <div className="absolute bottom-2 left-2 flex gap-1 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
-                                        <button onClick={(e) => { e.stopPropagation(); onReorder('awards', awards, awards.findIndex(a => a.id === award.id), 'left') }} className="p-1 bg-white rounded-full shadow hover:bg-black hover:text-white"><ArrowLeft className="w-3 h-3" /></button>
-                                        <button onClick={(e) => { e.stopPropagation(); onReorder('awards', awards, awards.findIndex(a => a.id === award.id), 'right') }} className="p-1 bg-white rounded-full shadow hover:bg-black hover:text-white"><ArrowRight className="w-3 h-3" /></button>
+                                        <button onClick={(e) => { e.stopPropagation(); onReorder('awards', filteredAwards, idx, 'left') }} className="p-1 bg-white rounded-full shadow hover:bg-black hover:text-white"><ArrowLeft className="w-3 h-3" /></button>
+                                        <button onClick={(e) => { e.stopPropagation(); onReorder('awards', filteredAwards, idx, 'right') }} className="p-1 bg-white rounded-full shadow hover:bg-black hover:text-white"><ArrowRight className="w-3 h-3" /></button>
                                     </div>
                                 </>
                             )}
