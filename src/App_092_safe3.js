@@ -38,7 +38,7 @@ const YOUR_FIREBASE_CONFIG = {
 // ----------------------------------------------------------------------
 // 상수 및 설정
 // ----------------------------------------------------------------------
-const APP_VERSION = "v0.8.93";
+const APP_VERSION = "v0.8.92";
 const BUILD_DATE = "2026.01.29";
 const ADMIN_PASSWORD = "adminlcg1";
 
@@ -2570,13 +2570,12 @@ function PieChartComponent({ data, total, selectedIndex, onSelect }) {
                             {/* Connecting Line - Removed V 0.8.88 */}
 
                             {/* Label - V 0.8.88: Responsive positioning - No Guide Lines */}
-                            {/* Label - V 0.8.93: Responsive positioning with CSS variable */}
                             <div
-                                className={`absolute ${fontSize} font-bold pointer-events-none whitespace-nowrap transition-all duration-300 md:[--radius:155px] [--radius:110px]`}
+                                className={`absolute ${fontSize} font-bold pointer-events-none whitespace-nowrap transition-all duration-300`}
                                 style={{
                                     left: '50%', top: '50%',
                                     color: item.color,
-                                    transform: `translate(calc(-50% + ${tx} * var(--radius))), calc(-50% + ${ty} * var(--radius)))`,
+                                    transform: `translate(calc(-50% + ${tx * 155}px), calc(-50% + ${ty * 155}px))`,
                                     opacity: isSelected || selectedIndex === null ? 1 : 0.4
                                 }}
                             >
@@ -2658,8 +2657,7 @@ function DashboardView({ products, favorites, awards, swatches, spaceContents, s
             ...subset.flatMap(p => p.upholsteryColors || [])
         ].filter(c => typeof c === 'object').map(c => c.materialCode).filter(Boolean))];
 
-        // V 0.8.93: Fix double counting - prefer awardHistory loop or length, fallback to awards length
-        const awardCount = subset.reduce((acc, p) => acc + (p.awardHistory?.length || p.awards?.length || 0), 0);
+        const awardCount = subset.reduce((acc, p) => acc + (p.awards?.length || 0) + (p.awardHistory?.length || 0), 0);
 
         // V 0.8.87: Make Year - Descending Sort
         const yearCounts = {};
@@ -2787,7 +2785,7 @@ function DashboardView({ products, favorites, awards, swatches, spaceContents, s
 
                                         <div className="bg-zinc-50 p-3 rounded-xl border border-zinc-100 relative group cursor-pointer" onClick={() => setOpenReportDropdown(openReportDropdown === 'NEW' ? null : 'NEW')}>
                                             <div className="flex justify-between items-center">
-                                                <span className="text-[10px] text-zinc-400 uppercase font-bold block mb-1">New</span>
+                                                <span className="text-[10px] text-zinc-400 uppercase font-bold block mb-1">New Gen</span>
                                                 <ChevronDown className={`w-3 h-3 text-zinc-400 transition-transform ${openReportDropdown === 'NEW' ? 'rotate-180' : ''}`} />
                                             </div>
                                             <span className="text-xl font-black text-zinc-900">{sliceDetails.products.filter(p => p.isNew).length}</span>
@@ -3911,36 +3909,33 @@ function SwatchSelector({ label, selected, swatches, onChange }) {
             </div>
 
             {isOpen && (
-                <>
-                    <div className="fixed inset-0 bg-black/20 z-[190]" onClick={() => setIsOpen(false)}></div>
-                    <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[200] mt-0 w-[90%] md:w-[400px] bg-white rounded-xl shadow-2xl border border-zinc-200 p-4 animate-in zoom-in-95">
-                        <div className="flex justify-between items-center mb-3">
-                            <h4 className="font-bold text-sm">Select Material</h4>
-                            <button onClick={() => setIsOpen(false)}><X className="w-4 h-4 text-zinc-400 hover:text-black" /></button>
-                        </div>
-
-                        <div className="flex gap-1 overflow-x-auto pb-2 mb-2 custom-scrollbar">
-                            <button type="button" onClick={() => setActiveTab('ALL')} className={`px-2 py-1 rounded text-[10px] font-bold whitespace-nowrap ${activeTab === 'ALL' ? 'bg-black text-white' : 'bg-zinc-100'}`}>ALL</button>
-                            {SWATCH_CATEGORIES.map(c => (
-                                <button key={c.id} type="button" onClick={() => setActiveTab(c.id)} className={`px-2 py-1 rounded text-[10px] font-bold whitespace-nowrap ${activeTab === c.id ? 'bg-black text-white' : 'bg-zinc-100'}`}>{c.label}</button>
-                            ))}
-                        </div>
-
-                        <input placeholder="Search materials..." value={filter} onChange={e => setFilter(e.target.value)} className="w-full text-xs p-2 bg-zinc-50 rounded border mb-3 outline-none" />
-
-                        <div className="grid grid-cols-5 gap-2 max-h-48 overflow-y-auto custom-scrollbar">
-                            {filteredSwatches.map(s => (
-                                <button key={s.id} type="button" onClick={() => handleSelect(s)} className="flex flex-col items-center group">
-                                    <div className="w-8 h-8 rounded-full border overflow-hidden relative">
-                                        {s.image ? <img src={s.image} className="w-full h-full object-cover" /> : <div className="w-full h-full" style={{ backgroundColor: s.hex }}></div>}
-                                        <div className="absolute inset-0 bg-black/20 hidden group-hover:flex items-center justify-center"><Plus className="w-4 h-4 text-white" /></div>
-                                    </div>
-                                    <span className="text-[9px] text-zinc-500 truncate w-full text-center mt-1">{s.materialCode || s.name}</span>
-                                </button>
-                            ))}
-                        </div>
+                <div className="absolute top-full left-0 z-50 mt-2 w-full md:w-[400px] bg-white rounded-xl shadow-xl border border-zinc-200 p-4">
+                    <div className="flex justify-between items-center mb-3">
+                        <h4 className="font-bold text-sm">Select Material</h4>
+                        <button onClick={() => setIsOpen(false)}><X className="w-4 h-4 text-zinc-400 hover:text-black" /></button>
                     </div>
-                </>
+
+                    <div className="flex gap-1 overflow-x-auto pb-2 mb-2 custom-scrollbar">
+                        <button type="button" onClick={() => setActiveTab('ALL')} className={`px-2 py-1 rounded text-[10px] font-bold whitespace-nowrap ${activeTab === 'ALL' ? 'bg-black text-white' : 'bg-zinc-100'}`}>ALL</button>
+                        {SWATCH_CATEGORIES.map(c => (
+                            <button key={c.id} type="button" onClick={() => setActiveTab(c.id)} className={`px-2 py-1 rounded text-[10px] font-bold whitespace-nowrap ${activeTab === c.id ? 'bg-black text-white' : 'bg-zinc-100'}`}>{c.label}</button>
+                        ))}
+                    </div>
+
+                    <input placeholder="Search materials..." value={filter} onChange={e => setFilter(e.target.value)} className="w-full text-xs p-2 bg-zinc-50 rounded border mb-3 outline-none" />
+
+                    <div className="grid grid-cols-5 gap-2 max-h-48 overflow-y-auto custom-scrollbar">
+                        {filteredSwatches.map(s => (
+                            <button key={s.id} type="button" onClick={() => handleSelect(s)} className="flex flex-col items-center group">
+                                <div className="w-8 h-8 rounded-full border overflow-hidden relative">
+                                    {s.image ? <img src={s.image} className="w-full h-full object-cover" /> : <div className="w-full h-full" style={{ backgroundColor: s.hex }}></div>}
+                                    <div className="absolute inset-0 bg-black/20 hidden group-hover:flex items-center justify-center"><Plus className="w-4 h-4 text-white" /></div>
+                                </div>
+                                <span className="text-[9px] text-zinc-500 truncate w-full text-center mt-1">{s.materialCode || s.name}</span>
+                            </button>
+                        ))}
+                    </div>
+                </div>
             )}
         </div>
     );
@@ -4330,15 +4325,13 @@ function AwardDetailModal({ award, products, onClose, onNavigateProduct, onSaveP
                     <button onClick={onClose} className="p-2 bg-white/50 hover:bg-zinc-100 rounded-full backdrop-blur shadow-sm"><X className="w-6 h-6 text-zinc-900" /></button>
                 </div>
                 {/* V 0.8.92: Scrollable wrapper for mobile - whole card scrolls */}
-                {/* V 0.8.92: Scrollable wrapper for mobile - whole card scrolls */}
-                {/* V 0.8.93: Independent scrolling for desktop right side */}
-                <div className="flex-1 overflow-hidden flex flex-col md:flex-row">
-                    <div className="w-full md:w-4/12 bg-zinc-50 flex items-center justify-center p-8 relative min-h-[30vh] shrink-0 md:overflow-y-auto custom-scrollbar">
+                <div className="flex-1 overflow-y-auto flex flex-col md:flex-row">
+                    <div className="w-full md:w-4/12 bg-zinc-50 flex items-center justify-center p-8 relative min-h-[30vh] shrink-0">
                         <div className="w-48 h-48 md:w-64 md:h-64 flex items-center justify-center">
                             {award.image ? <img src={award.image} className="w-full h-full object-contain" /> : <Trophy className="w-24 h-24 text-zinc-300" />}
                         </div>
                     </div>
-                    <div className="w-full md:w-8/12 bg-white p-8 md:p-12 flex flex-col pb-safe md:overflow-y-auto custom-scrollbar">
+                    <div className="w-full md:w-8/12 bg-white p-8 md:p-12 flex flex-col pb-safe">
                         <div className="mb-8">
                             <div className="flex gap-2 mb-3">
                                 {award.tags?.map(t => <span key={t} className="inline-block px-2 py-0.5 bg-zinc-100 text-zinc-600 text-[10px] font-bold rounded uppercase tracking-widest">{t}</span>)}
