@@ -133,10 +133,11 @@ const TEXTURE_TYPES = [
     { id: 'MATTE', label: 'Matte' }
 ];
 
-// V 0.8.92: Scroll lock with event-based prevention for mobile/desktop
+// V 0.8.92: Scroll lock with main content area locking
 // Uses reference counting for nested modals
 let scrollLockCount = 0;
 let savedScrollY = 0;
+let savedMainScrollY = 0;
 
 function useScrollLock() {
     useEffect(() => {
@@ -153,6 +154,13 @@ function useScrollLock() {
             document.body.style.top = `-${savedScrollY}px`;
             document.body.style.width = '100%';
             document.body.style.height = '100%';
+
+            // V 0.8.92: Also lock the main content scroll area
+            const mainContent = document.getElementById('main-scroll-content');
+            if (mainContent) {
+                savedMainScrollY = mainContent.scrollTop;
+                mainContent.style.overflow = 'hidden';
+            }
         }
 
         return () => {
@@ -167,6 +175,13 @@ function useScrollLock() {
                 document.body.style.width = '';
                 document.body.style.height = '';
                 window.scrollTo(0, savedScrollY);
+
+                // V 0.8.92: Restore main content scroll
+                const mainContent = document.getElementById('main-scroll-content');
+                if (mainContent) {
+                    mainContent.style.overflow = '';
+                    mainContent.scrollTop = savedMainScrollY;
+                }
             }
         };
     }, []);
@@ -1159,7 +1174,7 @@ export default function App() {
                     </div>
                 )}
 
-                <div ref={mainContentRef} className="flex-1 overflow-y-auto p-4 md:p-8 custom-scrollbar relative print:overflow-visible print:p-0 pb-20 md:pb-16">
+                <div id="main-scroll-content" ref={mainContentRef} className="flex-1 overflow-y-auto p-4 md:p-8 custom-scrollbar relative print:overflow-visible print:p-0 pb-20 md:pb-16">
                     {activeCategory === 'DASHBOARD' && !searchTerm && searchTags.length === 0 && !filters.year && !filters.color ? (
                         <DashboardView
                             products={products}
