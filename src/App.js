@@ -133,36 +133,43 @@ const TEXTURE_TYPES = [
     { id: 'MATTE', label: 'Matte' }
 ];
 
-// V 0.8.92: Enhanced scroll lock to completely prevent background scroll
+// V 0.8.92: Enhanced scroll lock - locks ALL scrollable elements
 function useScrollLock() {
     useEffect(() => {
         const scrollY = window.scrollY;
 
-        // Store original styles
-        const originalBodyOverflow = document.body.style.overflow;
-        const originalBodyPosition = document.body.style.position;
-        const originalBodyTop = document.body.style.top;
-        const originalBodyWidth = document.body.style.width;
-        const originalHtmlOverflow = document.documentElement.style.overflow;
+        // Create a style element that locks all scrolling
+        const styleId = 'scroll-lock-style';
+        let styleEl = document.getElementById(styleId);
+        if (!styleEl) {
+            styleEl = document.createElement('style');
+            styleEl.id = styleId;
+            styleEl.textContent = `
+                body.scroll-locked,
+                body.scroll-locked * {
+                    touch-action: none !important;
+                }
+                body.scroll-locked {
+                    overflow: hidden !important;
+                    position: fixed !important;
+                    width: 100% !important;
+                    height: 100% !important;
+                }
+                body.scroll-locked .overflow-y-auto,
+                body.scroll-locked .custom-scrollbar {
+                    overflow: hidden !important;
+                }
+            `;
+            document.head.appendChild(styleEl);
+        }
 
-        // Lock body
-        document.body.style.overflow = 'hidden';
-        document.body.style.position = 'fixed';
+        // Apply the lock class
+        document.body.classList.add('scroll-locked');
         document.body.style.top = `-${scrollY}px`;
-        document.body.style.width = '100%';
-
-        // Also lock html element for complete prevention
-        document.documentElement.style.overflow = 'hidden';
 
         return () => {
-            // Restore original styles
-            document.body.style.overflow = originalBodyOverflow;
-            document.body.style.position = originalBodyPosition;
-            document.body.style.top = originalBodyTop;
-            document.body.style.width = originalBodyWidth;
-            document.documentElement.style.overflow = originalHtmlOverflow;
-
-            // Restore scroll position
+            document.body.classList.remove('scroll-locked');
+            document.body.style.top = '';
             window.scrollTo(0, scrollY);
         };
     }, []);
@@ -332,11 +339,17 @@ export default function App() {
         return () => window.removeEventListener('popstate', handlePopState);
     }, [selectedProduct, selectedSwatch, activeCategory, previousCategory]);
 
+    // V 0.8.92: Clear URL when modal closes, push when modal opens
     useEffect(() => {
         if (selectedProduct) {
             const url = new URL(window.location);
             url.searchParams.set('id', selectedProduct.id);
             window.history.pushState({ modal: 'product' }, '', url);
+        } else {
+            // Clear URL when modal closes
+            if (window.location.search.includes('id=')) {
+                window.history.replaceState(null, '', window.location.pathname);
+            }
         }
     }, [selectedProduct]);
 
@@ -856,39 +869,48 @@ export default function App() {
         }
     };
 
-    // V 0.8.92: Fixed - properly swap orderIndex values
+    // V 0.8.92: Complete rewrite - use fractional orderIndex for stable positioning
     const handleMoveItem = async (collectionName, items, index, direction, parentId = null) => {
         const targetIndex = direction === 'left' ? index - 1 : index + 1;
         if (targetIndex < 0 || targetIndex >= items.length) return;
 
-        const itemA = items[index];
-        const itemB = items[targetIndex];
+        const itemA = items[index]; // Item being moved
+        const itemB = items[targetIndex]; // Item being displaced
 
-        // V 0.8.92: Get current orderIndex, use index*10 as fallback for proper spacing
-        const orderA = itemA.orderIndex !== undefined ? itemA.orderIndex : index * 10;
-        const orderB = itemB.orderIndex !== undefined ? itemB.orderIndex : targetIndex * 10;
+        // Calculate new orderIndex values that will result in proper swap
+        // The key is to give itemA an orderIndex that places it BEFORE itemB (for left)
+        // or AFTER itemB (for right) in the sorted list
+        let newOrderA, newOrderB;
 
-        // Simply swap the orderIndex values
-        const newOrderA = orderB;
-        const newOrderB = orderA;
+        if (direction === 'left') {
+            // Moving left: itemA should come before itemB
+            // Give itemA a value less than itemB's current value
+            const prevItemOrder = targetIndex > 0 ? (items[targetIndex - 1].orderIndex ?? (targetIndex - 1) * 100) : -100;
+            const itemBOrder = itemB.orderIndex ?? targetIndex * 100;
+            newOrderA = (prevItemOrder + itemBOrder) / 2; // Place between prev item and itemB
+            newOrderB = itemB.orderIndex ?? targetIndex * 100; // itemB keeps its position or gets assigned
+        } else {
+            // Moving right: itemA should come after itemB
+            const nextItemOrder = targetIndex < items.length - 1 ? (items[targetIndex + 1].orderIndex ?? (targetIndex + 1) * 100) : (targetIndex + 1) * 100;
+            const itemBOrder = itemB.orderIndex ?? targetIndex * 100;
+            newOrderA = (itemBOrder + nextItemOrder) / 2; // Place between itemB and next item
+            newOrderB = itemB.orderIndex ?? targetIndex * 100;
+        }
 
-        // Optimistic Update - update only the two swapped items in the state
+        // Optimistic Update - update only the moved item in the state
         if (collectionName === 'products') {
             setProducts(prev => prev.map(p => {
                 if (p.id === itemA.id) return { ...p, orderIndex: newOrderA };
-                if (p.id === itemB.id) return { ...p, orderIndex: newOrderB };
                 return p;
             }));
         } else if (collectionName === 'swatches') {
             setSwatches(prev => prev.map(s => {
                 if (s.id === itemA.id) return { ...s, orderIndex: newOrderA };
-                if (s.id === itemB.id) return { ...s, orderIndex: newOrderB };
                 return s;
             }));
         } else if (collectionName === 'awards') {
             setAwards(prev => prev.map(a => {
                 if (a.id === itemA.id) return { ...a, orderIndex: newOrderA };
-                if (a.id === itemB.id) return { ...a, orderIndex: newOrderB };
                 return a;
             }));
         } else if (collectionName === 'scenes' && parentId) {
@@ -904,7 +926,7 @@ export default function App() {
             });
         }
 
-        // Update Firebase with only the two swapped items
+        // Update Firebase with only the moved item
         await handlePairSwap(collectionName, { ...itemA, orderIndex: newOrderA }, { ...itemB, orderIndex: newOrderB }, parentId);
     };
 
