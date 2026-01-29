@@ -2123,10 +2123,10 @@ function SwatchManager({ category, swatches, isAdmin, onSave, onDelete, onSelect
                                         <button onClick={(e) => handleEditClick(e, swatch)} className="p-1.5 bg-white rounded-full shadow hover:text-blue-600"><Edit2 className="w-3 h-3" /></button>
                                         <button onClick={(e) => { e.stopPropagation(); onDelete(swatch.id); }} className="p-1.5 bg-white rounded-full shadow hover:text-red-600"><Trash2 className="w-3 h-3" /></button>
                                     </div>
-                                    {/* V 0.8.92: Use filteredSwatches with display idx for correct visual swap */}
+                                    {/* V 0.8.92: Fixed - use swatches (full list) with correct index lookup */}
                                     <div className="absolute bottom-2 left-2 flex gap-1 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
-                                        <button onClick={(e) => { e.stopPropagation(); onReorder('swatches', filteredSwatches, idx, 'left') }} className="p-1 bg-white rounded-full shadow hover:bg-black hover:text-white"><ArrowLeft className="w-3 h-3" /></button>
-                                        <button onClick={(e) => { e.stopPropagation(); onReorder('swatches', filteredSwatches, idx, 'right') }} className="p-1 bg-white rounded-full shadow hover:bg-black hover:text-white"><ArrowRight className="w-3 h-3" /></button>
+                                        <button onClick={(e) => { e.stopPropagation(); onReorder('swatches', swatches, swatches.findIndex(s => s.id === swatch.id), 'left') }} className="p-1 bg-white rounded-full shadow hover:bg-black hover:text-white"><ArrowLeft className="w-3 h-3" /></button>
+                                        <button onClick={(e) => { e.stopPropagation(); onReorder('swatches', swatches, swatches.findIndex(s => s.id === swatch.id), 'right') }} className="p-1 bg-white rounded-full shadow hover:bg-black hover:text-white"><ArrowRight className="w-3 h-3" /></button>
                                     </div>
                                 </>
                             )}
@@ -4213,10 +4213,10 @@ function AwardsManager({ awards, products, isAdmin, onSave, onDelete, onSelect, 
                                         <button onClick={(e) => { e.stopPropagation(); setEditingAward(award); setIsModalOpen(true); }} className="p-1.5 bg-white rounded-full shadow hover:text-blue-600"><Edit2 className="w-3 h-3" /></button>
                                         <button onClick={(e) => { e.stopPropagation(); onDelete(award.id); }} className="p-1.5 bg-white rounded-full shadow hover:text-red-600"><Trash2 className="w-3 h-3" /></button>
                                     </div>
-                                    {/* V 0.8.92: Use filteredAwards with display idx for correct visual swap */}
+                                    {/* V 0.8.92: Fixed - use awards (full list) with correct index lookup */}
                                     <div className="absolute bottom-2 left-2 flex gap-1 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
-                                        <button onClick={(e) => { e.stopPropagation(); onReorder('awards', filteredAwards, idx, 'left') }} className="p-1 bg-white rounded-full shadow hover:bg-black hover:text-white"><ArrowLeft className="w-3 h-3" /></button>
-                                        <button onClick={(e) => { e.stopPropagation(); onReorder('awards', filteredAwards, idx, 'right') }} className="p-1 bg-white rounded-full shadow hover:bg-black hover:text-white"><ArrowRight className="w-3 h-3" /></button>
+                                        <button onClick={(e) => { e.stopPropagation(); onReorder('awards', awards, awards.findIndex(a => a.id === award.id), 'left') }} className="p-1 bg-white rounded-full shadow hover:bg-black hover:text-white"><ArrowLeft className="w-3 h-3" /></button>
+                                        <button onClick={(e) => { e.stopPropagation(); onReorder('awards', awards, awards.findIndex(a => a.id === award.id), 'right') }} className="p-1 bg-white rounded-full shadow hover:bg-black hover:text-white"><ArrowRight className="w-3 h-3" /></button>
                                     </div>
                                 </>
                             )}
