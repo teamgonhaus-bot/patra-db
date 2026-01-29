@@ -38,7 +38,7 @@ const YOUR_FIREBASE_CONFIG = {
 // ----------------------------------------------------------------------
 // 상수 및 설정
 // ----------------------------------------------------------------------
-const APP_VERSION = "v0.8.9";
+const APP_VERSION = "v0.8.89";
 const BUILD_DATE = "2026.01.27";
 const ADMIN_PASSWORD = "adminlcg1";
 
@@ -962,21 +962,6 @@ export default function App() {
     };
     const processedProducts = getProcessedProducts();
 
-    // V 0.8.9: Merge scenes from both sources (new scenes collection + legacy spaceContents)
-    const allScenes = useMemo(() => {
-        const scenesMap = new Map();
-        // Add legacy scenes from spaceContents (keyed by spaceId)
-        SPACES.forEach(space => {
-            const content = spaceContents[space.id] || {};
-            (content.scenes || []).forEach(s => {
-                scenesMap.set(s.id, { ...s, spaceId: space.id });
-            });
-        });
-        // Add/override with new scenes collection (these have spaceId field)
-        scenes.forEach(s => scenesMap.set(s.id, s));
-        return Array.from(scenesMap.values());
-    }, [scenes, spaceContents]);
-
     // --- Navigation ---
     const handleNavigateNext = () => { if (!selectedProduct) return; const currentIndex = processedProducts.findIndex(p => p.id === selectedProduct.id); if (currentIndex >= 0 && currentIndex < processedProducts.length - 1) { setSelectedProduct(processedProducts[currentIndex + 1]); } };
     const handleNavigatePrev = () => { if (!selectedProduct) return; const currentIndex = processedProducts.findIndex(p => p.id === selectedProduct.id); if (currentIndex > 0) { setSelectedProduct(processedProducts[currentIndex - 1]); } };
@@ -1135,8 +1120,6 @@ export default function App() {
                             spaceContents={spaceContents}
                             setActiveCategory={setActiveCategory}
                             setSelectedProduct={setSelectedProduct}
-                            setSelectedAward={setSelectedAward}
-                            scenes={scenes}
                             isAdmin={isAdmin}
                             bannerData={bannerData}
                             onBannerUpload={handleBannerUpload}
@@ -1173,7 +1156,6 @@ export default function App() {
                             products={processedProducts}
                             categories={CATEGORIES.filter(c => !c.isSpecial)}
                             spaces={SPACES}
-                            scenes={allScenes}
                             spaceContents={spaceContents}
                             materials={swatches}
                             materialCategories={SWATCH_CATEGORIES}
@@ -1207,7 +1189,6 @@ export default function App() {
                             type={activeCategory}
                             spaces={SPACES}
                             spaceContents={spaceContents}
-                            scenes={allScenes}
                             collections={CATEGORIES.filter(c => !c.isSpecial)}
                             materials={SWATCH_CATEGORIES}
                             products={products}
@@ -1230,15 +1211,14 @@ export default function App() {
                                 <SpaceDetailView
                                     space={SPACES.find(s => s.id === activeCategory)}
                                     spaceContent={spaceContents[activeCategory] || {}}
-                                    additionalScenes={allScenes}
+                                    additionalScenes={scenes}
                                     isAdmin={isAdmin}
                                     activeTag={activeSpaceTag}
                                     setActiveTag={setActiveSpaceTag}
                                     onBannerUpload={(e) => handleSpaceBannerUpload(e, activeCategory)}
                                     onEditInfo={() => setEditingSpaceInfoId(activeCategory)}
                                     // V 0.8.88: Removed onManageProducts
-                                    // V 0.8.9: Auto-tag scene with active filter
-                                    onAddScene={() => setEditingScene({ isNew: true, spaceId: activeCategory, tags: activeSpaceTag !== 'ALL' ? [activeSpaceTag] : [] })}
+                                    onAddScene={() => setEditingScene({ isNew: true, spaceId: activeCategory })}
                                     onViewScene={(scene) => setSelectedScene({ ...scene, spaceId: activeCategory })}
                                     productCount={processedProducts.length}
                                     searchTerm={searchTerm}
@@ -1492,12 +1472,11 @@ export default function App() {
 // Helper Components
 // ----------------------------------------------------------------------
 
-// V 0.8.91: Conditional margin - mb-4 when expanded, mb-2 when collapsed
 function CollapsibleSection({ title, count, children, defaultExpanded = true }) {
     const [isExpanded, setIsExpanded] = useState(defaultExpanded);
     return (
         <div className="mb-12">
-            <div className={`flex items-center border-b border-zinc-100 pb-2 cursor-pointer hover:opacity-70 ${isExpanded ? 'mb-4' : 'mb-2'}`} onClick={() => setIsExpanded(!isExpanded)}>
+            <div className="flex items-center mb-4 border-b border-zinc-100 pb-2 cursor-pointer hover:opacity-70" onClick={() => setIsExpanded(!isExpanded)}>
                 <h4 className="text-lg font-bold text-zinc-800">{title}</h4>
                 <span className="ml-3 text-xs font-medium text-zinc-400 bg-zinc-50 px-2 py-0.5 rounded-full">{count}</span>
                 <div className="ml-auto">
@@ -1514,8 +1493,7 @@ function CollapsibleSection({ title, count, children, defaultExpanded = true }) 
 }
 
 // V 0.8.83: Unified Search Logic Helper
-// V 0.8.91: Added allProducts param for tagged products search in scenes
-const checkSearchMatch = (item, type, searchTerm, searchTags, filters = {}, allProducts = []) => {
+const checkSearchMatch = (item, type, searchTerm, searchTags, filters = {}) => {
     // 1. Text Search Construction
     let textFields = [];
     if (type === 'product' || !type) {
@@ -1531,12 +1509,7 @@ const checkSearchMatch = (item, type, searchTerm, searchTags, filters = {}, allP
             item.description, ...colorCodes // Add description and color codes
         ];
     } else if (type === 'scene') {
-        // V 0.8.91: Include tagged product names in scene search
-        const taggedProductNames = (item.productIds || [])
-            .map(pid => allProducts.find(p => String(p.id) === String(pid)))
-            .filter(Boolean)
-            .map(p => p.name);
-        textFields = [item.title, item.description, ...(item.tags || []), ...taggedProductNames];
+        textFields = [item.title, item.description, ...(item.tags || [])];
     } else if (type === 'material' || type === 'swatch') {
         textFields = [item.name, item.materialCode, item.group, item.category, ...(item.tags || [])];
     } else if (type === 'award') {
@@ -1568,10 +1541,10 @@ const checkSearchMatch = (item, type, searchTerm, searchTags, filters = {}, allP
     return matchesSearch && matchesTags && matchesFilter;
 };
 
-function TotalView({ products, categories, spaces, scenes, spaceContents, materials, materialCategories, onProductClick, onSceneClick, onSwatchClick, searchTerm, searchTags, filters, favorites, onToggleFavorite, onCompareToggle, compareList }) {
+function TotalView({ products, categories, spaces, spaceContents, materials, materialCategories, onProductClick, onSceneClick, onSwatchClick, searchTerm, searchTags, filters, favorites, onToggleFavorite, onCompareToggle, compareList }) {
+    // Filter Logic
     // Filter Logic - V 0.8.83: Uses unified checkSearchMatch
-    // V 0.8.91: Pass products array for scene tagged products search
-    const filterItem = (item, type) => checkSearchMatch(item, type, searchTerm, searchTags, filters, type === 'scene' ? products : []);
+    const filterItem = (item, type) => checkSearchMatch(item, type, searchTerm, searchTags, filters);
 
     return (
         <div className="animate-in fade-in slide-in-from-bottom-4 pb-32">
@@ -1587,14 +1560,14 @@ function TotalView({ products, categories, spaces, scenes, spaceContents, materi
                 <h3 className="text-2xl font-black text-zinc-900 mb-6 flex items-center"><Briefcase className="w-6 h-6 mr-2" /> SPACES</h3>
                 <div className="space-y-4">
                     {spaces.map(space => {
-                        // V 0.8.9: Use scenes array for accurate aggregation
-                        const spaceScenes = scenes.filter(s => s.spaceId === space.id).filter(s => filterItem(s, 'scene'));
-                        if (spaceScenes.length === 0) return null;
+                        const content = spaceContents[space.id] || {};
+                        const scenes = (content.scenes || []).filter(s => filterItem(s, 'scene'));
+                        if (scenes.length === 0) return null;
 
                         return (
-                            <CollapsibleSection key={space.id} title={space.label} count={spaceScenes.length}>
+                            <CollapsibleSection key={space.id} title={space.label} count={scenes.length}>
                                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                                    {spaceScenes.map(scene => (
+                                    {scenes.map(scene => (
                                         <div key={scene.id} onClick={() => onSceneClick({ ...scene, spaceId: space.id })} className="group cursor-pointer relative">
                                             <div className="aspect-[4/3] bg-zinc-50 rounded-xl mb-2 overflow-hidden border border-zinc-100 relative">
                                                 <img src={scene.image} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
@@ -1675,7 +1648,7 @@ function TotalView({ products, categories, spaces, scenes, spaceContents, materi
     );
 }
 
-function CategoryRootView({ type, spaces, spaceContents, scenes, collections, materials, products, swatches, onNavigate, onProductClick, onSwatchClick, onSceneClick, searchTerm, searchTags, filters, onCompareToggle, compareList, favorites, onToggleFavorite }) {
+function CategoryRootView({ type, spaces, spaceContents, collections, materials, products, swatches, onNavigate, onProductClick, onSwatchClick, onSceneClick, searchTerm, searchTags, filters, onCompareToggle, compareList, favorites, onToggleFavorite }) {
     let title = "";
     let items = [];
     let icon = null;
@@ -1715,8 +1688,8 @@ function CategoryRootView({ type, spaces, spaceContents, scenes, collections, ma
                     let itemType = '';
 
                     if (type === 'SPACES_ROOT') {
-                        // V 0.8.9: Use scenes array for accurate aggregation
-                        subItems = scenes.filter(s => s.spaceId === item.id);
+                        const content = spaceContents[item.id] || {};
+                        subItems = content.scenes || [];
                         itemType = 'scene';
                     } else if (type === 'COLLECTIONS_ROOT') {
                         subItems = products.filter(p => p.category === item.id);
@@ -2242,7 +2215,7 @@ function SwatchDetailModal({ swatch, allProducts, swatches, onClose, onNavigateP
                             </div>
 
                             {/* Share & Print - V 0.8.85: Match Material Modal Design - V 0.8.87: More space on desktop */}
-                            <div className="pt-8 border-t border-zinc-100 flex gap-3 print:hidden mb-safe mb-2 md:mb-10">
+                            <div className="pt-8 border-t border-zinc-100 flex gap-3 print:hidden mb-safe mb-8 md:mb-10">
                                 <button onClick={handleShareImage} className="flex-1 py-3 bg-zinc-100 text-zinc-600 rounded-xl text-xs font-bold hover:bg-zinc-200 flex items-center justify-center"><ImgIcon className="w-4 h-4 mr-2" /> Share</button>
                                 <button onClick={() => window.print()} className="flex-1 py-3 bg-zinc-100 text-zinc-600 rounded-xl text-xs font-bold hover:bg-zinc-200 flex items-center justify-center"><Printer className="w-4 h-4 mr-2" /> PDF</button>
                             </div>
@@ -2583,7 +2556,7 @@ function CompactStatsBar({ spacesCount, productsCount, materialsCount, awardsCou
     );
 }
 
-function DashboardView({ products, favorites, awards, swatches, spaceContents, scenes, setActiveCategory, setSelectedProduct, setSelectedAward, isAdmin, bannerData, onBannerUpload, onLogoUpload, onBannerTextChange, onSaveBannerText }) {
+function DashboardView({ products, favorites, awards, swatches, spaceContents, setActiveCategory, setSelectedProduct, isAdmin, bannerData, onBannerUpload, onLogoUpload, onBannerTextChange, onSaveBannerText }) {
     const totalCount = products.length; const newCount = products.filter(p => p.isNew).length; const pickCount = favorites.length;
     const categoryCounts = []; let totalStandardProducts = 0;
     CATEGORIES.filter(c => !c.isSpecial).forEach(c => { const count = products.filter(p => p.category === c.id).length; if (count > 0) { categoryCounts.push({ ...c, count }); totalStandardProducts += count; } });
@@ -2653,8 +2626,8 @@ function DashboardView({ products, favorites, awards, swatches, spaceContents, s
         }).filter(a => a.winners.length > 0);
     }, [awards, products]);
 
-    // V 0.8.5: Calculate Counts for Stats Bar - V 0.8.9: Use allScenes for accurate count
-    const spacesCount = scenes.length;
+    // V 0.8.5: Calculate Counts for Stats Bar
+    const spacesCount = Object.values(spaceContents).reduce((acc, content) => acc + (content.scenes?.length || 0), 0);
     const materialsCount = swatches.length;
     const totalAwardWinners = awardStats.reduce((acc, stat) => acc + stat.winners.length, 0);
 
@@ -2841,7 +2814,7 @@ function DashboardView({ products, favorites, awards, swatches, spaceContents, s
                     </div>
                     <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
                         {awardStats.map(stat => (
-                            <div key={stat.id} onClick={() => setSelectedAward(stat)} className="bg-zinc-50 rounded-xl border border-zinc-200 p-4 cursor-pointer hover:border-zinc-300 hover:bg-zinc-100 transition-all group">
+                            <div key={stat.id} className="bg-zinc-50 rounded-xl border border-zinc-200 p-4">
                                 <div className="flex items-center justify-between mb-3">
                                     <div className="flex items-center min-w-0">
                                         {stat.image ? <img src={stat.image} className="w-8 h-8 object-contain mr-2 flex-shrink-0" /> : <Trophy className="w-8 h-8 text-zinc-300 mr-2 flex-shrink-0" />}
@@ -2922,11 +2895,10 @@ function SpaceDetailView({ space, spaceContent, additionalScenes = [], activeTag
     const tags = spaceContent.tags || space.defaultTags || [];
 
     // Filter Scenes based on Tag AND Search - V 0.8.83: Unified unified checkSearchMatch
-    // V 0.8.91: Pass products for tagged products search
     const filteredScenes = scenes.filter(s => {
         const matchesTag = activeTag === 'ALL' || (s.tags && s.tags.includes(activeTag));
-        // V 0.8.91: Include products for tagged product name search
-        const matchesSearch = checkSearchMatch(s, 'scene', searchTerm, searchTags, {}, products);
+        // V 0.8.83: Unified Search
+        const matchesSearch = checkSearchMatch(s, 'scene', searchTerm, searchTags);
         return matchesTag && matchesSearch;
     });
 
@@ -3444,14 +3416,14 @@ function ProductDetailModal({ product, allProducts, swatches, spaceContents, awa
                                 </div>
                             ))}</div></div>)}
 
-                            <div className="md:hidden pt-4 border-t border-zinc-100 flex gap-3 print:hidden mb-safe mb-2">
+                            <div className="md:hidden pt-4 border-t border-zinc-100 flex gap-3 print:hidden mb-safe">
                                 <button onClick={handleShareImage} className="flex-1 py-3 bg-zinc-100 text-zinc-600 rounded-xl text-xs font-bold hover:bg-zinc-200 flex items-center justify-center"><ImgIcon className="w-4 h-4 mr-2" /> Share</button>
                                 <button onClick={() => window.print()} className="flex-1 py-3 bg-zinc-100 text-zinc-600 rounded-xl text-xs font-bold hover:bg-zinc-200 flex items-center justify-center"><Printer className="w-4 h-4 mr-2" /> PDF</button>
                             </div>
 
                         </div>
 
-                        <div className="hidden md:flex pt-6 border-t border-zinc-100 justify-end gap-3 print:hidden mb-10">
+                        <div className="hidden md:flex pt-6 border-t border-zinc-100 justify-end gap-3 print:hidden">
                             <button onClick={handleShareImage} className="px-6 py-3 bg-zinc-100 text-zinc-600 rounded-xl text-sm font-bold hover:bg-zinc-200 transition-colors shadow-sm flex items-center"><ImgIcon className="w-4 h-4 mr-2" /> Share</button>
                             <button onClick={() => window.print()} className="px-6 py-3 bg-zinc-100 text-zinc-600 rounded-xl text-sm font-bold hover:bg-zinc-200 transition-colors shadow-sm flex items-center"><Printer className="w-4 h-4 mr-2" /> PDF</button>
                         </div>
@@ -4128,7 +4100,7 @@ function SpaceSceneModal({ scene, products, allProducts, isAdmin, onClose, onEdi
                             )}
 
                             {/* V 0.8.85: Match Material Modal Design and Spacing */}
-                            <div className="pt-4 border-t border-zinc-100 flex gap-3 print:hidden mb-safe mb-2 md:mb-10">
+                            <div className="pt-4 border-t border-zinc-100 flex gap-3 print:hidden mb-safe mb-8">
                                 <button onClick={handleShareImage} className="flex-1 py-3 bg-zinc-100 text-zinc-600 rounded-xl text-xs font-bold hover:bg-zinc-200 flex items-center justify-center"><ImgIcon className="w-4 h-4 mr-2" /> Share</button>
                                 <button onClick={() => window.print()} className="flex-1 py-3 bg-zinc-100 text-zinc-600 rounded-xl text-xs font-bold hover:bg-zinc-200 flex items-center justify-center"><Printer className="w-4 h-4 mr-2" /> PDF</button>
                             </div>
