@@ -133,7 +133,7 @@ const TEXTURE_TYPES = [
     { id: 'MATTE', label: 'Matte' }
 ];
 
-// V 0.8.92: Scroll lock - only locks main page, NOT modal content
+// V 0.8.92: Scroll lock with event-based prevention for mobile/desktop
 // Uses reference counting for nested modals
 let scrollLockCount = 0;
 let savedScrollY = 0;
@@ -146,26 +146,13 @@ function useScrollLock() {
             // First modal - save scroll position and lock
             savedScrollY = window.scrollY;
 
-            // Create style if not exists
-            const styleId = 'scroll-lock-style';
-            let styleEl = document.getElementById(styleId);
-            if (!styleEl) {
-                styleEl = document.createElement('style');
-                styleEl.id = styleId;
-                // Only lock body and main content, NOT modal overlays (z-index > 100)
-                styleEl.textContent = `
-                    body.scroll-locked {
-                        overflow: hidden !important;
-                        position: fixed !important;
-                        width: 100% !important;
-                        height: 100% !important;
-                    }
-                `;
-                document.head.appendChild(styleEl);
-            }
-
-            document.body.classList.add('scroll-locked');
+            // Lock html and body
+            document.documentElement.style.overflow = 'hidden';
+            document.body.style.overflow = 'hidden';
+            document.body.style.position = 'fixed';
             document.body.style.top = `-${savedScrollY}px`;
+            document.body.style.width = '100%';
+            document.body.style.height = '100%';
         }
 
         return () => {
@@ -173,8 +160,12 @@ function useScrollLock() {
 
             if (scrollLockCount === 0) {
                 // Last modal closed - restore scroll
-                document.body.classList.remove('scroll-locked');
+                document.documentElement.style.overflow = '';
+                document.body.style.overflow = '';
+                document.body.style.position = '';
                 document.body.style.top = '';
+                document.body.style.width = '';
+                document.body.style.height = '';
                 window.scrollTo(0, savedScrollY);
             }
         };
@@ -3992,7 +3983,7 @@ function SceneEditModal({ initialData, allProducts, spaceTags = [], spaceOptions
     };
 
     return (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[80] flex items-center justify-center p-4 animate-in fade-in zoom-in-95 duration-300">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4 animate-in fade-in zoom-in-95 duration-300">
             <div className="bg-white w-full max-w-2xl rounded-2xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
                 <div className="px-6 py-4 border-b border-zinc-100 flex justify-between items-center bg-white z-10">
                     <h3 className="text-lg font-bold text-zinc-900">{!initialData.id ? 'New Scene' : 'Edit Scene'}</h3>
