@@ -4023,12 +4023,14 @@ function ProductFormModal({ categories, swatches = [], allProducts = [], awards 
                             label="Body Colors"
                             selected={formData.bodyColors}
                             swatches={swatches.filter(s => ['RESIN', 'METAL', 'WOOD'].includes(s.category))}
+                            allowedCategories={['RESIN', 'METAL', 'WOOD']}
                             onChange={(newColors) => setFormData({ ...formData, bodyColors: newColors })}
                         />
                         <SwatchSelector
                             label="Upholstery Colors"
                             selected={formData.upholsteryColors}
                             swatches={swatches.filter(s => ['MESH', 'FABRIC', 'LEATHER', 'ETC'].includes(s.category))}
+                            allowedCategories={['MESH', 'FABRIC', 'LEATHER', 'ETC']}
                             onChange={(newColors) => setFormData({ ...formData, upholsteryColors: newColors })}
                         />
                     </div>
@@ -4066,7 +4068,7 @@ function ProductFormModal({ categories, swatches = [], allProducts = [], awards 
     );
 }
 
-function SwatchSelector({ label, selected, swatches, onChange }) {
+function SwatchSelector({ label, selected, swatches, onChange, allowedCategories }) {
     const [isOpen, setIsOpen] = useState(false);
     const [filter, setFilter] = useState('');
     const [activeTab, setActiveTab] = useState('ALL');
@@ -4142,7 +4144,7 @@ function SwatchSelector({ label, selected, swatches, onChange }) {
 
                     <div className="flex gap-1 overflow-x-auto pb-2 mb-2 custom-scrollbar">
                         <button type="button" onClick={() => setActiveTab('ALL')} className={`px-2 py-1 rounded text-[10px] font-bold whitespace-nowrap ${activeTab === 'ALL' ? 'bg-black text-white' : 'bg-zinc-100'}`}>ALL</button>
-                        {SWATCH_CATEGORIES.map(c => (
+                        {SWATCH_CATEGORIES.filter(c => !allowedCategories || allowedCategories.includes(c.id)).map(c => (
                             <button key={c.id} type="button" onClick={() => setActiveTab(c.id)} className={`px-2 py-1 rounded text-[10px] font-bold whitespace-nowrap ${activeTab === c.id ? 'bg-black text-white' : 'bg-zinc-100'}`}>{c.label}</button>
                         ))}
                     </div>
