@@ -38,8 +38,8 @@ const YOUR_FIREBASE_CONFIG = {
 // ----------------------------------------------------------------------
 // 상수 및 설정
 // ----------------------------------------------------------------------
-const APP_VERSION = "v0.8.92";
-const BUILD_DATE = "2026.01.29";
+const APP_VERSION = "v0.8.93";
+const BUILD_DATE = "2026.01.30";
 const ADMIN_PASSWORD = "adminlcg1";
 
 // Firebase 초기화
@@ -759,18 +759,58 @@ export default function App() {
     const handleSaveProduct = async (productData) => {
         const docId = productData.id ? String(productData.id) : String(Date.now());
         const isEdit = !!productData.id && products.some(p => String(p.id) === docId);
+
+        // V 0.8.93: Mutual Tagging Logic
+        // Calculate diff in relatedProductIds to update OTHER products
+        const oldProduct = products.find(p => String(p.id) === docId);
+        const oldRelated = oldProduct?.relatedProductIds || [];
+        const newRelated = productData.relatedProductIds || [];
+
+        // IDs to ADD: Present in new, not in old
+        const addedIds = newRelated.filter(id => !oldRelated.includes(id));
+        // IDs to REMOVE: Present in old, not in new
+        const removedIds = oldRelated.filter(id => !newRelated.includes(id));
+
         const payload = {
             ...productData,
             id: docId,
             updatedAt: Date.now(),
-            createdAt: isEdit ? (products.find(p => String(p.id) === docId)?.createdAt || Date.now()) : Date.now(),
-            orderIndex: isEdit ? (products.find(p => String(p.id) === docId)?.orderIndex || Date.now()) : Date.now()
+            createdAt: isEdit ? (oldProduct?.createdAt || Date.now()) : Date.now(),
+            orderIndex: isEdit ? (oldProduct?.orderIndex || Date.now()) : Date.now()
         };
 
         if (isFirebaseAvailable && db) {
             try {
+                const batch = writeBatch(db);
+                // 1. Save current product
                 const sanitizedPayload = sanitizeForFirebase(payload);
-                await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'products', docId), sanitizedPayload, { merge: true });
+                batch.set(doc(db, 'artifacts', appId, 'public', 'data', 'products', docId), sanitizedPayload, { merge: true });
+
+                // 2. Handle Added Mutual Tags
+                for (const targetId of addedIds) {
+                    const targetProduct = products.find(p => String(p.id) === String(targetId));
+                    if (targetProduct) {
+                        const targetRef = doc(db, 'artifacts', appId, 'public', 'data', 'products', String(targetId));
+                        const targetRelated = targetProduct.relatedProductIds || [];
+                        if (!targetRelated.includes(docId)) {
+                            batch.update(targetRef, { relatedProductIds: [...targetRelated, docId] });
+                        }
+                    }
+                }
+
+                // 3. Handle Removed Mutual Tags
+                for (const targetId of removedIds) {
+                    const targetProduct = products.find(p => String(p.id) === String(targetId));
+                    if (targetProduct) {
+                        const targetRef = doc(db, 'artifacts', appId, 'public', 'data', 'products', String(targetId));
+                        const targetRelated = targetProduct.relatedProductIds || [];
+                        if (targetRelated.includes(docId)) {
+                            batch.update(targetRef, { relatedProductIds: targetRelated.filter(id => String(id) !== docId) });
+                        }
+                    }
+                }
+
+                await batch.commit();
             }
             catch (error) {
                 console.error("Product Save Error:", error);
@@ -778,9 +818,37 @@ export default function App() {
                 return;
             }
         } else {
-            const idx = products.findIndex(p => String(p.id) === docId);
+            // Local Storage Mode
             let newProducts = [...products];
-            if (idx >= 0) newProducts[idx] = payload; else newProducts = [payload, ...products];
+
+            // 1. Update Current Product
+            const idx = newProducts.findIndex(p => String(p.id) === docId);
+            if (idx >= 0) newProducts[idx] = payload; else newProducts = [payload, ...newProducts];
+
+            // 2. Handle Added Mutual Tags
+            addedIds.forEach(targetId => {
+                const tIdx = newProducts.findIndex(p => String(p.id) === String(targetId));
+                if (tIdx >= 0) {
+                    const target = newProducts[tIdx];
+                    const targetRelated = target.relatedProductIds || [];
+                    if (!targetRelated.includes(docId)) {
+                        newProducts[tIdx] = { ...target, relatedProductIds: [...targetRelated, docId] };
+                    }
+                }
+            });
+
+            // 3. Handle Removed Mutual Tags
+            removedIds.forEach(targetId => {
+                const tIdx = newProducts.findIndex(p => String(p.id) === String(targetId));
+                if (tIdx >= 0) {
+                    const target = newProducts[tIdx];
+                    const targetRelated = target.relatedProductIds || [];
+                    if (targetRelated.includes(docId)) {
+                        newProducts[tIdx] = { ...target, relatedProductIds: targetRelated.filter(id => String(id) !== docId) };
+                    }
+                }
+            });
+
             saveToLocalStorage(newProducts);
         }
 
@@ -789,7 +857,7 @@ export default function App() {
         if (selectedProduct && String(selectedProduct.id) === docId) setSelectedProduct(payload);
         setIsFormOpen(false);
         setEditingProduct(null);
-        showToast(isEdit ? "수정 완료" : "등록 완료");
+        showToast(isEdit ? "수정 완료 (상호 태그 업데이트됨)" : "등록 완료 (상호 태그 업데이트됨)");
     };
     const handleDeleteProduct = async (productId, productName) => {
         if (!window.confirm('정말 삭제하시겠습니까?')) return;
@@ -2550,16 +2618,15 @@ function PieChartComponent({ data, total, selectedIndex, onSelect }) {
                     const x1 = Math.cos(angleRad) * rSlice;
                     const y1 = Math.sin(angleRad) * rSlice;
 
-                    // V 0.8.88: Responsive label distance - closer on mobile
-                    // Mobile: 0.95, Desktop: 1.05 (closer to donut)
-                    const rLabel = 0.95;
+                    // V 0.8.93: Mobile Spacing Adjustment
+                    const rLabel = 0.9;
                     const x2 = Math.cos(angleRad) * rLabel;
                     const y2 = Math.sin(angleRad) * rLabel;
 
                     // V 0.8.88: Responsive text offset - 90px mobile, 120px desktop
                     // Smaller offset = closer to donut
-                    const tx = Math.cos(angleRad) * 1.08;
-                    const ty = Math.sin(angleRad) * 1.08;
+                    const tx = Math.cos(angleRad) * 1.05;
+                    const ty = Math.sin(angleRad) * 1.05;
 
                     // V 0.8.88: Dynamic font size based on percentage
                     const fontSize = percent < 0.05 ? 'text-[9px] md:text-[10px]' : 'text-[10px] md:text-xs';
@@ -2657,7 +2724,7 @@ function DashboardView({ products, favorites, awards, swatches, spaceContents, s
             ...subset.flatMap(p => p.upholsteryColors || [])
         ].filter(c => typeof c === 'object').map(c => c.materialCode).filter(Boolean))];
 
-        const awardCount = subset.reduce((acc, p) => acc + (p.awards?.length || 0) + (p.awardHistory?.length || 0), 0);
+        const awardCount = subset.reduce((acc, p) => acc + (p.awardHistory?.length || p.awards?.length || 0), 0);
 
         // V 0.8.87: Make Year - Descending Sort
         const yearCounts = {};
@@ -2785,7 +2852,7 @@ function DashboardView({ products, favorites, awards, swatches, spaceContents, s
 
                                         <div className="bg-zinc-50 p-3 rounded-xl border border-zinc-100 relative group cursor-pointer" onClick={() => setOpenReportDropdown(openReportDropdown === 'NEW' ? null : 'NEW')}>
                                             <div className="flex justify-between items-center">
-                                                <span className="text-[10px] text-zinc-400 uppercase font-bold block mb-1">New Gen</span>
+                                                <span className="text-[10px] text-zinc-400 uppercase font-bold block mb-1">New</span>
                                                 <ChevronDown className={`w-3 h-3 text-zinc-400 transition-transform ${openReportDropdown === 'NEW' ? 'rotate-180' : ''}`} />
                                             </div>
                                             <span className="text-xl font-black text-zinc-900">{sliceDetails.products.filter(p => p.isNew).length}</span>
@@ -3793,7 +3860,7 @@ function ProductFormModal({ categories, swatches = [], allProducts = [], awards 
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-zinc-50 p-4 rounded-xl border border-zinc-100">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-10 bg-zinc-50 p-6 rounded-xl border border-zinc-100">
                         <SwatchSelector
                             label="Body Colors"
                             selected={formData.bodyColors}
@@ -4324,14 +4391,14 @@ function AwardDetailModal({ award, products, onClose, onNavigateProduct, onSaveP
                     {isAdmin && <button onClick={onEdit} className="p-2 bg-white/50 hover:bg-zinc-100 rounded-full backdrop-blur shadow-sm"><Edit3 className="w-6 h-6 text-zinc-900" /></button>}
                     <button onClick={onClose} className="p-2 bg-white/50 hover:bg-zinc-100 rounded-full backdrop-blur shadow-sm"><X className="w-6 h-6 text-zinc-900" /></button>
                 </div>
-                {/* V 0.8.92: Scrollable wrapper for mobile - whole card scrolls */}
-                <div className="flex-1 overflow-y-auto flex flex-col md:flex-row">
-                    <div className="w-full md:w-4/12 bg-zinc-50 flex items-center justify-center p-8 relative min-h-[30vh] shrink-0">
+                {/* V 0.8.93: Independent scrolling for desktop */}
+                <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
+                    <div className="w-full md:w-4/12 bg-zinc-50 flex items-center justify-center p-8 relative min-h-[30vh] shrink-0 md:overflow-y-auto custom-scrollbar">
                         <div className="w-48 h-48 md:w-64 md:h-64 flex items-center justify-center">
                             {award.image ? <img src={award.image} className="w-full h-full object-contain" /> : <Trophy className="w-24 h-24 text-zinc-300" />}
                         </div>
                     </div>
-                    <div className="w-full md:w-8/12 bg-white p-8 md:p-12 flex flex-col pb-safe">
+                    <div className="w-full md:w-8/12 bg-white p-8 md:p-12 flex flex-col pb-safe md:overflow-y-auto custom-scrollbar">
                         <div className="mb-8">
                             <div className="flex gap-2 mb-3">
                                 {award.tags?.map(t => <span key={t} className="inline-block px-2 py-0.5 bg-zinc-100 text-zinc-600 text-[10px] font-bold rounded uppercase tracking-widest">{t}</span>)}
