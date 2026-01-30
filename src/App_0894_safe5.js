@@ -1385,8 +1385,6 @@ export default function App() {
                             onToggleFavorite={toggleFavorite}
                             onCompareToggle={toggleCompare}
                             compareList={compareList}
-                            sortOption={sortOption}
-                            sortDirection={sortDirection}
                         />
                     ) : activeCategory === 'AWARDS_ROOT' ? (
                         <AwardsManager
@@ -1790,7 +1788,7 @@ const checkSearchMatch = (item, type, searchTerm, searchTags, filters = {}, allP
     return matchesSearch && matchesTags && matchesFilter;
 };
 
-function TotalView({ products, categories, spaces, scenes, spaceContents, materials, materialCategories, onProductClick, onSceneClick, onSwatchClick, searchTerm, searchTags, filters, favorites, onToggleFavorite, onCompareToggle, compareList, sortOption = 'manual', sortDirection = 'desc' }) {
+function TotalView({ products, categories, spaces, scenes, spaceContents, materials, materialCategories, onProductClick, onSceneClick, onSwatchClick, searchTerm, searchTags, filters, favorites, onToggleFavorite, onCompareToggle, compareList }) {
     // Filter Logic - V 0.8.83: Uses unified checkSearchMatch
     // V 0.8.91: Pass products array for scene tagged products search
     const filterItem = (item, type) => checkSearchMatch(item, type, searchTerm, searchTags, filters, type === 'scene' ? products : []);
@@ -1811,9 +1809,6 @@ function TotalView({ products, categories, spaces, scenes, spaceContents, materi
                     {spaces.map(space => {
                         // V 0.8.9: Use scenes array for accurate aggregation
                         const spaceScenes = scenes.filter(s => s.spaceId === space.id).filter(s => filterItem(s, 'scene'));
-                        // V 0.8.97: Strict Manual Sort for Total View Spaces
-                        spaceScenes.sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0));
-
                         if (spaceScenes.length === 0) return null;
 
                         return (
@@ -1843,17 +1838,6 @@ function TotalView({ products, categories, spaces, scenes, spaceContents, materi
                 <div className="space-y-4">
                     {categories.map(cat => {
                         const catProducts = products.filter(p => p.category === cat.id && filterItem(p, 'product'));
-
-                        // V 0.8.97: Dynamic Sorting for Total View Collections
-                        catProducts.sort((a, b) => {
-                            let comparison = 0;
-                            if (sortOption === 'name') comparison = a.name.localeCompare(b.name);
-                            else if (sortOption === 'launchDate') comparison = parseInt(a.launchDate || 0) - parseInt(b.launchDate || 0);
-                            else if (sortOption === 'manual') comparison = (a.orderIndex || 0) - (b.orderIndex || 0);
-                            else comparison = (a.createdAt || 0) - (b.createdAt || 0);
-                            return sortDirection === 'asc' ? comparison : -comparison;
-                        });
-
                         if (catProducts.length === 0) return null;
 
                         return (
@@ -1884,10 +1868,6 @@ function TotalView({ products, categories, spaces, scenes, spaceContents, materi
                 <div className="space-y-4">
                     {materialCategories.map(cat => {
                         const catSwatches = materials.filter(s => s.category === cat.id && filterItem(s, 'material'));
-
-                        // V 0.8.97: Strict Manual Sort for Total View Materials
-                        catSwatches.sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0));
-
                         if (catSwatches.length === 0) return null;
 
                         return (
@@ -2481,7 +2461,7 @@ function SwatchDetailModal({ swatch, allProducts, swatches, onClose, onNavigateP
 
                 {/* V 0.8.96: Desktop Split Scroll - Main Container Hidden on Desktop */}
                 <div className="flex-1 overflow-y-auto md:overflow-hidden custom-scrollbar flex flex-col md:flex-row h-full pb-safe print:overflow-visible print:h-auto">
-                    <div className="w-full md:w-5/12 bg-zinc-50 flex items-center justify-center p-8 border-b md:border-b-0 md:border-r border-zinc-100 print:static print:bg-white print:border-none min-h-[40vh]">
+                    <div className="w-full md:w-5/12 bg-zinc-50 flex items-center justify-center p-8 border-b md:border-b-0 md:border-r border-zinc-100 md:h-full print:static print:bg-white print:border-none min-h-[40vh]">
                         <div className="w-48 h-48 md:w-64 md:h-64 rounded-full shadow-2xl overflow-hidden border-4 border-white ring-1 ring-black/5 flex items-center justify-center bg-white">
                             <SwatchDisplay color={swatch} size="large" className="w-full h-full scale-100 rounded-full" />
                         </div>
