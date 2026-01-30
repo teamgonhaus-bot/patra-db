@@ -1950,8 +1950,7 @@ function CategoryRootView({ type, spaces, spaceContents, scenes, collections, ma
 
                     // V 0.8.94: Sort items by orderIndex in Hub view
                     // V 0.8.95: Unified sorting for Hub Views
-                    // V 0.8.96: Spaces and Materials must use Manual Sort (orderIndex)
-                    if (type === 'COLLECTIONS_ROOT') {
+                    if (type === 'MATERIALS_ROOT' || type === 'COLLECTIONS_ROOT' || type === 'SPACES_ROOT') {
                         subItems.sort((a, b) => {
                             let comparison = 0;
                             if (sortOption === 'name') comparison = a.name.localeCompare(b.name);
@@ -1960,8 +1959,6 @@ function CategoryRootView({ type, spaces, spaceContents, scenes, collections, ma
                             else comparison = (a.createdAt || 0) - (b.createdAt || 0);
                             return sortDirection === 'asc' ? comparison : -comparison;
                         });
-                    } else if (type === 'MATERIALS_ROOT' || type === 'SPACES_ROOT') {
-                        subItems.sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0));
                     }
 
                     if (subItems.length === 0) return null;
@@ -2421,8 +2418,6 @@ function SwatchManager({ category, swatches, isAdmin, onSave, onDelete, onSelect
 }
 
 function SwatchDetailModal({ swatch, allProducts, swatches, onClose, onNavigateProduct, onNavigateSwatch, isAdmin, onEdit }) {
-    useScrollLock(); // V 0.8.96: Prevent background scroll
-
     const relatedProducts = allProducts.filter(p => {
         const inBody = p.bodyColors?.some(c => typeof c === 'object' && c.id === swatch.id);
         const inUph = p.upholsteryColors?.some(c => typeof c === 'object' && c.id === swatch.id);
@@ -2459,16 +2454,14 @@ function SwatchDetailModal({ swatch, allProducts, swatches, onClose, onNavigateP
                     <button onClick={onClose} className="p-2 bg-white/50 hover:bg-zinc-100 rounded-full backdrop-blur shadow-sm"><X className="w-6 h-6 text-zinc-900" /></button>
                 </div>
 
-                {/* V 0.8.96: Desktop Split Scroll - Main Container Hidden on Desktop */}
-                <div className="flex-1 overflow-y-auto md:overflow-hidden custom-scrollbar flex flex-col md:flex-row h-full pb-safe print:overflow-visible print:h-auto">
-                    <div className="w-full md:w-5/12 bg-zinc-50 flex items-center justify-center p-8 border-b md:border-b-0 md:border-r border-zinc-100 md:h-full print:static print:bg-white print:border-none min-h-[40vh]">
+                <div className="flex-1 overflow-y-auto custom-scrollbar flex flex-col md:flex-row h-full pb-safe print:overflow-visible print:h-auto">
+                    <div className="w-full md:w-5/12 bg-zinc-50 flex items-center justify-center p-8 border-b md:border-b-0 md:border-r border-zinc-100 md:sticky md:top-0 print:static print:bg-white print:border-none min-h-[40vh]">
                         <div className="w-48 h-48 md:w-64 md:h-64 rounded-full shadow-2xl overflow-hidden border-4 border-white ring-1 ring-black/5 flex items-center justify-center bg-white">
                             <SwatchDisplay color={swatch} size="large" className="w-full h-full scale-100 rounded-full" />
                         </div>
                     </div>
 
-                    {/* V 0.8.96: Right Pane Independent Scroll on Desktop */}
-                    <div className="w-full md:w-7/12 bg-white p-6 md:p-10 flex flex-col pb-24 md:pb-10 md:overflow-y-auto md:h-full custom-scrollbar">
+                    <div className="w-full md:w-7/12 bg-white p-6 md:p-10 flex flex-col pb-24 md:pb-10">
                         <div className="mb-6">
                             <div className="flex gap-2 mb-2">
                                 <span className="inline-block px-2.5 py-0.5 bg-zinc-900 text-white text-[10px] font-bold rounded uppercase tracking-widest">{swatch.category}</span>
