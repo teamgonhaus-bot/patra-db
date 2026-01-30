@@ -2361,15 +2361,29 @@ function SwatchManager({ category, swatches, isAdmin, onSave, onDelete, onSelect
 }
 
 function SwatchDetailModal({ swatch, allProducts, swatches, onClose, onNavigateProduct, onNavigateSwatch, isAdmin, onEdit }) {
-    useScrollLock(); // V 0.8.73: Ensure scroll lock
     const relatedProducts = allProducts.filter(p => {
         const inBody = p.bodyColors?.some(c => typeof c === 'object' && c.id === swatch.id);
         const inUph = p.upholsteryColors?.some(c => typeof c === 'object' && c.id === swatch.id);
-        // V 0.8.93 v6: Check Material string array and Tags
-        const inMaterials = p.materials?.some(m => m === swatch.name || m === swatch.materialCode);
-        const inTags = swatch.tags?.some(tag => p.name.includes(tag)) || false; // Basic tag linkage if needed, but mostly material string matches
-        // Also check if product has tags that match swatch name
-        // const matchTag = p.tags?.includes(swatch.name); // Product tags not explicitly defined in main object usually, but let's check basic string array
+
+        // V 0.8.93 v7: Enhanced Material Linkage
+        const sName = swatch.name?.toLowerCase().trim();
+        const sCode = swatch.materialCode?.toLowerCase().trim();
+
+        // 1. Check 'Materials' string list in Product
+        const inMaterials = p.materials?.some(m => {
+            const mat = m.toLowerCase().trim();
+            return mat === sName || (sCode && mat === sCode);
+        });
+
+        // 2. Check Tag Linkage: Swatch Tags vs Product Name/Tags
+        // If Swatch has tags (e.g. "Eco"), check if Product Name contains "Eco" or Product 'materials' contains "Eco"
+        const inTags = swatch.tags?.some(tag => {
+            const t = tag.toLowerCase().trim();
+            if (!t) return false;
+            return p.name.toLowerCase().includes(t) ||
+                p.materials?.some(m => m.toLowerCase().includes(t));
+        }) || false;
+
         return inBody || inUph || inMaterials || inTags;
     });
 
@@ -4491,15 +4505,15 @@ function AwardDetailModal({ award, products, onClose, onNavigateProduct, onSaveP
                     <span className="font-bold text-sm truncate max-w-[200px]">{award.title}</span>
                 </div>
 
-                <div className="flex-1 overflow-y-auto custom-scrollbar flex flex-col md:flex-row h-full pb-safe items-start">
+                <div className="flex-1 flex flex-col md:flex-row h-full pb-safe items-start md:overflow-hidden overflow-y-auto custom-scrollbar">
 
-                    <div className="w-full md:w-5/12 bg-zinc-50 p-8 flex items-center justify-center md:sticky md:top-0 border-b md:border-b-0 md:border-r border-zinc-100 min-h-[30vh] self-start h-auto">
-                        <div className="w-full flex items-center justify-center">
-                            {award.image ? <img src={award.image} className="max-w-full max-h-[50vh] object-contain mix-blend-multiply" /> : <Trophy className="w-32 h-32 text-zinc-200" />}
+                    <div className="w-full md:w-5/12 bg-zinc-50 flex items-center justify-center border-b md:border-b-0 md:border-r border-zinc-100 min-h-[40vh] md:h-full shrink-0">
+                        <div className="w-full h-full flex items-center justify-center p-8">
+                            {award.image ? <img src={award.image} className="max-w-full max-h-[40vh] md:max-h-[60vh] object-contain mix-blend-multiply" /> : <Trophy className="w-32 h-32 text-zinc-200" />}
                         </div>
                     </div>
 
-                    <div className="w-full md:w-7/12 bg-white p-8 md:p-12 pb-24">
+                    <div className="w-full md:w-7/12 bg-white p-8 md:p-12 pb-24 md:h-full md:overflow-y-auto custom-scrollbar">
                         <div className="mb-8">
                             <div className="flex gap-2 mb-3">
                                 {award.tags?.map(t => <span key={t} className="inline-block px-2 py-0.5 bg-zinc-100 text-zinc-600 text-[10px] font-bold rounded uppercase tracking-widest">{t}</span>)}
