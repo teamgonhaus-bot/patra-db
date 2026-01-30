@@ -775,7 +775,14 @@ export default function App() {
         showToast("어워드가 삭제되었습니다.");
     };
 
-    const handleSaveProduct = async (productData) => {
+    const handleSaveProduct = async (inputs) => {
+        // V 0.8.93 v8: Strip Base64 images to optimize storage
+        const optimize = (list) => list?.map(item => {
+            if (typeof item === 'object' && item.image) { const { image, ...rest } = item; return rest; }
+            return item;
+        });
+        const productData = { ...inputs, bodyColors: optimize(inputs.bodyColors), upholsteryColors: optimize(inputs.upholsteryColors) };
+
         const docId = productData.id ? String(productData.id) : String(Date.now());
         const isEdit = !!productData.id && products.some(p => String(p.id) === docId);
 
@@ -3425,7 +3432,7 @@ function ProductDetailModal({ product, allProducts, swatches, spaceContents, awa
     };
 
     return (
-        <div key={product.id} className="fixed inset-0 bg-black/60 backdrop-blur-md z-[200] flex items-center justify-center p-0 md:p-4 animate-in fade-in zoom-in-95 duration-300 print:fixed print:inset-0 print:z-[100] print:bg-white print:h-auto print:overflow-visible">
+        <div key={product.id} className="fixed inset-0 bg-black/60 backdrop-blur-md z-[300] flex items-center justify-center p-0 md:p-4 animate-in fade-in zoom-in-95 duration-300 print:fixed print:inset-0 print:z-[100] print:bg-white print:h-auto print:overflow-visible">
             <canvas ref={canvasRef} style={{ display: 'none' }} />
 
             {isZoomed && currentImageUrl && (
@@ -3552,23 +3559,29 @@ function ProductDetailModal({ product, allProducts, swatches, spaceContents, awa
                                 <div>
                                     <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2">Body Color</h3>
                                     <div className="flex flex-wrap gap-3">
-                                        {product.bodyColors?.map((c, i) => (
-                                            <div key={i} className="flex flex-col items-center gap-1 group cursor-pointer" onClick={(e) => handleSwatchClick(e, c)}>
-                                                <div className="transition-transform group-hover:scale-110"><SwatchDisplay color={c} size="medium" /></div>
-                                                <span className="text-[9px] font-mono text-zinc-400 group-hover:text-black transition-colors">{typeof c === 'object' ? c.materialCode : ''}</span>
-                                            </div>
-                                        ))}
+                                        {product.bodyColors?.map((rawC, i) => {
+                                            const c = (typeof rawC === 'object' && rawC.id) ? (swatches.find(s => s.id === rawC.id) || rawC) : rawC;
+                                            return (
+                                                <div key={i} className="flex flex-col items-center gap-1 group cursor-pointer" onClick={(e) => handleSwatchClick(e, c)}>
+                                                    <div className="transition-transform group-hover:scale-110"><SwatchDisplay color={c} size="medium" /></div>
+                                                    <span className="text-[9px] font-mono text-zinc-400 group-hover:text-black transition-colors">{typeof c === 'object' ? c.materialCode : ''}</span>
+                                                </div>
+                                            );
+                                        })}
                                     </div>
                                 </div>
                                 <div>
                                     <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2">Upholstery Color</h3>
                                     <div className="flex flex-wrap gap-3">
-                                        {product.upholsteryColors?.map((c, i) => (
-                                            <div key={i} className="flex flex-col items-center gap-1 group cursor-pointer" onClick={(e) => handleSwatchClick(e, c)}>
-                                                <div className="transition-transform group-hover:scale-110"><SwatchDisplay color={c} size="medium" /></div>
-                                                <span className="text-[9px] font-mono text-zinc-400 group-hover:text-black transition-colors">{typeof c === 'object' ? c.materialCode : ''}</span>
-                                            </div>
-                                        ))}
+                                        {product.upholsteryColors?.map((rawC, i) => {
+                                            const c = (typeof rawC === 'object' && rawC.id) ? (swatches.find(s => s.id === rawC.id) || rawC) : rawC;
+                                            return (
+                                                <div key={i} className="flex flex-col items-center gap-1 group cursor-pointer" onClick={(e) => handleSwatchClick(e, c)}>
+                                                    <div className="transition-transform group-hover:scale-110"><SwatchDisplay color={c} size="medium" /></div>
+                                                    <span className="text-[9px] font-mono text-zinc-400 group-hover:text-black transition-colors">{typeof c === 'object' ? c.materialCode : ''}</span>
+                                                </div>
+                                            );
+                                        })}
                                     </div>
                                 </div>
                             </div>
@@ -3775,8 +3788,9 @@ function ProductFormModal({ categories, swatches = [], allProducts = [], awards 
                 attachments: existingData.attachments || [],
                 contentImages: normalizeImages(existingData.contentImages || []),
                 spaces: existingData.spaces || [], spaceTags: existingData.spaceTags || [],
-                bodyColors: existingData.bodyColors || [],
-                upholsteryColors: existingData.upholsteryColors || [],
+                spaces: existingData.spaces || [], spaceTags: existingData.spaceTags || [],
+                bodyColors: existingData.bodyColors?.map(c => (typeof c === 'object' && c.id && swatches.find(s => s.id === c.id)) ? { ...c, image: swatches.find(s => s.id === c.id).image } : c) || [],
+                upholsteryColors: existingData.upholsteryColors?.map(c => (typeof c === 'object' && c.id && swatches.find(s => s.id === c.id)) ? { ...c, image: swatches.find(s => s.id === c.id).image } : c) || [],
                 relatedProductIds: existingData.relatedProductIds || [],
                 awardHistory: existingData.awardHistory || []
             });
