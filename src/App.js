@@ -226,6 +226,7 @@ export default function App() {
 
     // Selection & Compare (Stacked Modals)
     const [selectedProduct, setSelectedProduct] = useState(null);
+    const [selectedScene, setSelectedScene] = useState(null);
     const [selectedSwatch, setSelectedSwatch] = useState(null);
     const [selectedAward, setSelectedAward] = useState(null);
     const [compareList, setCompareList] = useState([]);
@@ -237,6 +238,7 @@ export default function App() {
     const [editingProduct, setEditingProduct] = useState(null);
     const [editingSwatchFromModal, setEditingSwatchFromModal] = useState(null);
     const [editingAwardFromModal, setEditingAwardFromModal] = useState(null);
+    const [editingScene, setEditingScene] = useState(null); // { isNew, spaceId, tags }
 
     const [isLoading, setIsLoading] = useState(true);
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -258,37 +260,56 @@ export default function App() {
     // Space/Scene Editing
     const [editingSpaceInfoId, setEditingSpaceInfoId] = useState(null);
     // V 0.8.88: Removed managingSpaceProductsId
-    const [editingScene, setEditingScene] = useState(null);
-    const [selectedScene, setSelectedScene] = useState(null);
-
     // V 0.8.74: Modal Navigation History
-    const [modalHistory, setModalHistory] = useState([]);
+    const [modalHistory, setModalHistory] = useState([]); // V 0.8.93 v4: Global Modal History
 
-    const pushModal = (type, data) => {
-        setModalHistory(prev => [...prev, { type, data }]);
+    const prevFilters = useRef(filters);
+
+    // V 0.8.93 v4: Modal History Logic
+    const handleOpenModal = (type, data) => {
+        // Push current active modal to history if exists
+        let currentModal = null;
+        if (selectedProduct) currentModal = { type: 'product', data: selectedProduct };
+        else if (selectedScene) currentModal = { type: 'scene', data: selectedScene };
+        else if (selectedSwatch) currentModal = { type: 'swatch', data: selectedSwatch };
+        else if (selectedAward) currentModal = { type: 'award', data: selectedAward };
+
+        if (currentModal) {
+            setModalHistory(prev => [...prev, currentModal]);
+        }
+
+        // Close all first to ensure clean switch (optional, but good for z-index reset)
+        setSelectedProduct(null);
+        setSelectedScene(null);
+        setSelectedSwatch(null);
+        setSelectedAward(null);
+
+        // Open new
+        if (type === 'product') setSelectedProduct(data);
+        else if (type === 'scene') setSelectedScene(data);
+        else if (type === 'swatch') setSelectedSwatch(data);
+        else if (type === 'award') setSelectedAward(data);
     };
 
-    const popModal = () => {
-        if (modalHistory.length === 0) return null;
-        const prev = modalHistory[modalHistory.length - 1];
-        setModalHistory(h => h.slice(0, -1));
-        return prev;
-    };
+    const handleCloseModal = (type) => {
+        // Close current
+        if (type === 'product') setSelectedProduct(null);
+        else if (type === 'scene') setSelectedScene(null);
+        else if (type === 'swatch') setSelectedSwatch(null);
+        else if (type === 'award') setSelectedAward(null);
 
-    const closeWithHistory = (currentType) => {
-        // Close current modal
-        if (currentType === 'product') setSelectedProduct(null);
-        else if (currentType === 'swatch') setSelectedSwatch(null);
-        else if (currentType === 'award') setSelectedAward(null);
-        else if (currentType === 'scene') setSelectedScene(null);
+        // Check history
+        if (modalHistory.length > 0) {
+            const last = modalHistory[modalHistory.length - 1];
+            setModalHistory(prev => prev.slice(0, -1));
 
-        // Restore previous modal from history
-        const prev = popModal();
-        if (prev) {
-            if (prev.type === 'product') setSelectedProduct(prev.data);
-            else if (prev.type === 'swatch') setSelectedSwatch(prev.data);
-            else if (prev.type === 'award') setSelectedAward(prev.data);
-            else if (prev.type === 'scene') setSelectedScene(prev.data);
+            // Restore last
+            setTimeout(() => { // Small timeout to allow render cycle to clear
+                if (last.type === 'product') setSelectedProduct(last.data);
+                else if (last.type === 'scene') setSelectedScene(last.data);
+                else if (last.type === 'swatch') setSelectedSwatch(last.data);
+                else if (last.type === 'award') setSelectedAward(last.data);
+            }, 50);
         }
     };
 
@@ -308,10 +329,10 @@ export default function App() {
                 if (editingSpaceInfoId) { setEditingSpaceInfoId(null); return; }
                 if (showAdminDashboard) { setShowAdminDashboard(false); return; }
 
-                if (selectedProduct) { setSelectedProduct(null); return; }
-                if (selectedSwatch) { setSelectedSwatch(null); return; }
-                if (selectedScene) { setSelectedScene(null); return; }
-                if (selectedAward) { setSelectedAward(null); return; }
+                if (selectedProduct) { handleCloseModal('product'); return; }
+                if (selectedSwatch) { handleCloseModal('swatch'); return; }
+                if (selectedScene) { handleCloseModal('scene'); return; }
+                if (selectedAward) { handleCloseModal('award'); return; }
             }
         };
         window.addEventListener('keydown', handleEsc);
@@ -1004,24 +1025,33 @@ export default function App() {
             await handlePairSwap(collectionName, { ...itemA, orderIndex: newOrderA }, { ...itemB, orderIndex: newOrderB }, parentId);
 
         } else if (collectionName === 'scenes' && parentId) {
-            // V 0.8.93 v3: Fix for Scenes - Swap in array and update ENTIRE array via batch
-            setSpaceContents(prev => {
-                const content = { ...prev[parentId] };
-                const scenes = [...(content.scenes || [])];
-                const idxA = scenes.findIndex(s => s.id === itemA.id);
-                const idxB = scenes.findIndex(s => s.id === itemB.id);
+            // V 0.8.93 v4: Check if item is separate scene document (V 0.8.82)
+            const isSeparateScene = scenes.some(s => s.id === itemA.id);
 
-                if (idxA >= 0 && idxB >= 0) {
-                    // Swap elements directly in the array for local state
-                    [scenes[idxA], scenes[idxB]] = [scenes[idxB], scenes[idxA]];
-                }
+            if (isSeparateScene) {
+                // Handle as Separate Collection (fractional index)
+                setScenes(prev => prev.map(s => {
+                    if (s.id === itemA.id) return { ...s, orderIndex: newOrderA };
+                    return s;
+                }));
+                await handlePairSwap('scenes', { ...itemA, orderIndex: newOrderA }, { ...itemB, orderIndex: newOrderB }, parentId);
+            } else {
+                // Legacy: Handle as Space Content Array
+                setSpaceContents(prev => {
+                    const content = { ...prev[parentId] };
+                    const spaceScenes = [...(content.scenes || [])];
+                    const idxA = spaceScenes.findIndex(s => s.id === itemA.id);
+                    const idxB = spaceScenes.findIndex(s => s.id === itemB.id);
 
-                // Important: For scenes, we save the ENTIRE reordered array, not just pair swap
-                handleBatchReorder('scenes', scenes, parentId);
+                    if (idxA >= 0 && idxB >= 0) {
+                        [spaceScenes[idxA], spaceScenes[idxB]] = [spaceScenes[idxB], spaceScenes[idxA]];
+                    }
 
-                return { ...prev, [parentId]: { ...content, scenes } };
-            });
-            // Note: handleBatchReorder calls API, so no need for handlePairSwap here
+                    handleBatchReorder('scenes', spaceScenes, parentId);
+
+                    return { ...prev, [parentId]: { ...content, scenes: spaceScenes } };
+                });
+            }
         }
     };
 
@@ -1216,7 +1246,7 @@ export default function App() {
                         </div>
                     </div>
 
-                    <div className="pt-2"><button onClick={handleMyPickToggle} className={`w-full text-left px-4 py-3 rounded-xl text-sm font-bold transition-all duration-200 flex items-center space-x-3 group border ${activeCategory === 'MY_PICK' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' : 'text-zinc-400 border-transparent hover:bg-zinc-50 hover:text-zinc-600'}`}><Heart className={`w-4 h-4 ${activeCategory === 'MY_PICK' ? 'fill-yellow-500 text-yellow-500' : ''}`} /><span>My Pick ({favorites.length})</span></button></div>
+                    <div className="pt-2"><button onClick={handleMyPickToggle} className={`w-full text-left px-4 py-3 rounded-xl text-sm font-bold transition-all ${activeCategory === 'MY_PICK' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' : 'text-zinc-400 border-transparent hover:bg-zinc-50 hover:text-zinc-600'}`}><Heart className={`w-4 h-4 ${activeCategory === 'MY_PICK' ? 'fill-yellow-500 text-yellow-500' : ''}`} /><span>My Pick ({favorites.length})</span></button></div>
                 </nav>
                 <div className="p-4 border-t border-zinc-100 bg-zinc-50/50 space-y-3">
                     {isAdmin && (<button onClick={() => { fetchLogs(); setShowAdminDashboard(true); }} className="w-full text-[10px] text-blue-600 hover:text-blue-800 flex items-center justify-center font-bold py-1 mb-2 bg-blue-50 rounded border border-blue-100"><Settings className="w-3 h-3 mr-1" /> Dashboard</button>)}
@@ -1340,7 +1370,8 @@ export default function App() {
                             isAdmin={isAdmin}
                             onSave={handleSaveAward}
                             onDelete={handleDeleteAward}
-                            onSelect={(award) => setSelectedAward(award)}
+
+                            onSelect={(award) => handleOpenModal('award', award)}
                             searchTerm={searchTerm}
                             searchTags={searchTags}
                             favorites={favorites}
@@ -1358,9 +1389,9 @@ export default function App() {
                             products={products}
                             swatches={swatches}
                             onNavigate={handleRootNavigate}
-                            onProductClick={(p) => setSelectedProduct(p)}
-                            onSwatchClick={(s) => setSelectedSwatch(s)}
-                            onSceneClick={(s) => setSelectedScene(s)}
+                            onProductClick={(p) => handleOpenModal('product', p)}
+                            onSwatchClick={(s) => handleOpenModal('swatch', s)}
+                            onSceneClick={(s) => handleOpenModal('scene', s)}
                             searchTerm={searchTerm}
                             searchTags={searchTags}
                             filters={filters}
@@ -1368,6 +1399,7 @@ export default function App() {
                             compareList={compareList}
                             favorites={favorites}
                             onToggleFavorite={toggleFavorite}
+                            onOpenModal={handleOpenModal}
                         />
                     ) : (
                         <>
@@ -1389,7 +1421,7 @@ export default function App() {
                                     searchTerm={searchTerm}
                                     searchTags={searchTags}
                                     products={processedProducts}
-                                    onProductClick={(p) => setSelectedProduct(p)}
+                                    onProductClick={(p) => handleOpenModal('product', p)}
                                     favorites={favorites}
                                     onToggleFavorite={toggleFavorite}
                                     onCompareToggle={toggleCompare}
@@ -1404,7 +1436,7 @@ export default function App() {
                                     isAdmin={isAdmin}
                                     onSave={handleSaveSwatch}
                                     onDelete={handleDeleteSwatch}
-                                    onSelect={(swatch) => setSelectedSwatch(swatch)}
+                                    onSelect={(swatch) => handleOpenModal('swatch', swatch)}
                                     onDuplicate={handleDuplicateSwatch}
                                     searchTerm={searchTerm}
                                     searchTags={searchTags}
@@ -1499,26 +1531,16 @@ export default function App() {
                 />
             )}
 
-            {editingSwatchFromModal && (
-                <SwatchFormModal
-                    category={SWATCH_CATEGORIES.find(c => c.id === editingSwatchFromModal.category) || SWATCH_CATEGORIES[0]}
-                    existingData={editingSwatchFromModal}
-                    onClose={() => setEditingSwatchFromModal(null)}
-                    onSave={(data) => { handleSaveSwatch(data); setEditingSwatchFromModal(null); }}
-                />
-            )}
-
+            {/* V 0.8.93 v4: Award Detail Modal - Full Page Scroll Architecture */}
             {selectedAward && (
                 <AwardDetailModal
                     award={selectedAward}
                     products={products}
-                    isAdmin={isAdmin}
-                    onClose={() => setSelectedAward(null)}
-                    onNavigateProduct={(p) => {
-                        setSelectedProduct(p);
-                    }}
+                    onClose={() => handleCloseModal('award')}
+                    onNavigateProduct={(p) => handleOpenModal('product', p)}
                     onSaveProduct={handleSaveProduct}
-                    onEdit={() => { setEditingAwardFromModal(selectedAward); /* V 0.8.92: Keep modal open */ }}
+                    isAdmin={isAdmin}
+                    onEdit={() => { setEditingAwardFromModal(selectedAward); }}
                 />
             )}
 
@@ -1561,15 +1583,15 @@ export default function App() {
                     products={products.filter(p => selectedScene.productIds && selectedScene.productIds.some(id => String(id) === String(p.id)))}
                     allProducts={products}
                     isAdmin={isAdmin}
-                    onClose={() => setSelectedScene(null)}
-                    onEdit={() => { setEditingScene({ ...selectedScene, isNew: false }); /* V 0.8.92: Keep modal open */ }}
+                    onClose={() => handleCloseModal('scene')}
+                    onEdit={() => { setEditingScene({ ...selectedScene, isNew: false }); }}
                     onProductToggle={async (pid, add) => {
                         const newPids = add ? [...(selectedScene.productIds || []), pid] : (selectedScene.productIds || []).filter(id => id !== pid);
                         const updatedScene = { ...selectedScene, productIds: newPids };
                         setSelectedScene(updatedScene);
                         await handleSceneSave(selectedScene.spaceId, updatedScene);
                     }}
-                    onNavigateProduct={(p) => { setSelectedScene(null); setSelectedProduct(p); }}
+                    onNavigateProduct={(p) => handleOpenModal('product', p)}
                     isFavorite={favorites.includes(selectedScene.id)}
                     onToggleFavorite={(e) => toggleFavorite(e, selectedScene.id)}
                 />
@@ -1616,7 +1638,7 @@ export default function App() {
                     swatches={swatches}
                     awards={awards}
                     spaceContents={spaceContents}
-                    onClose={() => setSelectedProduct(null)}
+                    onClose={() => handleCloseModal('product')}
                     onEdit={() => { setEditingProduct(selectedProduct); setIsFormOpen(true); }}
                     isAdmin={isAdmin}
                     showToast={showToast}
@@ -1625,10 +1647,10 @@ export default function App() {
                     onNavigateNext={handleNavigateNext}
                     onNavigatePrev={handleNavigatePrev}
                     onNavigateSpace={(spaceId) => { setSelectedProduct(null); setActiveCategory(spaceId); }}
-                    onNavigateScene={(scene) => { setSelectedProduct(null); setActiveCategory(scene.spaceId || scene.id); setSelectedScene({ ...scene, spaceId: scene.spaceId || 'UNKNOWN' }); }}
-                    onNavigateProduct={(product) => setSelectedProduct(product)}
-                    onNavigateSwatch={(swatch) => { setSelectedSwatch(swatch); /* Stacks on top */ }}
-                    onNavigateAward={handleNavigateToAward}
+                    onNavigateScene={(scene) => handleOpenModal('scene', scene)}
+                    onNavigateProduct={(product) => handleOpenModal('product', product)}
+                    onNavigateSwatch={(swatch) => handleOpenModal('swatch', swatch)}
+                    onNavigateAward={(award) => handleOpenModal('award', award)}
                     onSaveProduct={handleSaveProduct}
                 />
             )}
@@ -3065,7 +3087,7 @@ function SpaceDetailView({ space, spaceContent, additionalScenes = [], activeTag
     const scenesMap = new Map();
     oldScenes.forEach(s => scenesMap.set(s.id, s));
     newScenes.forEach(s => scenesMap.set(s.id, s));
-    const scenes = Array.from(scenesMap.values());
+    const scenes = Array.from(scenesMap.values()).sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0));
     const tags = spaceContent.tags || space.defaultTags || [];
 
     // Filter Scenes based on Tag AND Search - V 0.8.83: Unified unified checkSearchMatch
@@ -3121,25 +3143,15 @@ function SpaceDetailView({ space, spaceContent, additionalScenes = [], activeTag
                 {filteredScenes.length > 0 ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         {filteredScenes.map((scene, idx) => (
-                            <div
-                                key={scene.id}
-                                onClick={() => onViewScene(scene)}
-                                className="group cursor-pointer relative"
-                            >
-                                <div className="aspect-[4/3] bg-zinc-50 rounded-xl mb-2 overflow-hidden border border-zinc-100 relative">
-                                    <img src={scene.image} className="w-full h-full object-cover group-hover:scale-105 transition-transform" alt={scene.title} />
-                                    <button onClick={(e) => onToggleFavorite(e, scene.id)} className="absolute top-2 right-2 p-1.5 bg-white/80 rounded-full text-zinc-300 hover:text-yellow-400 hover:scale-110 transition-all z-10">
-                                        <Star className={`w-3.5 h-3.5 ${favorites.includes(scene.id) ? 'fill-yellow-400 text-yellow-400' : ''}`} />
-                                    </button>
-                                    {/* V 0.8.73: Admin Move Buttons for Scenes */}
-                                    {isAdmin && (
-                                        <div className="absolute bottom-2 left-2 flex gap-1 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
-                                            <button onClick={(e) => { e.stopPropagation(); onReorder('scenes', filteredScenes, idx, 'left', space.id) }} className="p-1 bg-white rounded-full shadow hover:bg-black hover:text-white"><ArrowLeft className="w-3 h-3" /></button>
-                                            <button onClick={(e) => { e.stopPropagation(); onReorder('scenes', filteredScenes, idx, 'right', space.id) }} className="p-1 bg-white rounded-full shadow hover:bg-black hover:text-white"><ArrowRight className="w-3 h-3" /></button>
-                                        </div>
-                                    )}
-                                </div>
-                                <h4 className="text-xs font-bold text-zinc-900 truncate group-hover:text-blue-600">{scene.title}</h4>
+                            <div key={scene.id} className="relative group">
+                                <ProductCard
+                                    product={{ ...scene, name: scene.label || scene.title, images: [scene.image], category: scene.tags ? scene.tags.join(', ') : 'Scene' }}
+                                    onClick={() => onViewScene(scene)}
+                                    showMoveControls={isAdmin && activeTag === 'ALL' && !searchTerm}
+                                    onMove={(direction) => onReorder('scenes', filteredScenes, idx, direction, space.id)}
+                                    isFavorite={favorites.includes(scene.id)}
+                                    onToggleFavorite={(e) => onToggleFavorite(e, scene.id)}
+                                />
                             </div>
                         ))}
                     </div>
@@ -4418,22 +4430,31 @@ function AwardDetailModal({ award, products, onClose, onNavigateProduct, onSaveP
         await onSaveProduct(updatedProduct);
     };
 
+    // V 0.8.93 v4: Material Design Full Screen Dialog Structure
+    // Outer container: Fixed, z-index, handles background dimming and OVERFLOW-Y-AUTO (The Scrollbar)
     return (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[150] flex items-center justify-center p-0 md:p-4 animate-in zoom-in-95 duration-300">
-            <div className="bg-white w-full h-full md:h-auto md:max-w-6xl rounded-none md:rounded-3xl overflow-hidden shadow-2xl flex flex-col md:max-h-[90vh] relative">
-                <div className="absolute top-4 right-4 z-[100] flex gap-2">
-                    {isAdmin && <button onClick={onEdit} className="p-2 bg-white/50 hover:bg-zinc-100 rounded-full backdrop-blur shadow-sm"><Edit3 className="w-6 h-6 text-zinc-900" /></button>}
-                    <button onClick={onClose} className="p-2 bg-white/50 hover:bg-zinc-100 rounded-full backdrop-blur shadow-sm"><X className="w-6 h-6 text-zinc-900" /></button>
-                </div>
-                {/* V 0.8.93 v3: Full Page Scroll (Material Modal Style) */}
-                <div className="flex-1 flex flex-col md:flex-row overflow-y-auto custom-scrollbar md:h-full">
-                    {/* Left Side: Sticky on Desktop */}
-                    <div className="w-full md:w-4/12 bg-zinc-50 flex items-center justify-center p-8 relative min-h-[30vh] shrink-0 md:sticky md:top-0 h-fit">
-                        <div className="w-48 h-48 md:w-64 md:h-64 flex items-center justify-center">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[150] overflow-y-auto custom-scrollbar animate-in zoom-in-95 duration-300">
+            {/* Inner Wrapper: Flex center to position card, min-h-full to allow scrolling */}
+            <div className="flex min-h-full items-center justify-center p-0 md:p-8">
+                {/* The Card: No fixed height, No internal scroll. Just a flex container. */}
+                <div className="bg-white w-full md:max-w-6xl rounded-none md:rounded-3xl overflow-hidden shadow-2xl flex flex-col md:flex-row relative">
+
+                    {/* Close Buttons - Fixed relative to card? No, usually absolute top right of card. */}
+                    <div className="absolute top-4 right-4 z-[100] flex gap-2">
+                        {isAdmin && <button onClick={onEdit} className="p-2 bg-white/50 hover:bg-zinc-100 rounded-full backdrop-blur shadow-sm"><Edit3 className="w-6 h-6 text-zinc-900" /></button>}
+                        <button onClick={onClose} className="p-2 bg-white/50 hover:bg-zinc-100 rounded-full backdrop-blur shadow-sm"><X className="w-6 h-6 text-zinc-900" /></button>
+                    </div>
+
+                    {/* Left Side: Sticky? If we want sticky, we need 'items-start' on parent flex. */}
+                    {/* If we strictly follow "Right side flows", Left side can be sticky. */}
+                    <div className="w-full md:w-4/12 bg-zinc-50 flex items-center justify-center p-8 relative min-h-[30vh] shrink-0">
+                        {/* Note: Sticky within a flex item requires 'self-start' and 'sticky top-0' */}
+                        <div className="w-48 h-48 md:w-64 md:h-64 flex items-center justify-center sticky top-8">
                             {award.image ? <img src={award.image} className="w-full h-full object-contain" /> : <Trophy className="w-24 h-24 text-zinc-300" />}
                         </div>
                     </div>
-                    {/* Right Side: Flows naturally, scroll is on parent */}
+
+                    {/* Right Side: Content flows naturally. NO OVERFLOW HIDDEN/AUTO here. */}
                     <div className="w-full md:w-8/12 bg-white p-8 md:p-12 flex flex-col pb-safe">
                         <div className="mb-8">
                             <div className="flex gap-2 mb-3">
