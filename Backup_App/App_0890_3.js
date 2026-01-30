@@ -38,8 +38,8 @@ const YOUR_FIREBASE_CONFIG = {
 // ----------------------------------------------------------------------
 // 상수 및 설정
 // ----------------------------------------------------------------------
-const APP_VERSION = "v0.8.94";
-const BUILD_DATE = "2026.01.30";
+const APP_VERSION = "v0.8.9";
+const BUILD_DATE = "2026.01.27";
 const ADMIN_PASSWORD = "adminlcg1";
 
 // Firebase 초기화
@@ -133,56 +133,25 @@ const TEXTURE_TYPES = [
     { id: 'MATTE', label: 'Matte' }
 ];
 
-// V 0.8.92: Scroll lock with main content area locking
-// Uses reference counting for nested modals
-let scrollLockCount = 0;
-let savedScrollY = 0;
-let savedMainScrollY = 0;
-
+// Hook for scroll locking - V 0.8.73 Fixed to prevent background drag
 function useScrollLock() {
     useEffect(() => {
-        scrollLockCount++;
+        const originalStyle = window.getComputedStyle(document.body).overflow;
+        const originalPosition = window.getComputedStyle(document.body).position;
+        const originalWidth = window.getComputedStyle(document.body).width;
+        const scrollY = window.scrollY;
 
-        if (scrollLockCount === 1) {
-            // First modal - save scroll position and lock
-            savedScrollY = window.scrollY;
-
-            // Lock html and body
-            document.documentElement.style.overflow = 'hidden';
-            document.body.style.overflow = 'hidden';
-            document.body.style.position = 'fixed';
-            document.body.style.top = `-${savedScrollY}px`;
-            document.body.style.width = '100%';
-            document.body.style.height = '100%';
-
-            // V 0.8.92: Also lock the main content scroll area
-            const mainContent = document.getElementById('main-scroll-content');
-            if (mainContent) {
-                savedMainScrollY = mainContent.scrollTop;
-                mainContent.style.overflow = 'hidden';
-            }
-        }
+        document.body.style.overflow = 'hidden';
+        document.body.style.position = 'fixed';
+        document.body.style.width = '100%';
+        document.body.style.top = `-${scrollY}px`;
 
         return () => {
-            scrollLockCount--;
-
-            if (scrollLockCount === 0) {
-                // Last modal closed - restore scroll
-                document.documentElement.style.overflow = '';
-                document.body.style.overflow = '';
-                document.body.style.position = '';
-                document.body.style.top = '';
-                document.body.style.width = '';
-                document.body.style.height = '';
-                window.scrollTo(0, savedScrollY);
-
-                // V 0.8.92: Restore main content scroll
-                const mainContent = document.getElementById('main-scroll-content');
-                if (mainContent) {
-                    mainContent.style.overflow = '';
-                    mainContent.scrollTop = savedMainScrollY;
-                }
-            }
+            document.body.style.overflow = originalStyle;
+            document.body.style.position = originalPosition;
+            document.body.style.width = originalWidth;
+            document.body.style.top = '';
+            window.scrollTo(0, scrollY);
         };
     }, []);
 }
@@ -226,7 +195,6 @@ export default function App() {
 
     // Selection & Compare (Stacked Modals)
     const [selectedProduct, setSelectedProduct] = useState(null);
-    const [selectedScene, setSelectedScene] = useState(null);
     const [selectedSwatch, setSelectedSwatch] = useState(null);
     const [selectedAward, setSelectedAward] = useState(null);
     const [compareList, setCompareList] = useState([]);
@@ -238,7 +206,6 @@ export default function App() {
     const [editingProduct, setEditingProduct] = useState(null);
     const [editingSwatchFromModal, setEditingSwatchFromModal] = useState(null);
     const [editingAwardFromModal, setEditingAwardFromModal] = useState(null);
-    const [editingScene, setEditingScene] = useState(null); // { isNew, spaceId, tags }
 
     const [isLoading, setIsLoading] = useState(true);
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -260,54 +227,37 @@ export default function App() {
     // Space/Scene Editing
     const [editingSpaceInfoId, setEditingSpaceInfoId] = useState(null);
     // V 0.8.88: Removed managingSpaceProductsId
+    const [editingScene, setEditingScene] = useState(null);
+    const [selectedScene, setSelectedScene] = useState(null);
+
     // V 0.8.74: Modal Navigation History
-    const [modalHistory, setModalHistory] = useState([]); // V 0.8.93 v4: Global Modal History
+    const [modalHistory, setModalHistory] = useState([]);
 
-    const prevFilters = useRef(filters);
-
-    // V 0.8.93 v4: Modal History Logic
-    const handleOpenModal = (type, data) => {
-        // Push current active modal to history if exists
-        let currentModal = null;
-        if (selectedProduct) currentModal = { type: 'product', data: selectedProduct };
-        else if (selectedScene) currentModal = { type: 'scene', data: selectedScene };
-        else if (selectedSwatch) currentModal = { type: 'swatch', data: selectedSwatch };
-        else if (selectedAward) currentModal = { type: 'award', data: selectedAward };
-
-        if (currentModal) {
-            setModalHistory(prev => [...prev, currentModal]);
-        }
-
-        // Close all first to ensure clean switch (optional, but good for z-index reset)
-        setSelectedProduct(null);
-        setSelectedScene(null);
-        setSelectedSwatch(null);
-        setSelectedAward(null);
-
-        // Open new
-        if (type === 'product') setSelectedProduct(data);
-        else if (type === 'scene') setSelectedScene(data);
-        else if (type === 'swatch') setSelectedSwatch(data);
-        else if (type === 'award') setSelectedAward(data);
+    const pushModal = (type, data) => {
+        setModalHistory(prev => [...prev, { type, data }]);
     };
 
-    const handleCloseModal = (type) => {
-        // Close current
-        if (type === 'product') setSelectedProduct(null);
-        else if (type === 'scene') setSelectedScene(null);
-        else if (type === 'swatch') setSelectedSwatch(null);
-        else if (type === 'award') setSelectedAward(null);
+    const popModal = () => {
+        if (modalHistory.length === 0) return null;
+        const prev = modalHistory[modalHistory.length - 1];
+        setModalHistory(h => h.slice(0, -1));
+        return prev;
+    };
 
-        // Check history
-        if (modalHistory.length > 0) {
-            const last = modalHistory[modalHistory.length - 1];
-            setModalHistory(prev => prev.slice(0, -1));
+    const closeWithHistory = (currentType) => {
+        // Close current modal
+        if (currentType === 'product') setSelectedProduct(null);
+        else if (currentType === 'swatch') setSelectedSwatch(null);
+        else if (currentType === 'award') setSelectedAward(null);
+        else if (currentType === 'scene') setSelectedScene(null);
 
-            // Restore last immediately
-            if (last.type === 'product') setSelectedProduct(last.data);
-            else if (last.type === 'scene') setSelectedScene(last.data);
-            else if (last.type === 'swatch') setSelectedSwatch(last.data);
-            else if (last.type === 'award') setSelectedAward(last.data);
+        // Restore previous modal from history
+        const prev = popModal();
+        if (prev) {
+            if (prev.type === 'product') setSelectedProduct(prev.data);
+            else if (prev.type === 'swatch') setSelectedSwatch(prev.data);
+            else if (prev.type === 'award') setSelectedAward(prev.data);
+            else if (prev.type === 'scene') setSelectedScene(prev.data);
         }
     };
 
@@ -327,10 +277,10 @@ export default function App() {
                 if (editingSpaceInfoId) { setEditingSpaceInfoId(null); return; }
                 if (showAdminDashboard) { setShowAdminDashboard(false); return; }
 
-                if (selectedProduct) { handleCloseModal('product'); return; }
-                if (selectedSwatch) { handleCloseModal('swatch'); return; }
-                if (selectedScene) { handleCloseModal('scene'); return; }
-                if (selectedAward) { handleCloseModal('award'); return; }
+                if (selectedProduct) { setSelectedProduct(null); return; }
+                if (selectedSwatch) { setSelectedSwatch(null); return; }
+                if (selectedScene) { setSelectedScene(null); return; }
+                if (selectedAward) { setSelectedAward(null); return; }
             }
         };
         window.addEventListener('keydown', handleEsc);
@@ -370,17 +320,11 @@ export default function App() {
         return () => window.removeEventListener('popstate', handlePopState);
     }, [selectedProduct, selectedSwatch, activeCategory, previousCategory]);
 
-    // V 0.8.92: Clear URL when modal closes, push when modal opens
     useEffect(() => {
         if (selectedProduct) {
             const url = new URL(window.location);
             url.searchParams.set('id', selectedProduct.id);
             window.history.pushState({ modal: 'product' }, '', url);
-        } else {
-            // Clear URL when modal closes
-            if (window.location.search.includes('id=')) {
-                window.history.replaceState(null, '', window.location.pathname);
-            }
         }
     }, [selectedProduct]);
 
@@ -775,68 +719,21 @@ export default function App() {
         showToast("어워드가 삭제되었습니다.");
     };
 
-    const handleSaveProduct = async (inputs) => {
-        // V 0.8.93 v8: Strip Base64 images to optimize storage
-        const optimize = (list) => list?.map(item => {
-            if (typeof item === 'object' && item.image) { const { image, ...rest } = item; return rest; }
-            return item;
-        });
-        const productData = { ...inputs, bodyColors: optimize(inputs.bodyColors), upholsteryColors: optimize(inputs.upholsteryColors) };
-
+    const handleSaveProduct = async (productData) => {
         const docId = productData.id ? String(productData.id) : String(Date.now());
         const isEdit = !!productData.id && products.some(p => String(p.id) === docId);
-
-        // V 0.8.93: Mutual Tagging Logic
-        // Calculate diff in relatedProductIds to update OTHER products
-        const oldProduct = products.find(p => String(p.id) === docId);
-        const oldRelated = oldProduct?.relatedProductIds || [];
-        const newRelated = productData.relatedProductIds || [];
-
-        // IDs to ADD: Present in new, not in old
-        const addedIds = newRelated.filter(id => !oldRelated.includes(id));
-        // IDs to REMOVE: Present in old, not in new
-        const removedIds = oldRelated.filter(id => !newRelated.includes(id));
-
         const payload = {
             ...productData,
             id: docId,
             updatedAt: Date.now(),
-            createdAt: isEdit ? (oldProduct?.createdAt || Date.now()) : Date.now(),
-            orderIndex: isEdit ? (oldProduct?.orderIndex || Date.now()) : Date.now()
+            createdAt: isEdit ? (products.find(p => String(p.id) === docId)?.createdAt || Date.now()) : Date.now(),
+            orderIndex: isEdit ? (products.find(p => String(p.id) === docId)?.orderIndex || Date.now()) : Date.now()
         };
 
         if (isFirebaseAvailable && db) {
             try {
-                const batch = writeBatch(db);
-                // 1. Save current product
                 const sanitizedPayload = sanitizeForFirebase(payload);
-                batch.set(doc(db, 'artifacts', appId, 'public', 'data', 'products', docId), sanitizedPayload, { merge: true });
-
-                // 2. Handle Added Mutual Tags
-                for (const targetId of addedIds) {
-                    const targetProduct = products.find(p => String(p.id) === String(targetId));
-                    if (targetProduct) {
-                        const targetRef = doc(db, 'artifacts', appId, 'public', 'data', 'products', String(targetId));
-                        const targetRelated = targetProduct.relatedProductIds || [];
-                        if (!targetRelated.includes(docId)) {
-                            batch.update(targetRef, { relatedProductIds: [...targetRelated, docId] });
-                        }
-                    }
-                }
-
-                // 3. Handle Removed Mutual Tags
-                for (const targetId of removedIds) {
-                    const targetProduct = products.find(p => String(p.id) === String(targetId));
-                    if (targetProduct) {
-                        const targetRef = doc(db, 'artifacts', appId, 'public', 'data', 'products', String(targetId));
-                        const targetRelated = targetProduct.relatedProductIds || [];
-                        if (targetRelated.includes(docId)) {
-                            batch.update(targetRef, { relatedProductIds: targetRelated.filter(id => String(id) !== docId) });
-                        }
-                    }
-                }
-
-                await batch.commit();
+                await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'products', docId), sanitizedPayload, { merge: true });
             }
             catch (error) {
                 console.error("Product Save Error:", error);
@@ -844,37 +741,9 @@ export default function App() {
                 return;
             }
         } else {
-            // Local Storage Mode
+            const idx = products.findIndex(p => String(p.id) === docId);
             let newProducts = [...products];
-
-            // 1. Update Current Product
-            const idx = newProducts.findIndex(p => String(p.id) === docId);
-            if (idx >= 0) newProducts[idx] = payload; else newProducts = [payload, ...newProducts];
-
-            // 2. Handle Added Mutual Tags
-            addedIds.forEach(targetId => {
-                const tIdx = newProducts.findIndex(p => String(p.id) === String(targetId));
-                if (tIdx >= 0) {
-                    const target = newProducts[tIdx];
-                    const targetRelated = target.relatedProductIds || [];
-                    if (!targetRelated.includes(docId)) {
-                        newProducts[tIdx] = { ...target, relatedProductIds: [...targetRelated, docId] };
-                    }
-                }
-            });
-
-            // 3. Handle Removed Mutual Tags
-            removedIds.forEach(targetId => {
-                const tIdx = newProducts.findIndex(p => String(p.id) === String(targetId));
-                if (tIdx >= 0) {
-                    const target = newProducts[tIdx];
-                    const targetRelated = target.relatedProductIds || [];
-                    if (targetRelated.includes(docId)) {
-                        newProducts[tIdx] = { ...target, relatedProductIds: targetRelated.filter(id => String(id) !== docId) };
-                    }
-                }
-            });
-
+            if (idx >= 0) newProducts[idx] = payload; else newProducts = [payload, ...products];
             saveToLocalStorage(newProducts);
         }
 
@@ -883,7 +752,7 @@ export default function App() {
         if (selectedProduct && String(selectedProduct.id) === docId) setSelectedProduct(payload);
         setIsFormOpen(false);
         setEditingProduct(null);
-        showToast(isEdit ? "수정 완료 (상호 태그 업데이트됨)" : "등록 완료 (상호 태그 업데이트됨)");
+        showToast(isEdit ? "수정 완료" : "등록 완료");
     };
     const handleDeleteProduct = async (productId, productName) => {
         if (!window.confirm('정말 삭제하시겠습니까?')) return;
@@ -975,119 +844,53 @@ export default function App() {
         }
     };
 
-    // V 0.8.92: Complete rewrite - use fractional orderIndex for stable positioning
-    // V 0.8.92: Complete rewrite - use fractional orderIndex for stable positioning
-    // V 0.8.93 v3: Product reorder robustness check + Scene reorder fix (State array sync)
     const handleMoveItem = async (collectionName, items, index, direction, parentId = null) => {
         const targetIndex = direction === 'left' ? index - 1 : index + 1;
         if (targetIndex < 0 || targetIndex >= items.length) return;
 
-        const itemA = items[index]; // Item being moved
-        const itemB = items[targetIndex]; // Item being displaced
+        const itemA = items[index];
+        const itemB = items[targetIndex];
 
-        let newOrderA, newOrderB;
+        // Swap orderIndex values between the two items
+        const orderA = itemA.orderIndex ?? index;
+        const orderB = itemB.orderIndex ?? targetIndex;
+        const newOrderA = orderB;
+        const newOrderB = orderA;
 
-        if (direction === 'left') {
-            const prevItemOrder = targetIndex > 0 ? (items[targetIndex - 1].orderIndex ?? (targetIndex - 1) * 100) : -100;
-            const itemBOrder = itemB.orderIndex ?? targetIndex * 100;
-            newOrderA = (prevItemOrder + itemBOrder) / 2;
-            newOrderB = itemB.orderIndex ?? targetIndex * 100;
-
-            // V 0.8.93 v3: Robustness check - if precision exhausted, nudge
-            if (newOrderA >= itemBOrder) newOrderA = itemBOrder - 0.0001;
-
-        } else {
-            const nextItemOrder = targetIndex < items.length - 1 ? (items[targetIndex + 1].orderIndex ?? (targetIndex + 1) * 100) : (targetIndex + 1) * 100;
-            const itemBOrder = itemB.orderIndex ?? targetIndex * 100;
-            newOrderA = (itemBOrder + nextItemOrder) / 2;
-            newOrderB = itemB.orderIndex ?? targetIndex * 100;
-
-            // V 0.8.93 v3: Robustness check
-            if (newOrderA <= itemBOrder) newOrderA = itemBOrder + 0.0001;
-        }
-
-        // Optimistic Update
+        // Optimistic Update - update only the two swapped items in the state
         if (collectionName === 'products') {
-            const itemA = items[index];
-            let itemB;
-            if (direction === 'left' || direction === 'up') itemB = items[index - 1];
-            else itemB = items[index + 1];
-
-            if (itemB) {
-                const orderA = itemA.orderIndex || 0;
-                const orderB = itemB.orderIndex || 0;
-                let newOrderA = orderB;
-                let newOrderB = orderA;
-
-                // Handle index collision
-                if (Math.abs(newOrderA - newOrderB) < 0.0001) {
-                    if (direction === 'right' || direction === 'down') newOrderA = orderB + 0.001;
-                    else newOrderA = orderB - 0.001;
-                }
-
-                setProducts(prev => prev.map(p => {
-                    if (String(p.id) === String(itemA.id)) return { ...p, orderIndex: newOrderA };
-                    if (String(p.id) === String(itemB.id)) return { ...p, orderIndex: newOrderB };
-                    return p;
-                }));
-                await handlePairSwap(collectionName, { ...itemA, orderIndex: newOrderA }, { ...itemB, orderIndex: newOrderB }, parentId);
-            }
-
+            setProducts(prev => prev.map(p => {
+                if (p.id === itemA.id) return { ...p, orderIndex: newOrderA };
+                if (p.id === itemB.id) return { ...p, orderIndex: newOrderB };
+                return p;
+            }));
         } else if (collectionName === 'swatches') {
             setSwatches(prev => prev.map(s => {
                 if (s.id === itemA.id) return { ...s, orderIndex: newOrderA };
+                if (s.id === itemB.id) return { ...s, orderIndex: newOrderB };
                 return s;
             }));
-            await handlePairSwap(collectionName, { ...itemA, orderIndex: newOrderA }, { ...itemB, orderIndex: newOrderB }, parentId);
-
         } else if (collectionName === 'awards') {
             setAwards(prev => prev.map(a => {
-                if (String(a.id) === String(itemA.id)) return { ...a, orderIndex: newOrderA };
+                if (a.id === itemA.id) return { ...a, orderIndex: newOrderA };
+                if (a.id === itemB.id) return { ...a, orderIndex: newOrderB };
                 return a;
             }));
-            await handlePairSwap(collectionName, { ...itemA, orderIndex: newOrderA }, { ...itemB, orderIndex: newOrderB }, parentId);
-
         } else if (collectionName === 'scenes' && parentId) {
-            // V 0.8.93 v4: Check if item is separate scene document (V 0.8.82)
-            const isSeparateScene = scenes.some(s => s.id === itemA.id);
-
-            if (isSeparateScene) {
-                // Handle as Separate Collection (fractional index)
-                setScenes(prev => prev.map(s => {
-                    if (s.id === itemA.id) return { ...s, orderIndex: newOrderA };
-                    return s;
-                }));
-                await handlePairSwap('scenes', { ...itemA, orderIndex: newOrderA }, { ...itemB, orderIndex: newOrderB }, parentId);
-            } else {
-                // Legacy: Handle as Space Content Array
-                setSpaceContents(prev => {
-                    const content = { ...prev[parentId] };
-                    const spaceScenes = [...(content.scenes || [])];
-                    const idxA = spaceScenes.findIndex(s => s.id === itemA.id);
-                    const idxB = spaceScenes.findIndex(s => s.id === itemB.id);
-
-                    if (idxA >= 0 && idxB >= 0) {
-                        [spaceScenes[idxA], spaceScenes[idxB]] = [spaceScenes[idxB], spaceScenes[idxA]];
-                    }
-
-                    handleBatchReorder('scenes', spaceScenes, parentId);
-
-                    return { ...prev, [parentId]: { ...content, scenes: spaceScenes } };
-                });
-            }
+            setSpaceContents(prev => {
+                const content = { ...prev[parentId] };
+                const scenes = [...(content.scenes || [])];
+                const idxA = scenes.findIndex(s => s.id === itemA.id);
+                const idxB = scenes.findIndex(s => s.id === itemB.id);
+                if (idxA >= 0 && idxB >= 0) {
+                    [scenes[idxA], scenes[idxB]] = [scenes[idxB], scenes[idxA]];
+                }
+                return { ...prev, [parentId]: { ...content, scenes } };
+            });
         }
-    };
 
-    // V 0.8.93 v3: Wrapper for CategoryRootView navigation to support reordering
-    const handleRootNavigate = (actionOrId, item, direction, list) => {
-        if (actionOrId === 'move') {
-            const index = list.findIndex(i => i.id === item.id);
-            if (index !== -1) {
-                handleMoveItem('products', list, index, direction);
-            }
-        } else {
-            handleCategoryClick(actionOrId);
-        }
+        // Update Firebase with only the two swapped items
+        await handlePairSwap(collectionName, { ...itemA, orderIndex: newOrderA }, { ...itemB, orderIndex: newOrderB }, parentId);
     };
 
     // --- Search Tag Logic ---
@@ -1269,7 +1072,7 @@ export default function App() {
                         </div>
                     </div>
 
-                    <div className="pt-2"><button onClick={handleMyPickToggle} className={`w-full text-left px-4 py-3 rounded-xl text-sm font-bold transition-all ${activeCategory === 'MY_PICK' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' : 'text-zinc-400 border-transparent hover:bg-zinc-50 hover:text-zinc-600'}`}><Heart className={`w-4 h-4 ${activeCategory === 'MY_PICK' ? 'fill-yellow-500 text-yellow-500' : ''}`} /><span>My Pick ({favorites.length})</span></button></div>
+                    <div className="pt-2"><button onClick={handleMyPickToggle} className={`w-full text-left px-4 py-3 rounded-xl text-sm font-bold transition-all duration-200 flex items-center space-x-3 group border ${activeCategory === 'MY_PICK' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' : 'text-zinc-400 border-transparent hover:bg-zinc-50 hover:text-zinc-600'}`}><Heart className={`w-4 h-4 ${activeCategory === 'MY_PICK' ? 'fill-yellow-500 text-yellow-500' : ''}`} /><span>My Pick ({favorites.length})</span></button></div>
                 </nav>
                 <div className="p-4 border-t border-zinc-100 bg-zinc-50/50 space-y-3">
                     {isAdmin && (<button onClick={() => { fetchLogs(); setShowAdminDashboard(true); }} className="w-full text-[10px] text-blue-600 hover:text-blue-800 flex items-center justify-center font-bold py-1 mb-2 bg-blue-50 rounded border border-blue-100"><Settings className="w-3 h-3 mr-1" /> Dashboard</button>)}
@@ -1322,7 +1125,7 @@ export default function App() {
                     </div>
                 )}
 
-                <div id="main-scroll-content" ref={mainContentRef} className="flex-1 overflow-y-auto p-4 md:p-8 custom-scrollbar relative print:overflow-visible print:p-0 pb-20 md:pb-16">
+                <div ref={mainContentRef} className="flex-1 overflow-y-auto p-4 md:p-8 custom-scrollbar relative print:overflow-visible print:p-0 pb-20 md:pb-16">
                     {activeCategory === 'DASHBOARD' && !searchTerm && searchTags.length === 0 && !filters.year && !filters.color ? (
                         <DashboardView
                             products={products}
@@ -1333,7 +1136,7 @@ export default function App() {
                             setActiveCategory={setActiveCategory}
                             setSelectedProduct={setSelectedProduct}
                             setSelectedAward={setSelectedAward}
-                            scenes={allScenes}
+                            scenes={scenes}
                             isAdmin={isAdmin}
                             bannerData={bannerData}
                             onBannerUpload={handleBannerUpload}
@@ -1357,7 +1160,6 @@ export default function App() {
                             products={products}
                             spaces={SPACES}
                             spaceContents={spaceContents}
-                            scenes={allScenes}
                             swatches={swatches}
                             awards={awards}
                             onProductClick={(p) => setSelectedProduct(p)}
@@ -1393,8 +1195,7 @@ export default function App() {
                             isAdmin={isAdmin}
                             onSave={handleSaveAward}
                             onDelete={handleDeleteAward}
-
-                            onSelect={(award) => handleOpenModal('award', award)}
+                            onSelect={(award) => setSelectedAward(award)}
                             searchTerm={searchTerm}
                             searchTags={searchTags}
                             favorites={favorites}
@@ -1411,10 +1212,10 @@ export default function App() {
                             materials={SWATCH_CATEGORIES}
                             products={products}
                             swatches={swatches}
-                            onNavigate={handleRootNavigate}
-                            onProductClick={(p) => handleOpenModal('product', p)}
-                            onSwatchClick={(s) => handleOpenModal('swatch', s)}
-                            onSceneClick={(s) => handleOpenModal('scene', s)}
+                            onNavigate={handleCategoryClick}
+                            onProductClick={(p) => setSelectedProduct(p)}
+                            onSwatchClick={(s) => setSelectedSwatch(s)}
+                            onSceneClick={(s) => setSelectedScene(s)}
                             searchTerm={searchTerm}
                             searchTags={searchTags}
                             filters={filters}
@@ -1422,7 +1223,6 @@ export default function App() {
                             compareList={compareList}
                             favorites={favorites}
                             onToggleFavorite={toggleFavorite}
-                            onOpenModal={handleOpenModal}
                         />
                     ) : (
                         <>
@@ -1444,7 +1244,7 @@ export default function App() {
                                     searchTerm={searchTerm}
                                     searchTags={searchTags}
                                     products={processedProducts}
-                                    onProductClick={(p) => handleOpenModal('product', p)}
+                                    onProductClick={(p) => setSelectedProduct(p)}
                                     favorites={favorites}
                                     onToggleFavorite={toggleFavorite}
                                     onCompareToggle={toggleCompare}
@@ -1459,7 +1259,7 @@ export default function App() {
                                     isAdmin={isAdmin}
                                     onSave={handleSaveSwatch}
                                     onDelete={handleDeleteSwatch}
-                                    onSelect={(swatch) => handleOpenModal('swatch', swatch)}
+                                    onSelect={(swatch) => setSelectedSwatch(swatch)}
                                     onDuplicate={handleDuplicateSwatch}
                                     searchTerm={searchTerm}
                                     searchTags={searchTags}
@@ -1523,9 +1323,45 @@ export default function App() {
             {toast && <div className="fixed bottom-8 right-8 bg-zinc-900 text-white px-5 py-3.5 rounded-xl shadow-2xl flex items-center space-x-3 animate-in slide-in-from-bottom-10 fade-in z-[250] print:hidden">{toast.type === 'success' ? <Check className="w-5 h-5 text-green-400" /> : <Info className="w-5 h-5 text-red-400" />}<span className="text-sm font-bold tracking-wide">{toast.message}</span></div>}
 
             {/* Modals are now stacked using conditional rendering with z-index management */}
+            {selectedProduct && (
+                <ProductDetailModal
+                    product={selectedProduct}
+                    allProducts={products}
+                    swatches={swatches}
+                    awards={awards}
+                    spaceContents={spaceContents}
+                    onClose={() => setSelectedProduct(null)}
+                    onEdit={() => { setEditingProduct(selectedProduct); setIsFormOpen(true); }}
+                    isAdmin={isAdmin}
+                    showToast={showToast}
+                    isFavorite={favorites.includes(selectedProduct.id)}
+                    onToggleFavorite={(e) => toggleFavorite(e, selectedProduct.id)}
+                    onNavigateNext={handleNavigateNext}
+                    onNavigatePrev={handleNavigatePrev}
+                    onNavigateSpace={(spaceId) => { setSelectedProduct(null); setActiveCategory(spaceId); }}
+                    onNavigateScene={(scene) => { setSelectedProduct(null); setActiveCategory(scene.spaceId || scene.id); setSelectedScene({ ...scene, spaceId: scene.spaceId || 'UNKNOWN' }); }}
+                    onNavigateProduct={(product) => setSelectedProduct(product)}
+                    onNavigateSwatch={(swatch) => { setSelectedSwatch(swatch); /* Stacks on top */ }}
+                    onNavigateAward={handleNavigateToAward}
+                    onSaveProduct={handleSaveProduct}
+                />
+            )}
 
-
-
+            {isFormOpen && (
+                <ProductFormModal
+                    categories={CATEGORIES.filter(c => !c.isSpecial)}
+                    swatches={swatches}
+                    allProducts={products}
+                    awards={awards}
+                    initialCategory={activeCategory}
+                    existingData={editingProduct}
+                    onClose={() => { setIsFormOpen(false); setEditingProduct(null); }}
+                    onSave={handleSaveProduct}
+                    onDelete={handleDeleteProduct}
+                    isFirebaseAvailable={isFirebaseAvailable}
+                    spaceTags={SPACES.find(s => s.id === activeCategory)?.defaultTags || []}
+                />
+            )}
 
             {selectedSwatch && (
                 <SwatchDetailModal
@@ -1533,29 +1369,44 @@ export default function App() {
                     allProducts={products}
                     swatches={swatches}
                     isAdmin={isAdmin}
-                    onClose={() => handleCloseModal('swatch')}
-                    onNavigateProduct={(product) => handleOpenModal('product', product)}
-                    onNavigateSwatch={(swatch) => handleOpenModal('swatch', swatch)}
-                    onEdit={() => { setEditingSwatchFromModal(selectedSwatch); }}
+                    onClose={() => setSelectedSwatch(null)}
+                    onNavigateProduct={(product) => { setSelectedProduct(product); /* V 0.8.88: Keep swatch modal open for smooth stacking */ }}
+                    onNavigateSwatch={(swatch) => setSelectedSwatch(swatch)}
+                    onEdit={() => { setSelectedSwatch(null); setEditingSwatchFromModal(selectedSwatch); }}
                 />
             )}
 
+            {editingSwatchFromModal && (
+                <SwatchFormModal
+                    category={SWATCH_CATEGORIES.find(c => c.id === editingSwatchFromModal.category) || SWATCH_CATEGORIES[0]}
+                    existingData={editingSwatchFromModal}
+                    onClose={() => setEditingSwatchFromModal(null)}
+                    onSave={(data) => { handleSaveSwatch(data); setEditingSwatchFromModal(null); }}
+                />
+            )}
 
-
-            {/* V 0.8.93 v4: Award Detail Modal - Full Page Scroll Architecture */}
             {selectedAward && (
                 <AwardDetailModal
                     award={selectedAward}
                     products={products}
-                    onClose={() => handleCloseModal('award')}
-                    onNavigateProduct={(p) => handleOpenModal('product', p)}
-                    onSaveProduct={handleSaveProduct}
                     isAdmin={isAdmin}
-                    onEdit={() => { setEditingAwardFromModal(selectedAward); }}
+                    onClose={() => setSelectedAward(null)}
+                    onNavigateProduct={(p) => {
+                        setSelectedProduct(p);
+                    }}
+                    onSaveProduct={handleSaveProduct}
+                    onEdit={() => { setSelectedAward(null); setEditingAwardFromModal(selectedAward); }}
                 />
             )}
 
-
+            {editingAwardFromModal && (
+                <AwardFormModal
+                    existingData={editingAwardFromModal}
+                    allProducts={products}
+                    onClose={() => setEditingAwardFromModal(null)}
+                    onSave={(data, winners) => { handleSaveAward(data, winners); }}
+                />
+            )}
 
             {editingSpaceInfoId && (
                 <SpaceInfoEditModal
@@ -1576,13 +1427,7 @@ export default function App() {
                     spaceTags={(spaceContents[editingScene.spaceId]?.tags) || SPACES.find(s => s.id === editingScene.spaceId)?.defaultTags || []}
                     spaceOptions={SPACES}
                     onClose={() => setEditingScene(null)}
-                    onSave={(data) => {
-                        handleSceneSave(editingScene.spaceId, data);
-                        if (selectedScene && selectedScene.id === data.id) {
-                            setSelectedScene(prev => ({ ...prev, ...data }));
-                        }
-                        setEditingScene(null);
-                    }}
+                    onSave={(data) => { handleSceneSave(editingScene.spaceId, data); }}
                     onDelete={(id) => { handleSceneDelete(editingScene.spaceId, id); setEditingScene(null); }}
                 />
             )}
@@ -1593,15 +1438,15 @@ export default function App() {
                     products={products.filter(p => selectedScene.productIds && selectedScene.productIds.some(id => String(id) === String(p.id)))}
                     allProducts={products}
                     isAdmin={isAdmin}
-                    onClose={() => handleCloseModal('scene')}
-                    onEdit={() => { setEditingScene({ ...selectedScene, isNew: false }); }}
+                    onClose={() => setSelectedScene(null)}
+                    onEdit={() => { setEditingScene({ ...selectedScene, isNew: false }); setSelectedScene(null); }}
                     onProductToggle={async (pid, add) => {
                         const newPids = add ? [...(selectedScene.productIds || []), pid] : (selectedScene.productIds || []).filter(id => id !== pid);
                         const updatedScene = { ...selectedScene, productIds: newPids };
                         setSelectedScene(updatedScene);
                         await handleSceneSave(selectedScene.spaceId, updatedScene);
                     }}
-                    onNavigateProduct={(p) => handleOpenModal('product', p)}
+                    onNavigateProduct={(p) => { setSelectedScene(null); setSelectedProduct(p); }}
                     isFavorite={favorites.includes(selectedScene.id)}
                     onToggleFavorite={(e) => toggleFavorite(e, selectedScene.id)}
                 />
@@ -1639,69 +1484,6 @@ export default function App() {
                     </div>
                 </div>
             )}
-
-            {/* V 0.8.93 v3: Reordered ProductDetailModal to be last for correct stacking */}
-            {selectedProduct && (
-                <ProductDetailModal
-                    product={selectedProduct}
-                    allProducts={products}
-                    swatches={swatches}
-                    awards={awards}
-                    spaceContents={spaceContents}
-                    onClose={() => handleCloseModal('product')}
-                    onEdit={() => { setEditingProduct(selectedProduct); setIsFormOpen(true); }}
-                    isAdmin={isAdmin}
-                    showToast={showToast}
-                    isFavorite={favorites.includes(selectedProduct.id)}
-                    onToggleFavorite={(e) => toggleFavorite(e, selectedProduct.id)}
-                    onNavigateNext={handleNavigateNext}
-                    onNavigatePrev={handleNavigatePrev}
-                    onNavigateSpace={(spaceId) => { setSelectedProduct(null); setActiveCategory(spaceId); }}
-                    onNavigateScene={(scene) => handleOpenModal('scene', scene)}
-                    onNavigateProduct={(product) => handleOpenModal('product', product)}
-                    onNavigateSwatch={(swatch) => handleOpenModal('swatch', swatch)}
-                    onNavigateAward={(award) => handleOpenModal('award', award)}
-                    onSaveProduct={handleSaveProduct}
-                />
-            )}
-
-            {isFormOpen && (
-                <ProductFormModal
-                    categories={CATEGORIES.filter(c => !c.isSpecial)}
-                    swatches={swatches}
-                    allProducts={products}
-                    awards={awards}
-                    initialCategory={activeCategory}
-                    existingData={editingProduct}
-                    onClose={() => { setIsFormOpen(false); setEditingProduct(null); }}
-                    onSave={handleSaveProduct}
-                    onDelete={handleDeleteProduct}
-                    isFirebaseAvailable={isFirebaseAvailable}
-                    spaceTags={SPACES.find(s => s.id === activeCategory)?.defaultTags || []}
-                />
-            )}
-
-            {editingSwatchFromModal && (
-                <SwatchFormModal
-                    category={SWATCH_CATEGORIES.find(c => c.id === editingSwatchFromModal.category) || SWATCH_CATEGORIES[0]}
-                    existingData={editingSwatchFromModal}
-                    onClose={() => setEditingSwatchFromModal(null)}
-                    onSave={(data) => {
-                        handleSaveSwatch(data);
-                        setEditingSwatchFromModal(null);
-                        setSelectedSwatch(prev => (prev && prev.id === data.id ? { ...prev, ...data } : prev));
-                    }}
-                />
-            )}
-
-            {editingAwardFromModal && (
-                <AwardFormModal
-                    existingData={editingAwardFromModal}
-                    allProducts={products}
-                    onClose={() => setEditingAwardFromModal(null)}
-                    onSave={(data, winners) => { handleSaveAward(data, winners); }}
-                />
-            )}
         </div>
     );
 }
@@ -1710,12 +1492,11 @@ export default function App() {
 // Helper Components
 // ----------------------------------------------------------------------
 
-// V 0.8.91: Conditional margin - mb-12 expanded, mb-4 collapsed for uniform spacing
 function CollapsibleSection({ title, count, children, defaultExpanded = true }) {
     const [isExpanded, setIsExpanded] = useState(defaultExpanded);
     return (
-        <div className={isExpanded ? 'mb-12' : 'mb-4'}>
-            <div className={`flex items-center border-b border-zinc-100 pb-2 cursor-pointer hover:opacity-70 ${isExpanded ? 'mb-4' : 'mb-2'}`} onClick={() => setIsExpanded(!isExpanded)}>
+        <div className="mb-12">
+            <div className="flex items-center mb-4 border-b border-zinc-100 pb-2 cursor-pointer hover:opacity-70" onClick={() => setIsExpanded(!isExpanded)}>
                 <h4 className="text-lg font-bold text-zinc-800">{title}</h4>
                 <span className="ml-3 text-xs font-medium text-zinc-400 bg-zinc-50 px-2 py-0.5 rounded-full">{count}</span>
                 <div className="ml-auto">
@@ -1732,8 +1513,7 @@ function CollapsibleSection({ title, count, children, defaultExpanded = true }) 
 }
 
 // V 0.8.83: Unified Search Logic Helper
-// V 0.8.91: Added allProducts param for tagged products search in scenes
-const checkSearchMatch = (item, type, searchTerm, searchTags, filters = {}, allProducts = []) => {
+const checkSearchMatch = (item, type, searchTerm, searchTags, filters = {}) => {
     // 1. Text Search Construction
     let textFields = [];
     if (type === 'product' || !type) {
@@ -1749,12 +1529,7 @@ const checkSearchMatch = (item, type, searchTerm, searchTags, filters = {}, allP
             item.description, ...colorCodes // Add description and color codes
         ];
     } else if (type === 'scene') {
-        // V 0.8.91: Include tagged product names in scene search
-        const taggedProductNames = (item.productIds || [])
-            .map(pid => allProducts.find(p => String(p.id) === String(pid)))
-            .filter(Boolean)
-            .map(p => p.name);
-        textFields = [item.title, item.description, ...(item.tags || []), ...taggedProductNames];
+        textFields = [item.title, item.description, ...(item.tags || [])];
     } else if (type === 'material' || type === 'swatch') {
         textFields = [item.name, item.materialCode, item.group, item.category, ...(item.tags || [])];
     } else if (type === 'award') {
@@ -1787,9 +1562,9 @@ const checkSearchMatch = (item, type, searchTerm, searchTags, filters = {}, allP
 };
 
 function TotalView({ products, categories, spaces, scenes, spaceContents, materials, materialCategories, onProductClick, onSceneClick, onSwatchClick, searchTerm, searchTags, filters, favorites, onToggleFavorite, onCompareToggle, compareList }) {
+    // Filter Logic
     // Filter Logic - V 0.8.83: Uses unified checkSearchMatch
-    // V 0.8.91: Pass products array for scene tagged products search
-    const filterItem = (item, type) => checkSearchMatch(item, type, searchTerm, searchTags, filters, type === 'scene' ? products : []);
+    const filterItem = (item, type) => checkSearchMatch(item, type, searchTerm, searchTags, filters);
 
     return (
         <div className="animate-in fade-in slide-in-from-bottom-4 pb-32">
@@ -1946,11 +1721,6 @@ function CategoryRootView({ type, spaces, spaceContents, scenes, collections, ma
 
                     subItems = subItems.filter(i => filterItem(i, itemType));
 
-                    // V 0.8.94: Sort items by orderIndex in Hub view
-                    if (type === 'MATERIALS_ROOT' || type === 'COLLECTIONS_ROOT' || type === 'SPACES_ROOT') {
-                        subItems.sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0));
-                    }
-
                     if (subItems.length === 0) return null;
 
                     return (
@@ -1967,8 +1737,6 @@ function CategoryRootView({ type, spaces, spaceContents, scenes, collections, ma
                                                     onToggleFavorite={(e) => onToggleFavorite(e, sub.id)}
                                                     onCompareToggle={(e) => onCompareToggle(e, sub)}
                                                     isCompared={!!compareList.find(p => p.id === sub.id)}
-                                                    showMoveControls={false}
-                                                    onMove={(direction) => onNavigate('move', sub, direction, subItems)}
                                                 />
                                             </div>
                                         );
@@ -2085,35 +1853,12 @@ function CompareView({ products, hiddenIds, onToggleVisibility, onRemove, onEdit
                             {visibleProducts.length < 4 && Array(4 - visibleProducts.length).fill(0).map((_, i) => <td key={i} className="border-b border-zinc-50"></td>)}
                         </tr>
                         <tr>
-                            <td className="bg-zinc-50 border-r border-b border-zinc-100 p-2 md:p-3 font-bold text-zinc-500 sticky left-0 z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">Features</td>
+                            <td className="bg-zinc-50 border-r border-b border-zinc-100 p-2 md:p-3 font-bold text-zinc-500 sticky left-0 z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">Colors</td>
                             {visibleProducts.map(p => (
                                 <td key={p.id} className="border-r border-b border-zinc-100 p-2 md:p-3">
                                     <div className="flex flex-wrap gap-1">
-                                        {p.features?.map((ft, i) => <span key={i} className="px-1.5 py-0.5 bg-zinc-100 text-zinc-600 rounded text-[9px] md:text-[10px] font-medium flex items-center"><Check className="w-2.5 h-2.5 mr-1" />{ft}</span>)}
-                                    </div>
-                                </td>
-                            ))}
-                            {visibleProducts.length < 4 && Array(4 - visibleProducts.length).fill(0).map((_, i) => <td key={i} className="border-b border-zinc-50"></td>)}
-                        </tr>
-                        <tr>
-                            <td className="bg-zinc-50 border-r border-b border-zinc-100 p-2 md:p-3 font-bold text-zinc-500 sticky left-0 z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">Body Color</td>
-                            {visibleProducts.map(p => (
-                                <td key={p.id} className="border-r border-b border-zinc-100 p-2 md:p-3">
-                                    <div className="flex flex-wrap gap-1">
-                                        {p.bodyColors?.slice(0, 8).map((c, i) => <SwatchDisplay key={i} color={c} size="small" />)}
-                                        {(p.bodyColors?.length > 8) && <span className="text-[9px] text-zinc-400">+</span>}
-                                    </div>
-                                </td>
-                            ))}
-                            {visibleProducts.length < 4 && Array(4 - visibleProducts.length).fill(0).map((_, i) => <td key={i} className="border-b border-zinc-50"></td>)}
-                        </tr>
-                        <tr>
-                            <td className="bg-zinc-50 border-r border-b border-zinc-100 p-2 md:p-3 font-bold text-zinc-500 sticky left-0 z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">Upholstery Color</td>
-                            {visibleProducts.map(p => (
-                                <td key={p.id} className="border-r border-b border-zinc-100 p-2 md:p-3">
-                                    <div className="flex flex-wrap gap-1">
-                                        {p.upholsteryColors?.slice(0, 8).map((c, i) => <SwatchDisplay key={i} color={c} size="small" />)}
-                                        {(p.upholsteryColors?.length > 8) && <span className="text-[9px] text-zinc-400">+</span>}
+                                        {[...(p.bodyColors || []), ...(p.upholsteryColors || [])].slice(0, 8).map((c, i) => <SwatchDisplay key={i} color={c} size="small" />)}
+                                        {([...(p.bodyColors || []), ...(p.upholsteryColors || [])].length > 8) && <span className="text-[9px] text-zinc-400">+</span>}
                                     </div>
                                 </td>
                             ))}
@@ -2132,12 +1877,16 @@ function CompareView({ products, hiddenIds, onToggleVisibility, onRemove, onEdit
     );
 }
 
-// V 0.8.92: Added scenes prop for correct scene favorites
-function MyPickView({ favorites, products, spaces, spaceContents, scenes = [], swatches, awards, onProductClick, onSceneClick, onSwatchClick, onAwardClick, onToggleFavorite }) {
+function MyPickView({ favorites, products, spaces, spaceContents, swatches, awards, onProductClick, onSceneClick, onSwatchClick, onAwardClick, onToggleFavorite }) {
     // Group favorites
     const favProducts = products.filter(p => favorites.includes(p.id));
-    // V 0.8.92: Use passed scenes (already merged) instead of legacy spaceContents
-    const favScenes = scenes.filter(s => favorites.includes(s.id));
+    const favScenes = [];
+    SPACES.forEach(space => {
+        const content = spaceContents[space.id] || {};
+        (content.scenes || []).forEach(scene => {
+            if (favorites.includes(scene.id)) favScenes.push({ ...scene, spaceId: space.id });
+        });
+    });
     const favSwatches = swatches.filter(s => favorites.includes(s.id));
     const favAwards = awards ? awards.filter(a => favorites.includes(a.id)) : [];
 
@@ -2370,7 +2119,7 @@ function SwatchManager({ category, swatches, isAdmin, onSave, onDelete, onSelect
                                         <button onClick={(e) => handleEditClick(e, swatch)} className="p-1.5 bg-white rounded-full shadow hover:text-blue-600"><Edit2 className="w-3 h-3" /></button>
                                         <button onClick={(e) => { e.stopPropagation(); onDelete(swatch.id); }} className="p-1.5 bg-white rounded-full shadow hover:text-red-600"><Trash2 className="w-3 h-3" /></button>
                                     </div>
-                                    {/* V 0.8.92: Use filteredSwatches with display idx for correct visual swap */}
+                                    {/* V 0.8.73: Admin Move Buttons */}
                                     <div className="absolute bottom-2 left-2 flex gap-1 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
                                         <button onClick={(e) => { e.stopPropagation(); onReorder('swatches', filteredSwatches, idx, 'left') }} className="p-1 bg-white rounded-full shadow hover:bg-black hover:text-white"><ArrowLeft className="w-3 h-3" /></button>
                                         <button onClick={(e) => { e.stopPropagation(); onReorder('swatches', filteredSwatches, idx, 'right') }} className="p-1 bg-white rounded-full shadow hover:bg-black hover:text-white"><ArrowRight className="w-3 h-3" /></button>
@@ -2408,30 +2157,11 @@ function SwatchManager({ category, swatches, isAdmin, onSave, onDelete, onSelect
 }
 
 function SwatchDetailModal({ swatch, allProducts, swatches, onClose, onNavigateProduct, onNavigateSwatch, isAdmin, onEdit }) {
+    useScrollLock(); // V 0.8.73: Ensure scroll lock
     const relatedProducts = allProducts.filter(p => {
         const inBody = p.bodyColors?.some(c => typeof c === 'object' && c.id === swatch.id);
         const inUph = p.upholsteryColors?.some(c => typeof c === 'object' && c.id === swatch.id);
-
-        // V 0.8.93 v7: Enhanced Material Linkage
-        const sName = swatch.name?.toLowerCase().trim();
-        const sCode = swatch.materialCode?.toLowerCase().trim();
-
-        // 1. Check 'Materials' string list in Product
-        const inMaterials = p.materials?.some(m => {
-            const mat = m.toLowerCase().trim();
-            return mat === sName || (sCode && mat === sCode);
-        });
-
-        // 2. Check Tag Linkage: Swatch Tags vs Product Name/Tags
-        // If Swatch has tags (e.g. "Eco"), check if Product Name contains "Eco" or Product 'materials' contains "Eco"
-        const inTags = swatch.tags?.some(tag => {
-            const t = tag.toLowerCase().trim();
-            if (!t) return false;
-            return p.name.toLowerCase().includes(t) ||
-                p.materials?.some(m => m.toLowerCase().includes(t));
-        }) || false;
-
-        return inBody || inUph || inMaterials || inTags;
+        return inBody || inUph;
     });
 
     const handleShareImage = async () => { /* Placeholder */ };
@@ -2598,7 +2328,7 @@ function SwatchFormModal({ category, existingData, onClose, onSave }) {
     };
 
     return (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[1060] flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[250] flex items-center justify-center p-4">
             <div className="bg-white rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
                 <div className="px-5 py-4 border-b border-zinc-100 font-bold text-lg flex-shrink-0">
                     {existingData ? 'Edit Material' : 'Add Material'}
@@ -2676,12 +2406,8 @@ function SwatchFormModal({ category, existingData, onClose, onSave }) {
                     </div>
 
                     <div>
+                        <label className="text-xs font-bold text-zinc-500 uppercase block mb-1">Name</label>
                         <input value={data.name} onChange={e => setData({ ...data, name: e.target.value })} className="w-full border rounded-lg p-2 text-sm outline-none" />
-                    </div>
-
-                    <div>
-                        <label className="text-xs font-bold text-zinc-500 uppercase block mb-1">Description</label>
-                        <textarea rows={3} value={data.description} onChange={e => setData({ ...data, description: e.target.value })} className="w-full border rounded-lg p-2 text-sm outline-none" />
                     </div>
 
                     <div>
@@ -2771,19 +2497,18 @@ function PieChartComponent({ data, total, selectedIndex, onSelect }) {
                     const x1 = Math.cos(angleRad) * rSlice;
                     const y1 = Math.sin(angleRad) * rSlice;
 
-                    // V 0.8.93 Refined: Responsive Spacing
-                    const isMobile = window.innerWidth < 768; // Simple check
-                    const rLabel = isMobile ? 0.85 : 0.95; // Closer on mobile
+                    // V 0.8.88: Responsive label distance - closer on mobile
+                    // Mobile: 0.95, Desktop: 1.05 (closer to donut)
+                    const rLabel = 0.95;
                     const x2 = Math.cos(angleRad) * rLabel;
                     const y2 = Math.sin(angleRad) * rLabel;
 
-                    // Text Offset
-                    // Mobile: 0.95 (Very close), Desktop: 1.08 (Standard)
-                    const offsetMult = isMobile ? 0.95 : 1.08;
-                    const tx = Math.cos(angleRad) * offsetMult;
-                    const ty = Math.sin(angleRad) * offsetMult;
+                    // V 0.8.88: Responsive text offset - 90px mobile, 120px desktop
+                    // Smaller offset = closer to donut
+                    const tx = Math.cos(angleRad) * 1.08;
+                    const ty = Math.sin(angleRad) * 1.08;
 
-                    // Dynamic font size
+                    // V 0.8.88: Dynamic font size based on percentage
                     const fontSize = percent < 0.05 ? 'text-[9px] md:text-[10px]' : 'text-[10px] md:text-xs';
 
                     return (
@@ -2879,7 +2604,7 @@ function DashboardView({ products, favorites, awards, swatches, spaceContents, s
             ...subset.flatMap(p => p.upholsteryColors || [])
         ].filter(c => typeof c === 'object').map(c => c.materialCode).filter(Boolean))];
 
-        const awardCount = subset.reduce((acc, p) => acc + (p.awardHistory?.length || p.awards?.length || 0), 0);
+        const awardCount = subset.reduce((acc, p) => acc + (p.awards?.length || 0) + (p.awardHistory?.length || 0), 0);
 
         // V 0.8.87: Make Year - Descending Sort
         const yearCounts = {};
@@ -3007,7 +2732,7 @@ function DashboardView({ products, favorites, awards, swatches, spaceContents, s
 
                                         <div className="bg-zinc-50 p-3 rounded-xl border border-zinc-100 relative group cursor-pointer" onClick={() => setOpenReportDropdown(openReportDropdown === 'NEW' ? null : 'NEW')}>
                                             <div className="flex justify-between items-center">
-                                                <span className="text-[10px] text-zinc-400 uppercase font-bold block mb-1">New</span>
+                                                <span className="text-[10px] text-zinc-400 uppercase font-bold block mb-1">New Gen</span>
                                                 <ChevronDown className={`w-3 h-3 text-zinc-400 transition-transform ${openReportDropdown === 'NEW' ? 'rotate-180' : ''}`} />
                                             </div>
                                             <span className="text-xl font-black text-zinc-900">{sliceDetails.products.filter(p => p.isNew).length}</span>
@@ -3186,15 +2911,14 @@ function SpaceDetailView({ space, spaceContent, additionalScenes = [], activeTag
     const scenesMap = new Map();
     oldScenes.forEach(s => scenesMap.set(s.id, s));
     newScenes.forEach(s => scenesMap.set(s.id, s));
-    const scenes = Array.from(scenesMap.values()).sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0));
+    const scenes = Array.from(scenesMap.values());
     const tags = spaceContent.tags || space.defaultTags || [];
 
     // Filter Scenes based on Tag AND Search - V 0.8.83: Unified unified checkSearchMatch
-    // V 0.8.91: Pass products for tagged products search
     const filteredScenes = scenes.filter(s => {
         const matchesTag = activeTag === 'ALL' || (s.tags && s.tags.includes(activeTag));
-        // V 0.8.91: Include products for tagged product name search
-        const matchesSearch = checkSearchMatch(s, 'scene', searchTerm, searchTags, {}, products);
+        // V 0.8.83: Unified Search
+        const matchesSearch = checkSearchMatch(s, 'scene', searchTerm, searchTags);
         return matchesTag && matchesSearch;
     });
 
@@ -3242,15 +2966,25 @@ function SpaceDetailView({ space, spaceContent, additionalScenes = [], activeTag
                 {filteredScenes.length > 0 ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         {filteredScenes.map((scene, idx) => (
-                            <div key={scene.id} className="relative group">
-                                <ProductCard
-                                    product={{ ...scene, name: scene.label || scene.title, images: [scene.image], category: scene.tags ? scene.tags.join(', ') : 'Scene' }}
-                                    onClick={() => onViewScene(scene)}
-                                    showMoveControls={isAdmin && activeTag === 'ALL' && !searchTerm}
-                                    onMove={(direction) => onReorder('scenes', filteredScenes, idx, direction, space.id)}
-                                    isFavorite={favorites.includes(scene.id)}
-                                    onToggleFavorite={(e) => onToggleFavorite(e, scene.id)}
-                                />
+                            <div
+                                key={scene.id}
+                                onClick={() => onViewScene(scene)}
+                                className="group cursor-pointer relative"
+                            >
+                                <div className="aspect-[4/3] bg-zinc-50 rounded-xl mb-2 overflow-hidden border border-zinc-100 relative">
+                                    <img src={scene.image} className="w-full h-full object-cover group-hover:scale-105 transition-transform" alt={scene.title} />
+                                    <button onClick={(e) => onToggleFavorite(e, scene.id)} className="absolute top-2 right-2 p-1.5 bg-white/80 rounded-full text-zinc-300 hover:text-yellow-400 hover:scale-110 transition-all z-10">
+                                        <Star className={`w-3.5 h-3.5 ${favorites.includes(scene.id) ? 'fill-yellow-400 text-yellow-400' : ''}`} />
+                                    </button>
+                                    {/* V 0.8.73: Admin Move Buttons for Scenes */}
+                                    {isAdmin && (
+                                        <div className="absolute bottom-2 left-2 flex gap-1 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <button onClick={(e) => { e.stopPropagation(); onReorder('scenes', filteredScenes, idx, 'left', space.id) }} className="p-1 bg-white rounded-full shadow hover:bg-black hover:text-white"><ArrowLeft className="w-3 h-3" /></button>
+                                            <button onClick={(e) => { e.stopPropagation(); onReorder('scenes', filteredScenes, idx, 'right', space.id) }} className="p-1 bg-white rounded-full shadow hover:bg-black hover:text-white"><ArrowRight className="w-3 h-3" /></button>
+                                        </div>
+                                    )}
+                                </div>
+                                <h4 className="text-xs font-bold text-zinc-900 truncate group-hover:text-blue-600">{scene.title}</h4>
                             </div>
                         ))}
                     </div>
@@ -3421,27 +3155,14 @@ function ProductDetailModal({ product, allProducts, swatches, spaceContents, awa
 
     const handleShareImage = async () => { /* ... */ };
 
-    // V 0.8.92: Bidirectional related products tagging
     const toggleRelatedProduct = async (pid) => {
         const currentIds = product.relatedProductIds || [];
-        const isRemoving = currentIds.includes(pid);
-        const newIds = isRemoving ? currentIds.filter(id => id !== pid) : [...currentIds, pid];
+        let newIds;
+        if (currentIds.includes(pid)) newIds = currentIds.filter(id => id !== pid);
+        else newIds = [...currentIds, pid];
 
-        // Update current product
         const updatedProduct = { ...product, relatedProductIds: newIds };
         await onSaveProduct(updatedProduct);
-
-        // V 0.8.92: Bidirectional update - update target product too
-        const targetProduct = allProducts.find(p => String(p.id) === String(pid));
-        if (targetProduct) {
-            const targetIds = targetProduct.relatedProductIds || [];
-            const updatedTargetIds = isRemoving
-                ? targetIds.filter(id => String(id) !== String(product.id))
-                : targetIds.some(id => String(id) === String(product.id)) ? targetIds : [...targetIds, product.id];
-            if (JSON.stringify(targetIds) !== JSON.stringify(updatedTargetIds)) {
-                await onSaveProduct({ ...targetProduct, relatedProductIds: updatedTargetIds });
-            }
-        }
     };
 
     const handleAddAward = async () => {
@@ -3472,7 +3193,7 @@ function ProductDetailModal({ product, allProducts, swatches, spaceContents, awa
     };
 
     return (
-        <div key={product.id} className="fixed inset-0 bg-black/60 backdrop-blur-md z-[300] flex items-center justify-center p-0 md:p-4 animate-in fade-in zoom-in-95 duration-300 print:fixed print:inset-0 print:z-[100] print:bg-white print:h-auto print:overflow-visible">
+        <div key={product.id} className="fixed inset-0 bg-black/60 backdrop-blur-md z-[200] flex items-center justify-center p-0 md:p-4 animate-in fade-in zoom-in-95 duration-300 print:fixed print:inset-0 print:z-[100] print:bg-white print:h-auto print:overflow-visible">
             <canvas ref={canvasRef} style={{ display: 'none' }} />
 
             {isZoomed && currentImageUrl && (
@@ -3588,51 +3309,39 @@ function ProductDetailModal({ product, allProducts, swatches, spaceContents, awa
                             <h2 className="text-3xl md:text-5xl font-black text-zinc-900 mb-1 tracking-tight">{product.name}</h2>
                             <div className="flex items-center text-sm text-zinc-500 font-medium">
                                 {product.designer && <span className="mr-3">Designed by <span className="text-zinc-900">{product.designer}</span></span>}
-                                {launchYear && <span className="mr-3">Since {launchYear}</span>}
-                                {product.productLink && (
-                                    <a href={product.productLink} target="_blank" rel="noopener noreferrer" className="p-1.5 bg-zinc-100 hover:bg-zinc-200 rounded-full text-zinc-600 transition-colors" title="External Link">
-                                        <ExternalLink className="w-4 h-4" />
-                                    </a>
-                                )}
+                                {launchYear && <span>Since {launchYear}</span>}
                             </div>
                         </div>
 
                         <div className="space-y-6 md:space-y-10">
                             <div><h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-3 flex items-center justify-between">Specifications <button onClick={copyToClipboard} className="text-zinc-400 hover:text-zinc-900 print:hidden"><Copy className="w-4 h-4" /></button></h3><p className="text-sm text-zinc-600 leading-relaxed bg-zinc-50 p-4 md:p-6 rounded-2xl border border-zinc-100 whitespace-pre-wrap print:bg-transparent print:border-none print:p-0">{product.specs}</p></div>
-                            {product.options?.length > 0 && (<div><h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-3">Options</h3><div className="flex flex-wrap gap-2">{product.options.map((opt, idx) => (<span key={idx} className="px-3 py-1.5 bg-blue-50 text-blue-600 border border-blue-100 rounded-lg text-xs font-bold print:border-gray-300 print:text-black">{opt}</span>))}</div></div>)}
-                            {product.features?.length > 0 && (<div><h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-3">Features</h3><div className="flex flex-wrap gap-2">{product.features.map((ft, idx) => (<span key={idx} className="px-3 py-1.5 bg-zinc-100 text-zinc-600 rounded-lg text-xs font-medium flex items-center print:bg-transparent"><Check className="w-3 h-3 mr-1.5" /> {ft}</span>))}</div></div>)}
+                            {(product.features?.length > 0 || product.options?.length > 0) && (<div><h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-3">Features & Options</h3><div className="flex flex-wrap gap-2">{product.options?.map((opt, idx) => (<span key={idx} className="px-3 py-1.5 bg-blue-50 text-blue-600 border border-blue-100 rounded-lg text-xs font-bold print:border-gray-300 print:text-black">{opt}</span>))}{product.features?.map((ft, idx) => (<span key={idx} className="px-3 py-1.5 bg-zinc-100 text-zinc-600 rounded-lg text-xs font-medium flex items-center print:bg-transparent"><Check className="w-3 h-3 mr-1.5" /> {ft}</span>))}</div></div>)}
                             <div className="grid grid-cols-2 gap-4 md:gap-8">
                                 <div>
                                     <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2">Body Color</h3>
                                     <div className="flex flex-wrap gap-3">
-                                        {product.bodyColors?.map((rawC, i) => {
-                                            const c = (typeof rawC === 'object' && rawC.id) ? (swatches.find(s => s.id === rawC.id) || rawC) : rawC;
-                                            return (
-                                                <div key={i} className="flex flex-col items-center gap-1 group cursor-pointer" onClick={(e) => handleSwatchClick(e, c)}>
-                                                    <div className="transition-transform group-hover:scale-110"><SwatchDisplay color={c} size="medium" /></div>
-                                                    <span className="text-[9px] font-mono text-zinc-400 group-hover:text-black transition-colors">{typeof c === 'object' ? c.materialCode : ''}</span>
-                                                </div>
-                                            );
-                                        })}
+                                        {product.bodyColors?.map((c, i) => (
+                                            <div key={i} className="flex flex-col items-center gap-1 group cursor-pointer" onClick={(e) => handleSwatchClick(e, c)}>
+                                                <div className="transition-transform group-hover:scale-110"><SwatchDisplay color={c} size="medium" /></div>
+                                                <span className="text-[9px] font-mono text-zinc-400 group-hover:text-black transition-colors">{typeof c === 'object' ? c.materialCode : ''}</span>
+                                            </div>
+                                        ))}
                                     </div>
                                 </div>
                                 <div>
                                     <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2">Upholstery Color</h3>
                                     <div className="flex flex-wrap gap-3">
-                                        {product.upholsteryColors?.map((rawC, i) => {
-                                            const c = (typeof rawC === 'object' && rawC.id) ? (swatches.find(s => s.id === rawC.id) || rawC) : rawC;
-                                            return (
-                                                <div key={i} className="flex flex-col items-center gap-1 group cursor-pointer" onClick={(e) => handleSwatchClick(e, c)}>
-                                                    <div className="transition-transform group-hover:scale-110"><SwatchDisplay color={c} size="medium" /></div>
-                                                    <span className="text-[9px] font-mono text-zinc-400 group-hover:text-black transition-colors">{typeof c === 'object' ? c.materialCode : ''}</span>
-                                                </div>
-                                            );
-                                        })}
+                                        {product.upholsteryColors?.map((c, i) => (
+                                            <div key={i} className="flex flex-col items-center gap-1 group cursor-pointer" onClick={(e) => handleSwatchClick(e, c)}>
+                                                <div className="transition-transform group-hover:scale-110"><SwatchDisplay color={c} size="medium" /></div>
+                                                <span className="text-[9px] font-mono text-zinc-400 group-hover:text-black transition-colors">{typeof c === 'object' ? c.materialCode : ''}</span>
+                                            </div>
+                                        ))}
                                     </div>
                                 </div>
                             </div>
 
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 print:hidden">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-8 border-t border-zinc-100 print:hidden">
                                 {relatedSpaces.length > 0 && (
                                     <div>
                                         <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-3">Related Spaces</h3>
@@ -3775,7 +3484,7 @@ function SpaceInfoEditModal({ spaceId, currentData = {}, defaultTags, onClose, o
     };
 
     return (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[1050] flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[80] flex items-center justify-center p-4">
             <div className="bg-white w-full max-w-lg rounded-2xl overflow-hidden shadow-2xl">
                 <div className="px-6 py-4 border-b border-zinc-100 flex justify-between items-center"><h3 className="text-lg font-bold text-zinc-900">Edit Space Info</h3><button onClick={onClose}><X className="w-5 h-5 text-zinc-400" /></button></div>
                 <div className="p-6 space-y-4">
@@ -3834,9 +3543,8 @@ function ProductFormModal({ categories, swatches = [], allProducts = [], awards 
                 attachments: existingData.attachments || [],
                 contentImages: normalizeImages(existingData.contentImages || []),
                 spaces: existingData.spaces || [], spaceTags: existingData.spaceTags || [],
-                spaces: existingData.spaces || [], spaceTags: existingData.spaceTags || [],
-                bodyColors: existingData.bodyColors?.map(c => (typeof c === 'object' && c.id && swatches.find(s => s.id === c.id)) ? { ...c, image: swatches.find(s => s.id === c.id).image } : c) || [],
-                upholsteryColors: existingData.upholsteryColors?.map(c => (typeof c === 'object' && c.id && swatches.find(s => s.id === c.id)) ? { ...c, image: swatches.find(s => s.id === c.id).image } : c) || [],
+                bodyColors: existingData.bodyColors || [],
+                upholsteryColors: existingData.upholsteryColors || [],
                 relatedProductIds: existingData.relatedProductIds || [],
                 awardHistory: existingData.awardHistory || []
             });
@@ -3923,7 +3631,7 @@ function ProductFormModal({ categories, swatches = [], allProducts = [], awards 
     };
 
     return (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[1050] flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[250] flex items-center justify-center p-4">
             <div className="bg-white w-full max-w-3xl rounded-2xl overflow-hidden shadow-2xl flex flex-col max-h-[95vh] animate-in slide-in-from-bottom-4 duration-200">
                 <div className="px-8 py-5 border-b border-zinc-100 flex justify-between items-center">
                     <h2 className="text-xl font-bold text-zinc-900">{isEditMode ? 'Edit Product' : 'New Product'}</h2>
@@ -4018,19 +3726,17 @@ function ProductFormModal({ categories, swatches = [], allProducts = [], awards 
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-10 bg-zinc-50 p-6 rounded-xl border border-zinc-100">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-zinc-50 p-4 rounded-xl border border-zinc-100">
                         <SwatchSelector
                             label="Body Colors"
                             selected={formData.bodyColors}
-                            swatches={swatches.filter(s => ['RESIN', 'METAL', 'WOOD'].includes(s.category))}
-                            allowedCategories={['RESIN', 'METAL', 'WOOD']}
+                            swatches={swatches}
                             onChange={(newColors) => setFormData({ ...formData, bodyColors: newColors })}
                         />
                         <SwatchSelector
                             label="Upholstery Colors"
                             selected={formData.upholsteryColors}
-                            swatches={swatches.filter(s => ['MESH', 'FABRIC', 'LEATHER', 'ETC'].includes(s.category))}
-                            allowedCategories={['MESH', 'FABRIC', 'LEATHER', 'ETC']}
+                            swatches={swatches}
                             onChange={(newColors) => setFormData({ ...formData, upholsteryColors: newColors })}
                         />
                     </div>
@@ -4068,7 +3774,7 @@ function ProductFormModal({ categories, swatches = [], allProducts = [], awards 
     );
 }
 
-function SwatchSelector({ label, selected, swatches, onChange, allowedCategories }) {
+function SwatchSelector({ label, selected, swatches, onChange }) {
     const [isOpen, setIsOpen] = useState(false);
     const [filter, setFilter] = useState('');
     const [activeTab, setActiveTab] = useState('ALL');
@@ -4136,7 +3842,7 @@ function SwatchSelector({ label, selected, swatches, onChange, allowedCategories
             </div>
 
             {isOpen && (
-                <div className="absolute top-full left-0 z-[60] mt-2 w-full md:w-[320px] bg-white rounded-xl shadow-2xl border border-zinc-200 p-4 animate-in fade-in slide-in-from-top-2">
+                <div className="absolute top-full left-0 z-50 mt-2 w-full md:w-[400px] bg-white rounded-xl shadow-xl border border-zinc-200 p-4">
                     <div className="flex justify-between items-center mb-3">
                         <h4 className="font-bold text-sm">Select Material</h4>
                         <button onClick={() => setIsOpen(false)}><X className="w-4 h-4 text-zinc-400 hover:text-black" /></button>
@@ -4144,7 +3850,7 @@ function SwatchSelector({ label, selected, swatches, onChange, allowedCategories
 
                     <div className="flex gap-1 overflow-x-auto pb-2 mb-2 custom-scrollbar">
                         <button type="button" onClick={() => setActiveTab('ALL')} className={`px-2 py-1 rounded text-[10px] font-bold whitespace-nowrap ${activeTab === 'ALL' ? 'bg-black text-white' : 'bg-zinc-100'}`}>ALL</button>
-                        {SWATCH_CATEGORIES.filter(c => !allowedCategories || allowedCategories.includes(c.id)).map(c => (
+                        {SWATCH_CATEGORIES.map(c => (
                             <button key={c.id} type="button" onClick={() => setActiveTab(c.id)} className={`px-2 py-1 rounded text-[10px] font-bold whitespace-nowrap ${activeTab === c.id ? 'bg-black text-white' : 'bg-zinc-100'}`}>{c.label}</button>
                         ))}
                     </div>
@@ -4225,7 +3931,7 @@ function SceneEditModal({ initialData, allProducts, spaceTags = [], spaceOptions
     };
 
     return (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4 animate-in fade-in zoom-in-95 duration-300">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[80] flex items-center justify-center p-4 animate-in fade-in zoom-in-95 duration-300">
             <div className="bg-white w-full max-w-2xl rounded-2xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
                 <div className="px-6 py-4 border-b border-zinc-100 flex justify-between items-center bg-white z-10">
                     <h3 className="text-lg font-bold text-zinc-900">{!initialData.id ? 'New Scene' : 'Edit Scene'}</h3>
@@ -4381,17 +4087,8 @@ function SpaceSceneModal({ scene, products, allProducts, isAdmin, onClose, onEdi
                     <div className="w-full md:w-1/3 bg-white flex flex-col border-l border-zinc-100 md:h-auto relative pb-24 md:pb-0">
                         <div className="p-6 md:p-8 border-b border-zinc-50 pt-8 flex-shrink-0">
                             <div className="mb-4">
-                                <div className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-1">
-                                    {SPACES.find(s => s.id === scene.spaceId)?.label || scene.spaceId}
-                                </div>
-                                {scene.tags?.length > 0 && (
-                                    <div className="flex flex-wrap gap-1 mb-2">
-                                        {scene.tags.map(t => <span key={t} className="text-[10px] font-bold bg-zinc-100 text-zinc-500 px-1.5 py-0.5 rounded">{t}</span>)}
-                                    </div>
-                                )}
-                                <h2 className="text-2xl md:text-3xl font-black text-zinc-900 mb-4">{scene.title}</h2>
-                                <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-1">Description</h3>
-                                <p className="text-zinc-500 text-sm leading-relaxed whitespace-pre-wrap">{scene.description}</p>
+                                <h2 className="text-2xl md:text-3xl font-black text-zinc-900 mb-2">{scene.title}</h2>
+                                <p className="text-zinc-500 text-sm leading-relaxed">{scene.description}</p>
                             </div>
                         </div>
                         <div className="flex-1 p-6 md:p-8 custom-scrollbar bg-zinc-50/50">
@@ -4498,7 +4195,6 @@ function AwardsManager({ awards, products, isAdmin, onSave, onDelete, onSelect, 
                                         <button onClick={(e) => { e.stopPropagation(); setEditingAward(award); setIsModalOpen(true); }} className="p-1.5 bg-white rounded-full shadow hover:text-blue-600"><Edit2 className="w-3 h-3" /></button>
                                         <button onClick={(e) => { e.stopPropagation(); onDelete(award.id); }} className="p-1.5 bg-white rounded-full shadow hover:text-red-600"><Trash2 className="w-3 h-3" /></button>
                                     </div>
-                                    {/* V 0.8.92: Use filteredAwards with display idx for correct visual swap */}
                                     <div className="absolute bottom-2 left-2 flex gap-1 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
                                         <button onClick={(e) => { e.stopPropagation(); onReorder('awards', filteredAwards, idx, 'left') }} className="p-1 bg-white rounded-full shadow hover:bg-black hover:text-white"><ArrowLeft className="w-3 h-3" /></button>
                                         <button onClick={(e) => { e.stopPropagation(); onReorder('awards', filteredAwards, idx, 'right') }} className="p-1 bg-white rounded-full shadow hover:bg-black hover:text-white"><ArrowRight className="w-3 h-3" /></button>
@@ -4545,66 +4241,46 @@ function AwardDetailModal({ award, products, onClose, onNavigateProduct, onSaveP
     });
 
     const addProductToAward = async (product) => {
-        if (!product) return;
-
-        // 1. Add to Product History
-        const historyItem = { awardId: award.id, year: awardYear };
-        const newHistory = [...(product.awardHistory || [])];
-        if (!newHistory.some(h => h.awardId === award.id)) {
-            newHistory.push(historyItem);
-            await onSaveProduct({ ...product, awardHistory: newHistory });
-        }
-
-        // 2. Add tag if missing (legacy support)
-        if (!product.awards?.includes(award.title)) {
-            // allow legacy tag update via saveProduct if needed, but history is primary now
-            // For now, history update is sufficient for this View to reflect it (line 4436)
-        }
-        setIsAddingProduct(false);
-    }
+        const currentAwards = product.awards || [];
+        const newAwards = currentAwards.includes(award.title) ? currentAwards : [...currentAwards, award.title];
+        const currentHistory = product.awardHistory || [];
+        const newHistory = [...currentHistory.filter(h => h.awardId !== award.id), { awardId: award.id, title: award.title, year: awardYear }];
+        const updatedProduct = { ...product, awards: newAwards, awardHistory: newHistory };
+        await onSaveProduct(updatedProduct);
+    };
 
     return (
-        <div className="fixed inset-0 z-[160] bg-black/60 backdrop-blur-sm flex items-center justify-center p-0 md:p-8 animate-in zoom-in-95 duration-200">
-            <div className="bg-white w-full h-full md:h-[90vh] md:w-full md:max-w-6xl md:rounded-3xl overflow-hidden shadow-2xl flex flex-col md:flex-row relative">
-
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[150] flex items-center justify-center p-0 md:p-4 animate-in zoom-in-95 duration-300">
+            <div className="bg-white w-full h-full md:h-auto md:max-w-6xl rounded-none md:rounded-3xl overflow-hidden shadow-2xl flex flex-col md:flex-row md:max-h-[90vh] relative">
                 <div className="absolute top-4 right-4 z-[100] flex gap-2">
                     {isAdmin && <button onClick={onEdit} className="p-2 bg-white/50 hover:bg-zinc-100 rounded-full backdrop-blur shadow-sm"><Edit3 className="w-6 h-6 text-zinc-900" /></button>}
                     <button onClick={onClose} className="p-2 bg-white/50 hover:bg-zinc-100 rounded-full backdrop-blur shadow-sm"><X className="w-6 h-6 text-zinc-900" /></button>
                 </div>
-
-                <div className="md:hidden flex items-center justify-between p-4 border-b border-zinc-100 bg-white sticky top-0 z-50 print:hidden">
-                    <span className="font-bold text-sm truncate max-w-[200px]">{award.title}</span>
-                </div>
-
-                <div className="flex-1 flex flex-col md:flex-row h-full pb-safe items-start md:overflow-hidden overflow-y-auto custom-scrollbar">
-
-                    <div className="w-full md:w-5/12 bg-zinc-50 flex items-center justify-center border-b md:border-b-0 md:border-r border-zinc-100 min-h-[40vh] md:h-full shrink-0">
-                        <div className="w-full h-full flex items-center justify-center p-8">
-                            {award.image ? <img src={award.image} className="max-w-full max-h-[40vh] md:max-h-[60vh] object-contain mix-blend-multiply" /> : <Trophy className="w-32 h-32 text-zinc-200" />}
-                        </div>
+                <div className="w-full md:w-4/12 bg-zinc-50 flex items-center justify-center p-8 relative min-h-[30vh]">
+                    <div className="w-48 h-48 md:w-64 md:h-64 flex items-center justify-center">
+                        {award.image ? <img src={award.image} className="w-full h-full object-contain" /> : <Trophy className="w-24 h-24 text-zinc-300" />}
                     </div>
-
-                    <div className="w-full md:w-7/12 bg-white p-8 md:p-12 pb-24 md:h-full md:overflow-y-auto custom-scrollbar">
-                        <div className="mb-8">
-                            <div className="flex gap-2 mb-3">
-                                {award.tags?.map(t => <span key={t} className="inline-block px-2 py-0.5 bg-zinc-100 text-zinc-600 text-[10px] font-bold rounded uppercase tracking-widest">{t}</span>)}
-                            </div>
-                            <h2 className="text-3xl md:text-4xl font-black text-zinc-900 tracking-tighter mb-2">{award.title}</h2>
-                            <p className="text-xl font-bold text-zinc-500 mb-4">{award.organization}</p>
-                            {award.link && (
-                                <a href={award.link} target="_blank" rel="noopener noreferrer" className="inline-flex items-center text-xs font-bold text-blue-600 hover:underline">
-                                    <ExternalLink className="w-3 h-3 mr-1" /> Official Website
-                                </a>
-                            )}
+                </div>
+                <div className="w-full md:w-8/12 bg-white p-8 md:p-12 flex flex-col overflow-y-auto pb-safe">
+                    <div className="mb-8">
+                        <div className="flex gap-2 mb-3">
+                            {award.tags?.map(t => <span key={t} className="inline-block px-2 py-0.5 bg-zinc-100 text-zinc-600 text-[10px] font-bold rounded uppercase tracking-widest">{t}</span>)}
                         </div>
-
-                        <div className="mb-10">
+                        <h2 className="text-4xl font-black text-zinc-900 tracking-tighter mb-2">{award.title}</h2>
+                        <p className="text-xl font-bold text-zinc-500 mb-4">{award.organization}</p>
+                        {award.link && (
+                            <a href={award.link} target="_blank" rel="noopener noreferrer" className="inline-flex items-center text-xs font-bold text-blue-600 hover:underline">
+                                <ExternalLink className="w-3 h-3 mr-1" /> Official Website
+                            </a>
+                        )}
+                    </div>
+                    <div className="space-y-8 flex-1">
+                        <div>
                             <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-3">About Award</h3>
                             <p className="text-sm text-zinc-600 leading-relaxed whitespace-pre-wrap">
                                 {award.description || "No description provided."}
                             </p>
                         </div>
-
                         <div className="pt-8 border-t border-zinc-100">
                             <div className="flex justify-between items-center mb-4">
                                 <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest flex items-center">
@@ -4650,7 +4326,7 @@ function AwardDetailModal({ award, products, onClose, onNavigateProduct, onSaveP
                                     </div>
                                 </div>
                             )}
-                            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 max-h-80 overflow-y-auto custom-scrollbar p-1 pb-10">
                                 {relatedProducts.length > 0 ? relatedProducts.map(p => {
                                     const historyItem = p.awardHistory?.find(h => h.awardId === award.id);
                                     const year = historyItem ? historyItem.year : (p.launchDate?.substring(0, 4) || '-');
