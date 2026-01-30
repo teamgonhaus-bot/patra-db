@@ -950,8 +950,6 @@ export default function App() {
     };
 
     // V 0.8.92: Complete rewrite - use fractional orderIndex for stable positioning
-    // V 0.8.92: Complete rewrite - use fractional orderIndex for stable positioning
-    // V 0.8.93 v3: Product reorder robustness check + Scene reorder fix (State array sync)
     const handleMoveItem = async (collectionName, items, index, direction, parentId = null) => {
         const targetIndex = direction === 'left' ? index - 1 : index + 1;
         if (targetIndex < 0 || targetIndex >= items.length) return;
@@ -959,82 +957,57 @@ export default function App() {
         const itemA = items[index]; // Item being moved
         const itemB = items[targetIndex]; // Item being displaced
 
+        // Calculate new orderIndex values that will result in proper swap
+        // The key is to give itemA an orderIndex that places it BEFORE itemB (for left)
+        // or AFTER itemB (for right) in the sorted list
         let newOrderA, newOrderB;
 
         if (direction === 'left') {
+            // Moving left: itemA should come before itemB
+            // Give itemA a value less than itemB's current value
             const prevItemOrder = targetIndex > 0 ? (items[targetIndex - 1].orderIndex ?? (targetIndex - 1) * 100) : -100;
             const itemBOrder = itemB.orderIndex ?? targetIndex * 100;
-            newOrderA = (prevItemOrder + itemBOrder) / 2;
-            newOrderB = itemB.orderIndex ?? targetIndex * 100;
-
-            // V 0.8.93 v3: Robustness check - if precision exhausted, nudge
-            if (newOrderA >= itemBOrder) newOrderA = itemBOrder - 0.0001;
-
+            newOrderA = (prevItemOrder + itemBOrder) / 2; // Place between prev item and itemB
+            newOrderB = itemB.orderIndex ?? targetIndex * 100; // itemB keeps its position or gets assigned
         } else {
+            // Moving right: itemA should come after itemB
             const nextItemOrder = targetIndex < items.length - 1 ? (items[targetIndex + 1].orderIndex ?? (targetIndex + 1) * 100) : (targetIndex + 1) * 100;
             const itemBOrder = itemB.orderIndex ?? targetIndex * 100;
-            newOrderA = (itemBOrder + nextItemOrder) / 2;
+            newOrderA = (itemBOrder + nextItemOrder) / 2; // Place between itemB and next item
             newOrderB = itemB.orderIndex ?? targetIndex * 100;
-
-            // V 0.8.93 v3: Robustness check
-            if (newOrderA <= itemBOrder) newOrderA = itemBOrder + 0.0001;
         }
 
-        // Optimistic Update
+        // Optimistic Update - update only the moved item in the state
         if (collectionName === 'products') {
             setProducts(prev => prev.map(p => {
-                // V 0.8.93 v3: Ensure we only update the specific moved item ID
-                if (String(p.id) === String(itemA.id)) return { ...p, orderIndex: newOrderA };
+                if (p.id === itemA.id) return { ...p, orderIndex: newOrderA };
                 return p;
             }));
-            await handlePairSwap(collectionName, { ...itemA, orderIndex: newOrderA }, { ...itemB, orderIndex: newOrderB }, parentId);
-
         } else if (collectionName === 'swatches') {
             setSwatches(prev => prev.map(s => {
                 if (s.id === itemA.id) return { ...s, orderIndex: newOrderA };
                 return s;
             }));
-            await handlePairSwap(collectionName, { ...itemA, orderIndex: newOrderA }, { ...itemB, orderIndex: newOrderB }, parentId);
-
         } else if (collectionName === 'awards') {
             setAwards(prev => prev.map(a => {
-                if (String(a.id) === String(itemA.id)) return { ...a, orderIndex: newOrderA };
+                if (a.id === itemA.id) return { ...a, orderIndex: newOrderA };
                 return a;
             }));
-            await handlePairSwap(collectionName, { ...itemA, orderIndex: newOrderA }, { ...itemB, orderIndex: newOrderB }, parentId);
-
         } else if (collectionName === 'scenes' && parentId) {
-            // V 0.8.93 v3: Fix for Scenes - Swap in array and update ENTIRE array via batch
             setSpaceContents(prev => {
                 const content = { ...prev[parentId] };
                 const scenes = [...(content.scenes || [])];
                 const idxA = scenes.findIndex(s => s.id === itemA.id);
                 const idxB = scenes.findIndex(s => s.id === itemB.id);
-
                 if (idxA >= 0 && idxB >= 0) {
-                    // Swap elements directly in the array for local state
                     [scenes[idxA], scenes[idxB]] = [scenes[idxB], scenes[idxA]];
                 }
-
-                // Important: For scenes, we save the ENTIRE reordered array, not just pair swap
-                handleBatchReorder('scenes', scenes, parentId);
-
                 return { ...prev, [parentId]: { ...content, scenes } };
             });
-            // Note: handleBatchReorder calls API, so no need for handlePairSwap here
         }
-    };
 
-    // V 0.8.93 v3: Wrapper for CategoryRootView navigation to support reordering
-    const handleRootNavigate = (actionOrId, item, direction, list) => {
-        if (actionOrId === 'move') {
-            const index = list.findIndex(i => i.id === item.id);
-            if (index !== -1) {
-                handleMoveItem('products', list, index, direction);
-            }
-        } else {
-            handleCategoryClick(actionOrId);
-        }
+        // Update Firebase with only the moved item
+        await handlePairSwap(collectionName, { ...itemA, orderIndex: newOrderA }, { ...itemB, orderIndex: newOrderB }, parentId);
     };
 
     // --- Search Tag Logic ---
@@ -1357,7 +1330,7 @@ export default function App() {
                             materials={SWATCH_CATEGORIES}
                             products={products}
                             swatches={swatches}
-                            onNavigate={handleRootNavigate}
+                            onNavigate={handleCategoryClick}
                             onProductClick={(p) => setSelectedProduct(p)}
                             onSwatchClick={(s) => setSelectedSwatch(s)}
                             onSceneClick={(s) => setSelectedScene(s)}
@@ -1468,7 +1441,29 @@ export default function App() {
             {toast && <div className="fixed bottom-8 right-8 bg-zinc-900 text-white px-5 py-3.5 rounded-xl shadow-2xl flex items-center space-x-3 animate-in slide-in-from-bottom-10 fade-in z-[250] print:hidden">{toast.type === 'success' ? <Check className="w-5 h-5 text-green-400" /> : <Info className="w-5 h-5 text-red-400" />}<span className="text-sm font-bold tracking-wide">{toast.message}</span></div>}
 
             {/* Modals are now stacked using conditional rendering with z-index management */}
-
+            {selectedProduct && (
+                <ProductDetailModal
+                    product={selectedProduct}
+                    allProducts={products}
+                    swatches={swatches}
+                    awards={awards}
+                    spaceContents={spaceContents}
+                    onClose={() => setSelectedProduct(null)}
+                    onEdit={() => { setEditingProduct(selectedProduct); setIsFormOpen(true); }}
+                    isAdmin={isAdmin}
+                    showToast={showToast}
+                    isFavorite={favorites.includes(selectedProduct.id)}
+                    onToggleFavorite={(e) => toggleFavorite(e, selectedProduct.id)}
+                    onNavigateNext={handleNavigateNext}
+                    onNavigatePrev={handleNavigatePrev}
+                    onNavigateSpace={(spaceId) => { setSelectedProduct(null); setActiveCategory(spaceId); }}
+                    onNavigateScene={(scene) => { setSelectedProduct(null); setActiveCategory(scene.spaceId || scene.id); setSelectedScene({ ...scene, spaceId: scene.spaceId || 'UNKNOWN' }); }}
+                    onNavigateProduct={(product) => setSelectedProduct(product)}
+                    onNavigateSwatch={(swatch) => { setSelectedSwatch(swatch); /* Stacks on top */ }}
+                    onNavigateAward={handleNavigateToAward}
+                    onSaveProduct={handleSaveProduct}
+                />
+            )}
 
             {isFormOpen && (
                 <ProductFormModal
@@ -1606,31 +1601,6 @@ export default function App() {
                         </div>
                     </div>
                 </div>
-            )}
-
-            {/* V 0.8.93 v3: Reordered ProductDetailModal to be last for correct stacking */}
-            {selectedProduct && (
-                <ProductDetailModal
-                    product={selectedProduct}
-                    allProducts={products}
-                    swatches={swatches}
-                    awards={awards}
-                    spaceContents={spaceContents}
-                    onClose={() => setSelectedProduct(null)}
-                    onEdit={() => { setEditingProduct(selectedProduct); setIsFormOpen(true); }}
-                    isAdmin={isAdmin}
-                    showToast={showToast}
-                    isFavorite={favorites.includes(selectedProduct.id)}
-                    onToggleFavorite={(e) => toggleFavorite(e, selectedProduct.id)}
-                    onNavigateNext={handleNavigateNext}
-                    onNavigatePrev={handleNavigatePrev}
-                    onNavigateSpace={(spaceId) => { setSelectedProduct(null); setActiveCategory(spaceId); }}
-                    onNavigateScene={(scene) => { setSelectedProduct(null); setActiveCategory(scene.spaceId || scene.id); setSelectedScene({ ...scene, spaceId: scene.spaceId || 'UNKNOWN' }); }}
-                    onNavigateProduct={(product) => setSelectedProduct(product)}
-                    onNavigateSwatch={(swatch) => { setSelectedSwatch(swatch); /* Stacks on top */ }}
-                    onNavigateAward={handleNavigateToAward}
-                    onSaveProduct={handleSaveProduct}
-                />
             )}
         </div>
     );
@@ -1892,8 +1862,6 @@ function CategoryRootView({ type, spaces, spaceContents, scenes, collections, ma
                                                     onToggleFavorite={(e) => onToggleFavorite(e, sub.id)}
                                                     onCompareToggle={(e) => onCompareToggle(e, sub)}
                                                     isCompared={!!compareList.find(p => p.id === sub.id)}
-                                                    showMoveControls={true}
-                                                    onMove={(direction) => onNavigate('move', sub, direction, subItems)}
                                                 />
                                             </div>
                                         );
@@ -4425,16 +4393,14 @@ function AwardDetailModal({ award, products, onClose, onNavigateProduct, onSaveP
                     {isAdmin && <button onClick={onEdit} className="p-2 bg-white/50 hover:bg-zinc-100 rounded-full backdrop-blur shadow-sm"><Edit3 className="w-6 h-6 text-zinc-900" /></button>}
                     <button onClick={onClose} className="p-2 bg-white/50 hover:bg-zinc-100 rounded-full backdrop-blur shadow-sm"><X className="w-6 h-6 text-zinc-900" /></button>
                 </div>
-                {/* V 0.8.93 v3: Full Page Scroll (Material Modal Style) */}
-                <div className="flex-1 flex flex-col md:flex-row overflow-y-auto custom-scrollbar md:h-full">
-                    {/* Left Side: Sticky on Desktop */}
-                    <div className="w-full md:w-4/12 bg-zinc-50 flex items-center justify-center p-8 relative min-h-[30vh] shrink-0 md:sticky md:top-0 h-fit">
+                {/* V 0.8.93: Independent scrolling for desktop */}
+                <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
+                    <div className="w-full md:w-4/12 bg-zinc-50 flex items-center justify-center p-8 relative min-h-[30vh] shrink-0 md:overflow-y-auto custom-scrollbar">
                         <div className="w-48 h-48 md:w-64 md:h-64 flex items-center justify-center">
                             {award.image ? <img src={award.image} className="w-full h-full object-contain" /> : <Trophy className="w-24 h-24 text-zinc-300" />}
                         </div>
                     </div>
-                    {/* Right Side: Flows naturally, scroll is on parent */}
-                    <div className="w-full md:w-8/12 bg-white p-8 md:p-12 flex flex-col pb-safe">
+                    <div className="w-full md:w-8/12 bg-white p-8 md:p-12 flex flex-col pb-safe md:overflow-y-auto custom-scrollbar md:h-full">
                         <div className="mb-8">
                             <div className="flex gap-2 mb-3">
                                 {award.tags?.map(t => <span key={t} className="inline-block px-2 py-0.5 bg-zinc-100 text-zinc-600 text-[10px] font-bold rounded uppercase tracking-widest">{t}</span>)}
