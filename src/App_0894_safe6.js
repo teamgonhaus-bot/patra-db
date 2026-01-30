@@ -2480,8 +2480,8 @@ function SwatchDetailModal({ swatch, allProducts, swatches, onClose, onNavigateP
                 </div>
 
                 {/* V 0.8.96: Desktop Split Scroll - Main Container Hidden on Desktop */}
-                <div className="flex-1 flex flex-col md:flex-row h-full pb-safe items-start md:overflow-hidden overflow-y-auto custom-scrollbar">
-                    <div className="w-full md:w-5/12 bg-zinc-50 flex items-center justify-center border-b md:border-b-0 md:border-r border-zinc-100 min-h-[40vh] md:h-full shrink-0">
+                <div className="flex-1 overflow-y-auto md:overflow-hidden custom-scrollbar flex flex-col md:flex-row h-full pb-safe print:overflow-visible print:h-auto">
+                    <div className="w-full md:w-5/12 bg-zinc-50 flex items-center justify-center p-8 border-b md:border-b-0 md:border-r border-zinc-100 print:static print:bg-white print:border-none min-h-[40vh]">
                         <div className="w-48 h-48 md:w-64 md:h-64 rounded-full shadow-2xl overflow-hidden border-4 border-white ring-1 ring-black/5 flex items-center justify-center bg-white">
                             <SwatchDisplay color={swatch} size="large" className="w-full h-full scale-100 rounded-full" />
                         </div>
