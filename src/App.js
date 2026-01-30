@@ -303,13 +303,11 @@ export default function App() {
             const last = modalHistory[modalHistory.length - 1];
             setModalHistory(prev => prev.slice(0, -1));
 
-            // Restore last
-            setTimeout(() => { // Small timeout to allow render cycle to clear
-                if (last.type === 'product') setSelectedProduct(last.data);
-                else if (last.type === 'scene') setSelectedScene(last.data);
-                else if (last.type === 'swatch') setSelectedSwatch(last.data);
-                else if (last.type === 'award') setSelectedAward(last.data);
-            }, 50);
+            // Restore last immediately
+            if (last.type === 'product') setSelectedProduct(last.data);
+            else if (last.type === 'scene') setSelectedScene(last.data);
+            else if (last.type === 'swatch') setSelectedSwatch(last.data);
+            else if (last.type === 'award') setSelectedAward(last.data);
         }
     };
 
@@ -1003,12 +1001,30 @@ export default function App() {
 
         // Optimistic Update
         if (collectionName === 'products') {
-            setProducts(prev => prev.map(p => {
-                // V 0.8.93 v3: Ensure we only update the specific moved item ID
-                if (String(p.id) === String(itemA.id)) return { ...p, orderIndex: newOrderA };
-                return p;
-            }));
-            await handlePairSwap(collectionName, { ...itemA, orderIndex: newOrderA }, { ...itemB, orderIndex: newOrderB }, parentId);
+            const itemA = items[index];
+            let itemB;
+            if (direction === 'left' || direction === 'up') itemB = items[index - 1];
+            else itemB = items[index + 1];
+
+            if (itemB) {
+                const orderA = itemA.orderIndex || 0;
+                const orderB = itemB.orderIndex || 0;
+                let newOrderA = orderB;
+                let newOrderB = orderA;
+
+                // Handle index collision
+                if (Math.abs(newOrderA - newOrderB) < 0.0001) {
+                    if (direction === 'right' || direction === 'down') newOrderA = orderB + 0.001;
+                    else newOrderA = orderB - 0.001;
+                }
+
+                setProducts(prev => prev.map(p => {
+                    if (String(p.id) === String(itemA.id)) return { ...p, orderIndex: newOrderA };
+                    if (String(p.id) === String(itemB.id)) return { ...p, orderIndex: newOrderB };
+                    return p;
+                }));
+                await handlePairSwap(collectionName, { ...itemA, orderIndex: newOrderA }, { ...itemB, orderIndex: newOrderB }, parentId);
+            }
 
         } else if (collectionName === 'swatches') {
             setSwatches(prev => prev.map(s => {
@@ -4422,45 +4438,51 @@ function AwardDetailModal({ award, products, onClose, onNavigateProduct, onSaveP
     });
 
     const addProductToAward = async (product) => {
-        const currentAwards = product.awards || [];
-        const newAwards = currentAwards.includes(award.title) ? currentAwards : [...currentAwards, award.title];
-        const currentHistory = product.awardHistory || [];
-        const newHistory = [...currentHistory.filter(h => h.awardId !== award.id), { awardId: award.id, title: award.title, year: awardYear }];
-        const updatedProduct = { ...product, awards: newAwards, awardHistory: newHistory };
-        await onSaveProduct(updatedProduct);
-    };
+        if (!product) return;
 
-    // V 0.8.93 v4: Material Design Full Screen Dialog Structure
-    // Outer container: Fixed, z-index, handles background dimming and OVERFLOW-Y-AUTO (The Scrollbar)
+        // 1. Add to Product History
+        const historyItem = { awardId: award.id, year: awardYear };
+        const newHistory = [...(product.awardHistory || [])];
+        if (!newHistory.some(h => h.awardId === award.id)) {
+            newHistory.push(historyItem);
+            await onSaveProduct({ ...product, awardHistory: newHistory });
+        }
+
+        // 2. Add tag if missing (legacy support)
+        if (!product.awards?.includes(award.title)) {
+            // allow legacy tag update via saveProduct if needed, but history is primary now
+            // For now, history update is sufficient for this View to reflect it (line 4436)
+        }
+        setIsAddingProduct(false);
+    }
+
     return (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[150] overflow-y-auto custom-scrollbar animate-in zoom-in-95 duration-300">
-            {/* Inner Wrapper: Flex center to position card, min-h-full to allow scrolling */}
-            <div className="flex min-h-full items-center justify-center p-0 md:p-8">
-                {/* The Card: No fixed height, No internal scroll. Just a flex container. */}
-                <div className="bg-white w-full md:max-w-6xl rounded-none md:rounded-3xl overflow-hidden shadow-2xl flex flex-col md:flex-row relative">
+        <div className="fixed inset-0 z-[160] bg-black/60 backdrop-blur-sm flex items-center justify-center p-0 md:p-8 animate-in zoom-in-95 duration-200">
+            <div className="bg-white w-full h-full md:h-[90vh] md:w-full md:max-w-6xl md:rounded-3xl overflow-hidden shadow-2xl flex flex-col md:flex-row relative">
 
-                    {/* Close Buttons - Fixed relative to card? No, usually absolute top right of card. */}
-                    <div className="absolute top-4 right-4 z-[100] flex gap-2">
-                        {isAdmin && <button onClick={onEdit} className="p-2 bg-white/50 hover:bg-zinc-100 rounded-full backdrop-blur shadow-sm"><Edit3 className="w-6 h-6 text-zinc-900" /></button>}
-                        <button onClick={onClose} className="p-2 bg-white/50 hover:bg-zinc-100 rounded-full backdrop-blur shadow-sm"><X className="w-6 h-6 text-zinc-900" /></button>
-                    </div>
+                <div className="absolute top-4 right-4 z-[100] flex gap-2">
+                    {isAdmin && <button onClick={onEdit} className="p-2 bg-white/50 hover:bg-zinc-100 rounded-full backdrop-blur shadow-sm"><Edit3 className="w-6 h-6 text-zinc-900" /></button>}
+                    <button onClick={onClose} className="p-2 bg-white/50 hover:bg-zinc-100 rounded-full backdrop-blur shadow-sm"><X className="w-6 h-6 text-zinc-900" /></button>
+                </div>
 
-                    {/* Left Side: Sticky? If we want sticky, we need 'items-start' on parent flex. */}
-                    {/* If we strictly follow "Right side flows", Left side can be sticky. */}
-                    <div className="w-full md:w-4/12 bg-zinc-50 flex items-center justify-center p-8 relative min-h-[30vh] shrink-0">
-                        {/* Note: Sticky within a flex item requires 'self-start' and 'sticky top-0' */}
-                        <div className="w-48 h-48 md:w-64 md:h-64 flex items-center justify-center sticky top-8">
-                            {award.image ? <img src={award.image} className="w-full h-full object-contain" /> : <Trophy className="w-24 h-24 text-zinc-300" />}
+                <div className="md:hidden flex items-center justify-between p-4 border-b border-zinc-100 bg-white sticky top-0 z-50 print:hidden">
+                    <span className="font-bold text-sm truncate max-w-[200px]">{award.title}</span>
+                </div>
+
+                <div className="flex-1 overflow-y-auto custom-scrollbar flex flex-col md:flex-row h-full pb-safe items-start">
+
+                    <div className="w-full md:w-5/12 bg-zinc-50 p-8 flex items-center justify-center md:sticky md:top-0 border-b md:border-b-0 md:border-r border-zinc-100 min-h-[30vh] self-start h-auto">
+                        <div className="w-full flex items-center justify-center">
+                            {award.image ? <img src={award.image} className="max-w-full max-h-[50vh] object-contain mix-blend-multiply" /> : <Trophy className="w-32 h-32 text-zinc-200" />}
                         </div>
                     </div>
 
-                    {/* Right Side: Content flows naturally. NO OVERFLOW HIDDEN/AUTO here. */}
-                    <div className="w-full md:w-8/12 bg-white p-8 md:p-12 flex flex-col pb-safe">
+                    <div className="w-full md:w-7/12 bg-white p-8 md:p-12 pb-24">
                         <div className="mb-8">
                             <div className="flex gap-2 mb-3">
                                 {award.tags?.map(t => <span key={t} className="inline-block px-2 py-0.5 bg-zinc-100 text-zinc-600 text-[10px] font-bold rounded uppercase tracking-widest">{t}</span>)}
                             </div>
-                            <h2 className="text-4xl font-black text-zinc-900 tracking-tighter mb-2">{award.title}</h2>
+                            <h2 className="text-3xl md:text-4xl font-black text-zinc-900 tracking-tighter mb-2">{award.title}</h2>
                             <p className="text-xl font-bold text-zinc-500 mb-4">{award.organization}</p>
                             {award.link && (
                                 <a href={award.link} target="_blank" rel="noopener noreferrer" className="inline-flex items-center text-xs font-bold text-blue-600 hover:underline">
@@ -4468,80 +4490,80 @@ function AwardDetailModal({ award, products, onClose, onNavigateProduct, onSaveP
                                 </a>
                             )}
                         </div>
-                        <div className="space-y-8 flex-1">
-                            <div>
-                                <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-3">About Award</h3>
-                                <p className="text-sm text-zinc-600 leading-relaxed whitespace-pre-wrap">
-                                    {award.description || "No description provided."}
-                                </p>
-                            </div>
-                            <div className="pt-8 border-t border-zinc-100">
-                                <div className="flex justify-between items-center mb-4">
-                                    <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest flex items-center">
-                                        Winners Gallery
-                                        <span className="bg-zinc-100 text-zinc-600 px-2 py-0.5 rounded-full text-[10px] ml-2">{relatedProducts.length}</span>
-                                    </h3>
-                                    {isAdmin && (
-                                        <button onClick={() => setIsAddingProduct(!isAddingProduct)} className="text-[10px] font-bold text-indigo-600 border border-indigo-200 px-3 py-1.5 rounded hover:bg-indigo-50 transition-colors">
-                                            {isAddingProduct ? 'Done' : '+ Add Winner'}
-                                        </button>
-                                    )}
-                                </div>
-                                {isAdmin && isAddingProduct && (
-                                    <div className="mb-6 bg-zinc-50 p-4 rounded-xl border border-zinc-200 animate-in slide-in-from-top-2">
-                                        <div className="flex gap-2 mb-2">
-                                            <input
-                                                type="text"
-                                                placeholder="Search products..."
-                                                className="flex-1 text-xs p-2 bg-white rounded-lg border border-zinc-200 outline-none"
-                                                value={productFilter}
-                                                onChange={(e) => setProductFilter(e.target.value)}
-                                            />
-                                            <input
-                                                type="number"
-                                                className="w-20 text-xs p-2 bg-white rounded-lg border border-zinc-200 outline-none text-center"
-                                                value={awardYear}
-                                                onChange={(e) => setAwardYear(e.target.value)}
-                                                placeholder="Year"
-                                            />
-                                        </div>
-                                        <div className="max-h-40 overflow-y-auto space-y-1 custom-scrollbar">
-                                            {products.filter(p => p.name.toLowerCase().includes(productFilter.toLowerCase())).map(p => {
-                                                const isAdded = p.awardHistory?.some(h => h.awardId === award.id);
-                                                return (
-                                                    <div key={p.id} onClick={() => !isAdded && addProductToAward(p)} className={`flex items-center p-2 rounded cursor-pointer ${isAdded ? 'opacity-50 cursor-default' : 'hover:bg-white'}`}>
-                                                        <div className={`w-4 h-4 border rounded mr-3 flex items-center justify-center ${isAdded ? 'bg-zinc-300 border-zinc-300' : 'border-zinc-300 bg-white'}`}>
-                                                            {isAdded && <Check className="w-3 h-3 text-white" />}
-                                                        </div>
-                                                        <span className="text-xs font-bold text-zinc-700">{p.name}</span>
-                                                    </div>
-                                                );
-                                            })}
-                                        </div>
-                                    </div>
+
+                        <div className="mb-10">
+                            <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-3">About Award</h3>
+                            <p className="text-sm text-zinc-600 leading-relaxed whitespace-pre-wrap">
+                                {award.description || "No description provided."}
+                            </p>
+                        </div>
+
+                        <div className="pt-8 border-t border-zinc-100">
+                            <div className="flex justify-between items-center mb-4">
+                                <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest flex items-center">
+                                    Winners Gallery
+                                    <span className="bg-zinc-100 text-zinc-600 px-2 py-0.5 rounded-full text-[10px] ml-2">{relatedProducts.length}</span>
+                                </h3>
+                                {isAdmin && (
+                                    <button onClick={() => setIsAddingProduct(!isAddingProduct)} className="text-[10px] font-bold text-indigo-600 border border-indigo-200 px-3 py-1.5 rounded hover:bg-indigo-50 transition-colors">
+                                        {isAddingProduct ? 'Done' : '+ Add Winner'}
+                                    </button>
                                 )}
-                                <div className="grid grid-cols-2 md:grid-cols-3 gap-4 max-h-80 overflow-y-auto custom-scrollbar p-1 pb-10">
-                                    {relatedProducts.length > 0 ? relatedProducts.map(p => {
-                                        const historyItem = p.awardHistory?.find(h => h.awardId === award.id);
-                                        const year = historyItem ? historyItem.year : (p.launchDate?.substring(0, 4) || '-');
-                                        return (
-                                            <button key={p.id} onClick={() => onNavigateProduct(p)} className="flex flex-col p-3 rounded-xl border border-zinc-100 hover:border-zinc-300 hover:bg-zinc-50 transition-all text-left group bg-white shadow-sm">
-                                                <div className="aspect-[4/3] w-full rounded-lg bg-zinc-50 overflow-hidden mb-3 flex items-center justify-center">
-                                                    {p.images?.[0] ? <img src={typeof p.images[0] === 'object' ? p.images[0].url : p.images[0]} className="w-full h-full object-contain mix-blend-multiply" /> : <div className="w-full h-full bg-zinc-200"></div>}
-                                                </div>
-                                                <div>
-                                                    <div className="text-sm font-bold text-zinc-900 truncate group-hover:text-blue-600">{p.name}</div>
-                                                    <div className="flex justify-between items-center mt-1">
-                                                        <span className="text-[10px] text-zinc-400 uppercase">{p.category}</span>
-                                                        <span className="text-[10px] font-bold text-yellow-600 bg-yellow-50 px-1.5 py-0.5 rounded">{year}</span>
+                            </div>
+                            {isAdmin && isAddingProduct && (
+                                <div className="mb-6 bg-zinc-50 p-4 rounded-xl border border-zinc-200 animate-in slide-in-from-top-2">
+                                    <div className="flex gap-2 mb-2">
+                                        <input
+                                            type="text"
+                                            placeholder="Search products..."
+                                            className="flex-1 text-xs p-2 bg-white rounded-lg border border-zinc-200 outline-none"
+                                            value={productFilter}
+                                            onChange={(e) => setProductFilter(e.target.value)}
+                                        />
+                                        <input
+                                            type="number"
+                                            className="w-20 text-xs p-2 bg-white rounded-lg border border-zinc-200 outline-none text-center"
+                                            value={awardYear}
+                                            onChange={(e) => setAwardYear(e.target.value)}
+                                            placeholder="Year"
+                                        />
+                                    </div>
+                                    <div className="max-h-40 overflow-y-auto space-y-1 custom-scrollbar">
+                                        {products.filter(p => p.name.toLowerCase().includes(productFilter.toLowerCase())).map(p => {
+                                            const isAdded = p.awardHistory?.some(h => h.awardId === award.id);
+                                            return (
+                                                <div key={p.id} onClick={() => !isAdded && addProductToAward(p)} className={`flex items-center p-2 rounded cursor-pointer ${isAdded ? 'opacity-50 cursor-default' : 'hover:bg-white'}`}>
+                                                    <div className={`w-4 h-4 border rounded mr-3 flex items-center justify-center ${isAdded ? 'bg-zinc-300 border-zinc-300' : 'border-zinc-300 bg-white'}`}>
+                                                        {isAdded && <Check className="w-3 h-3 text-white" />}
                                                     </div>
+                                                    <span className="text-xs font-bold text-zinc-700">{p.name}</span>
                                                 </div>
-                                            </button>
-                                        );
-                                    }) : (
-                                        <div className="col-span-full text-center py-12 text-zinc-300 text-sm border-2 border-dashed border-zinc-100 rounded-xl">No winners yet.</div>
-                                    )}
+                                            );
+                                        })}
+                                    </div>
                                 </div>
+                            )}
+                            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                                {relatedProducts.length > 0 ? relatedProducts.map(p => {
+                                    const historyItem = p.awardHistory?.find(h => h.awardId === award.id);
+                                    const year = historyItem ? historyItem.year : (p.launchDate?.substring(0, 4) || '-');
+                                    return (
+                                        <button key={p.id} onClick={() => onNavigateProduct(p)} className="flex flex-col p-3 rounded-xl border border-zinc-100 hover:border-zinc-300 hover:bg-zinc-50 transition-all text-left group bg-white shadow-sm">
+                                            <div className="aspect-[4/3] w-full rounded-lg bg-zinc-50 overflow-hidden mb-3 flex items-center justify-center">
+                                                {p.images?.[0] ? <img src={typeof p.images[0] === 'object' ? p.images[0].url : p.images[0]} className="w-full h-full object-contain mix-blend-multiply" /> : <div className="w-full h-full bg-zinc-200"></div>}
+                                            </div>
+                                            <div>
+                                                <div className="text-sm font-bold text-zinc-900 truncate group-hover:text-blue-600">{p.name}</div>
+                                                <div className="flex justify-between items-center mt-1">
+                                                    <span className="text-[10px] text-zinc-400 uppercase">{p.category}</span>
+                                                    <span className="text-[10px] font-bold text-yellow-600 bg-yellow-50 px-1.5 py-0.5 rounded">{year}</span>
+                                                </div>
+                                            </div>
+                                        </button>
+                                    );
+                                }) : (
+                                    <div className="col-span-full text-center py-12 text-zinc-300 text-sm border-2 border-dashed border-zinc-100 rounded-xl">No winners yet.</div>
+                                )}
                             </div>
                         </div>
                     </div>
