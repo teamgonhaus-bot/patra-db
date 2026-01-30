@@ -1423,8 +1423,6 @@ export default function App() {
                             favorites={favorites}
                             onToggleFavorite={toggleFavorite}
                             onOpenModal={handleOpenModal}
-                            sortOption={sortOption}
-                            sortDirection={sortDirection}
                         />
                     ) : (
                         <>
@@ -1895,7 +1893,7 @@ function TotalView({ products, categories, spaces, scenes, spaceContents, materi
     );
 }
 
-function CategoryRootView({ type, spaces, spaceContents, scenes, collections, materials, products, swatches, onNavigate, onProductClick, onSwatchClick, onSceneClick, searchTerm, searchTags, filters, onCompareToggle, compareList, favorites, onToggleFavorite, sortOption = 'manual', sortDirection = 'desc' }) {
+function CategoryRootView({ type, spaces, spaceContents, scenes, collections, materials, products, swatches, onNavigate, onProductClick, onSwatchClick, onSceneClick, searchTerm, searchTags, filters, onCompareToggle, compareList, favorites, onToggleFavorite }) {
     let title = "";
     let items = [];
     let icon = null;
@@ -1949,16 +1947,8 @@ function CategoryRootView({ type, spaces, spaceContents, scenes, collections, ma
                     subItems = subItems.filter(i => filterItem(i, itemType));
 
                     // V 0.8.94: Sort items by orderIndex in Hub view
-                    // V 0.8.95: Unified sorting for Hub Views
                     if (type === 'MATERIALS_ROOT' || type === 'COLLECTIONS_ROOT' || type === 'SPACES_ROOT') {
-                        subItems.sort((a, b) => {
-                            let comparison = 0;
-                            if (sortOption === 'name') comparison = a.name.localeCompare(b.name);
-                            else if (sortOption === 'launchDate') comparison = parseInt(a.launchDate || 0) - parseInt(b.launchDate || 0);
-                            else if (sortOption === 'manual') comparison = (a.orderIndex || 0) - (b.orderIndex || 0);
-                            else comparison = (a.createdAt || 0) - (b.createdAt || 0);
-                            return sortDirection === 'asc' ? comparison : -comparison;
-                        });
+                        subItems.sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0));
                     }
 
                     if (subItems.length === 0) return null;
@@ -2497,7 +2487,7 @@ function SwatchDetailModal({ swatch, allProducts, swatches, onClose, onNavigateP
                                     Applied Products
                                     <span className="bg-zinc-100 text-zinc-600 px-2 py-0.5 rounded-full text-[10px]">{relatedProducts.length}</span>
                                 </h3>
-                                <div className="grid grid-cols-2 gap-3 p-1">
+                                <div className="grid grid-cols-2 gap-3 max-h-60 overflow-y-auto custom-scrollbar p-1">
                                     {relatedProducts.length > 0 ? relatedProducts.map(p => (
                                         <button key={p.id} onClick={() => onNavigateProduct(p)} className="flex items-center p-2 rounded-lg border border-zinc-100 hover:border-zinc-300 hover:bg-zinc-50 transition-all text-left group">
                                             <div className="w-10 h-10 rounded-md bg-zinc-100 overflow-hidden mr-3 flex-shrink-0">
