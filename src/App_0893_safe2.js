@@ -1547,19 +1547,6 @@ export default function App() {
                 />
             )}
 
-            {editingSwatchFromModal && (
-                <SwatchFormModal
-                    category={SWATCH_CATEGORIES.find(c => c.id === editingSwatchFromModal.category) || SWATCH_CATEGORIES[0]}
-                    existingData={editingSwatchFromModal}
-                    onClose={() => setEditingSwatchFromModal(null)}
-                    onSave={(data) => {
-                        handleSaveSwatch(data);
-                        setEditingSwatchFromModal(null);
-                        setSelectedSwatch(prev => (prev && prev.id === data.id ? { ...prev, ...data } : prev));
-                    }}
-                />
-            )}
-
             {/* V 0.8.93 v4: Award Detail Modal - Full Page Scroll Architecture */}
             {selectedAward && (
                 <AwardDetailModal
@@ -2365,12 +2352,7 @@ function SwatchDetailModal({ swatch, allProducts, swatches, onClose, onNavigateP
     const relatedProducts = allProducts.filter(p => {
         const inBody = p.bodyColors?.some(c => typeof c === 'object' && c.id === swatch.id);
         const inUph = p.upholsteryColors?.some(c => typeof c === 'object' && c.id === swatch.id);
-        // V 0.8.93 v6: Check Material string array and Tags
-        const inMaterials = p.materials?.some(m => m === swatch.name || m === swatch.materialCode);
-        const inTags = swatch.tags?.some(tag => p.name.includes(tag)) || false; // Basic tag linkage if needed, but mostly material string matches
-        // Also check if product has tags that match swatch name
-        // const matchTag = p.tags?.includes(swatch.name); // Product tags not explicitly defined in main object usually, but let's check basic string array
-        return inBody || inUph || inMaterials || inTags;
+        return inBody || inUph;
     });
 
     const handleShareImage = async () => { /* Placeholder */ };
@@ -2615,12 +2597,8 @@ function SwatchFormModal({ category, existingData, onClose, onSave }) {
                     </div>
 
                     <div>
+                        <label className="text-xs font-bold text-zinc-500 uppercase block mb-1">Name</label>
                         <input value={data.name} onChange={e => setData({ ...data, name: e.target.value })} className="w-full border rounded-lg p-2 text-sm outline-none" />
-                    </div>
-
-                    <div>
-                        <label className="text-xs font-bold text-zinc-500 uppercase block mb-1">Description</label>
-                        <textarea rows={3} value={data.description} onChange={e => setData({ ...data, description: e.target.value })} className="w-full border rounded-lg p-2 text-sm outline-none" />
                     </div>
 
                     <div>
