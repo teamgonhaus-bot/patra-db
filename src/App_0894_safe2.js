@@ -1946,11 +1946,6 @@ function CategoryRootView({ type, spaces, spaceContents, scenes, collections, ma
 
                     subItems = subItems.filter(i => filterItem(i, itemType));
 
-                    // V 0.8.94: Sort materials by orderIndex in Hub view
-                    if (type === 'MATERIALS_ROOT') {
-                        subItems.sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0));
-                    }
-
                     if (subItems.length === 0) return null;
 
                     return (
@@ -4022,13 +4017,13 @@ function ProductFormModal({ categories, swatches = [], allProducts = [], awards 
                         <SwatchSelector
                             label="Body Colors"
                             selected={formData.bodyColors}
-                            swatches={swatches.filter(s => ['RESIN', 'METAL', 'WOOD'].includes(s.category))}
+                            swatches={swatches}
                             onChange={(newColors) => setFormData({ ...formData, bodyColors: newColors })}
                         />
                         <SwatchSelector
                             label="Upholstery Colors"
                             selected={formData.upholsteryColors}
-                            swatches={swatches.filter(s => ['MESH', 'FABRIC', 'LEATHER', 'ETC'].includes(s.category))}
+                            swatches={swatches}
                             onChange={(newColors) => setFormData({ ...formData, upholsteryColors: newColors })}
                         />
                     </div>
