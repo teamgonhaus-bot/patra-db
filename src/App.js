@@ -38,7 +38,7 @@ const YOUR_FIREBASE_CONFIG = {
 // ----------------------------------------------------------------------
 // 상수 및 설정
 // ----------------------------------------------------------------------
-const APP_VERSION = "v0.8.93";
+const APP_VERSION = "v0.8.94";
 const BUILD_DATE = "2026.01.30";
 const ADMIN_PASSWORD = "adminlcg1";
 
@@ -2074,12 +2074,35 @@ function CompareView({ products, hiddenIds, onToggleVisibility, onRemove, onEdit
                             {visibleProducts.length < 4 && Array(4 - visibleProducts.length).fill(0).map((_, i) => <td key={i} className="border-b border-zinc-50"></td>)}
                         </tr>
                         <tr>
-                            <td className="bg-zinc-50 border-r border-b border-zinc-100 p-2 md:p-3 font-bold text-zinc-500 sticky left-0 z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">Colors</td>
+                            <td className="bg-zinc-50 border-r border-b border-zinc-100 p-2 md:p-3 font-bold text-zinc-500 sticky left-0 z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">Features</td>
                             {visibleProducts.map(p => (
                                 <td key={p.id} className="border-r border-b border-zinc-100 p-2 md:p-3">
                                     <div className="flex flex-wrap gap-1">
-                                        {[...(p.bodyColors || []), ...(p.upholsteryColors || [])].slice(0, 8).map((c, i) => <SwatchDisplay key={i} color={c} size="small" />)}
-                                        {([...(p.bodyColors || []), ...(p.upholsteryColors || [])].length > 8) && <span className="text-[9px] text-zinc-400">+</span>}
+                                        {p.features?.map((ft, i) => <span key={i} className="px-1.5 py-0.5 bg-zinc-100 text-zinc-600 rounded text-[9px] md:text-[10px] font-medium flex items-center"><Check className="w-2.5 h-2.5 mr-1" />{ft}</span>)}
+                                    </div>
+                                </td>
+                            ))}
+                            {visibleProducts.length < 4 && Array(4 - visibleProducts.length).fill(0).map((_, i) => <td key={i} className="border-b border-zinc-50"></td>)}
+                        </tr>
+                        <tr>
+                            <td className="bg-zinc-50 border-r border-b border-zinc-100 p-2 md:p-3 font-bold text-zinc-500 sticky left-0 z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">Body Color</td>
+                            {visibleProducts.map(p => (
+                                <td key={p.id} className="border-r border-b border-zinc-100 p-2 md:p-3">
+                                    <div className="flex flex-wrap gap-1">
+                                        {p.bodyColors?.slice(0, 8).map((c, i) => <SwatchDisplay key={i} color={c} size="small" />)}
+                                        {(p.bodyColors?.length > 8) && <span className="text-[9px] text-zinc-400">+</span>}
+                                    </div>
+                                </td>
+                            ))}
+                            {visibleProducts.length < 4 && Array(4 - visibleProducts.length).fill(0).map((_, i) => <td key={i} className="border-b border-zinc-50"></td>)}
+                        </tr>
+                        <tr>
+                            <td className="bg-zinc-50 border-r border-b border-zinc-100 p-2 md:p-3 font-bold text-zinc-500 sticky left-0 z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">Upholstery Color</td>
+                            {visibleProducts.map(p => (
+                                <td key={p.id} className="border-r border-b border-zinc-100 p-2 md:p-3">
+                                    <div className="flex flex-wrap gap-1">
+                                        {p.upholsteryColors?.slice(0, 8).map((c, i) => <SwatchDisplay key={i} color={c} size="small" />)}
+                                        {(p.upholsteryColors?.length > 8) && <span className="text-[9px] text-zinc-400">+</span>}
                                     </div>
                                 </td>
                             ))}
@@ -3560,7 +3583,8 @@ function ProductDetailModal({ product, allProducts, swatches, spaceContents, awa
 
                         <div className="space-y-6 md:space-y-10">
                             <div><h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-3 flex items-center justify-between">Specifications <button onClick={copyToClipboard} className="text-zinc-400 hover:text-zinc-900 print:hidden"><Copy className="w-4 h-4" /></button></h3><p className="text-sm text-zinc-600 leading-relaxed bg-zinc-50 p-4 md:p-6 rounded-2xl border border-zinc-100 whitespace-pre-wrap print:bg-transparent print:border-none print:p-0">{product.specs}</p></div>
-                            {(product.features?.length > 0 || product.options?.length > 0) && (<div><h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-3">Features & Options</h3><div className="flex flex-wrap gap-2">{product.options?.map((opt, idx) => (<span key={idx} className="px-3 py-1.5 bg-blue-50 text-blue-600 border border-blue-100 rounded-lg text-xs font-bold print:border-gray-300 print:text-black">{opt}</span>))}{product.features?.map((ft, idx) => (<span key={idx} className="px-3 py-1.5 bg-zinc-100 text-zinc-600 rounded-lg text-xs font-medium flex items-center print:bg-transparent"><Check className="w-3 h-3 mr-1.5" /> {ft}</span>))}</div></div>)}
+                            {product.options?.length > 0 && (<div><h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-3">Options</h3><div className="flex flex-wrap gap-2">{product.options.map((opt, idx) => (<span key={idx} className="px-3 py-1.5 bg-blue-50 text-blue-600 border border-blue-100 rounded-lg text-xs font-bold print:border-gray-300 print:text-black">{opt}</span>))}</div></div>)}
+                            {product.features?.length > 0 && (<div><h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-3">Features</h3><div className="flex flex-wrap gap-2">{product.features.map((ft, idx) => (<span key={idx} className="px-3 py-1.5 bg-zinc-100 text-zinc-600 rounded-lg text-xs font-medium flex items-center print:bg-transparent"><Check className="w-3 h-3 mr-1.5" /> {ft}</span>))}</div></div>)}
                             <div className="grid grid-cols-2 gap-4 md:gap-8">
                                 <div>
                                     <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2">Body Color</h3>

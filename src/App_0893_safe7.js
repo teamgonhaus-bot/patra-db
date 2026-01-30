@@ -1525,21 +1525,7 @@ export default function App() {
             {/* Modals are now stacked using conditional rendering with z-index management */}
 
 
-            {isFormOpen && (
-                <ProductFormModal
-                    categories={CATEGORIES.filter(c => !c.isSpecial)}
-                    swatches={swatches}
-                    allProducts={products}
-                    awards={awards}
-                    initialCategory={activeCategory}
-                    existingData={editingProduct}
-                    onClose={() => { setIsFormOpen(false); setEditingProduct(null); }}
-                    onSave={handleSaveProduct}
-                    onDelete={handleDeleteProduct}
-                    isFirebaseAvailable={isFirebaseAvailable}
-                    spaceTags={SPACES.find(s => s.id === activeCategory)?.defaultTags || []}
-                />
-            )}
+
 
             {selectedSwatch && (
                 <SwatchDetailModal
@@ -1554,18 +1540,7 @@ export default function App() {
                 />
             )}
 
-            {editingSwatchFromModal && (
-                <SwatchFormModal
-                    category={SWATCH_CATEGORIES.find(c => c.id === editingSwatchFromModal.category) || SWATCH_CATEGORIES[0]}
-                    existingData={editingSwatchFromModal}
-                    onClose={() => setEditingSwatchFromModal(null)}
-                    onSave={(data) => {
-                        handleSaveSwatch(data);
-                        setEditingSwatchFromModal(null);
-                        setSelectedSwatch(prev => (prev && prev.id === data.id ? { ...prev, ...data } : prev));
-                    }}
-                />
-            )}
+
 
             {/* V 0.8.93 v4: Award Detail Modal - Full Page Scroll Architecture */}
             {selectedAward && (
@@ -1580,14 +1555,7 @@ export default function App() {
                 />
             )}
 
-            {editingAwardFromModal && (
-                <AwardFormModal
-                    existingData={editingAwardFromModal}
-                    allProducts={products}
-                    onClose={() => setEditingAwardFromModal(null)}
-                    onSave={(data, winners) => { handleSaveAward(data, winners); }}
-                />
-            )}
+
 
             {editingSpaceInfoId && (
                 <SpaceInfoEditModal
@@ -1688,6 +1656,44 @@ export default function App() {
                     onNavigateSwatch={(swatch) => handleOpenModal('swatch', swatch)}
                     onNavigateAward={(award) => handleOpenModal('award', award)}
                     onSaveProduct={handleSaveProduct}
+                />
+            )}
+
+            {isFormOpen && (
+                <ProductFormModal
+                    categories={CATEGORIES.filter(c => !c.isSpecial)}
+                    swatches={swatches}
+                    allProducts={products}
+                    awards={awards}
+                    initialCategory={activeCategory}
+                    existingData={editingProduct}
+                    onClose={() => { setIsFormOpen(false); setEditingProduct(null); }}
+                    onSave={handleSaveProduct}
+                    onDelete={handleDeleteProduct}
+                    isFirebaseAvailable={isFirebaseAvailable}
+                    spaceTags={SPACES.find(s => s.id === activeCategory)?.defaultTags || []}
+                />
+            )}
+
+            {editingSwatchFromModal && (
+                <SwatchFormModal
+                    category={SWATCH_CATEGORIES.find(c => c.id === editingSwatchFromModal.category) || SWATCH_CATEGORIES[0]}
+                    existingData={editingSwatchFromModal}
+                    onClose={() => setEditingSwatchFromModal(null)}
+                    onSave={(data) => {
+                        handleSaveSwatch(data);
+                        setEditingSwatchFromModal(null);
+                        setSelectedSwatch(prev => (prev && prev.id === data.id ? { ...prev, ...data } : prev));
+                    }}
+                />
+            )}
+
+            {editingAwardFromModal && (
+                <AwardFormModal
+                    existingData={editingAwardFromModal}
+                    allProducts={products}
+                    onClose={() => setEditingAwardFromModal(null)}
+                    onSave={(data, winners) => { handleSaveAward(data, winners); }}
                 />
             )}
         </div>
@@ -2558,7 +2564,7 @@ function SwatchFormModal({ category, existingData, onClose, onSave }) {
     };
 
     return (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[500] flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[1060] flex items-center justify-center p-4">
             <div className="bg-white rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
                 <div className="px-5 py-4 border-b border-zinc-100 font-bold text-lg flex-shrink-0">
                     {existingData ? 'Edit Material' : 'Add Material'}
@@ -3729,7 +3735,7 @@ function SpaceInfoEditModal({ spaceId, currentData = {}, defaultTags, onClose, o
     };
 
     return (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[500] flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[1050] flex items-center justify-center p-4">
             <div className="bg-white w-full max-w-lg rounded-2xl overflow-hidden shadow-2xl">
                 <div className="px-6 py-4 border-b border-zinc-100 flex justify-between items-center"><h3 className="text-lg font-bold text-zinc-900">Edit Space Info</h3><button onClick={onClose}><X className="w-5 h-5 text-zinc-400" /></button></div>
                 <div className="p-6 space-y-4">
@@ -3877,7 +3883,7 @@ function ProductFormModal({ categories, swatches = [], allProducts = [], awards 
     };
 
     return (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[250] flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[1050] flex items-center justify-center p-4">
             <div className="bg-white w-full max-w-3xl rounded-2xl overflow-hidden shadow-2xl flex flex-col max-h-[95vh] animate-in slide-in-from-bottom-4 duration-200">
                 <div className="px-8 py-5 border-b border-zinc-100 flex justify-between items-center">
                     <h2 className="text-xl font-bold text-zinc-900">{isEditMode ? 'Edit Product' : 'New Product'}</h2>
