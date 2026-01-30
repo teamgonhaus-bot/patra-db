@@ -1576,13 +1576,7 @@ export default function App() {
                     spaceTags={(spaceContents[editingScene.spaceId]?.tags) || SPACES.find(s => s.id === editingScene.spaceId)?.defaultTags || []}
                     spaceOptions={SPACES}
                     onClose={() => setEditingScene(null)}
-                    onSave={(data) => {
-                        handleSceneSave(editingScene.spaceId, data);
-                        if (selectedScene && selectedScene.id === data.id) {
-                            setSelectedScene(prev => ({ ...prev, ...data }));
-                        }
-                        setEditingScene(null);
-                    }}
+                    onSave={(data) => { handleSceneSave(editingScene.spaceId, data); }}
                     onDelete={(id) => { handleSceneDelete(editingScene.spaceId, id); setEditingScene(null); }}
                 />
             )}
@@ -3583,12 +3577,7 @@ function ProductDetailModal({ product, allProducts, swatches, spaceContents, awa
                             <h2 className="text-3xl md:text-5xl font-black text-zinc-900 mb-1 tracking-tight">{product.name}</h2>
                             <div className="flex items-center text-sm text-zinc-500 font-medium">
                                 {product.designer && <span className="mr-3">Designed by <span className="text-zinc-900">{product.designer}</span></span>}
-                                {launchYear && <span className="mr-3">Since {launchYear}</span>}
-                                {product.productLink && (
-                                    <a href={product.productLink} target="_blank" rel="noopener noreferrer" className="p-1.5 bg-zinc-100 hover:bg-zinc-200 rounded-full text-zinc-600 transition-colors" title="External Link">
-                                        <ExternalLink className="w-4 h-4" />
-                                    </a>
-                                )}
+                                {launchYear && <span>Since {launchYear}</span>}
                             </div>
                         </div>
 
@@ -3627,7 +3616,7 @@ function ProductDetailModal({ product, allProducts, swatches, spaceContents, awa
                                 </div>
                             </div>
 
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 print:hidden">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-8 border-t border-zinc-100 print:hidden">
                                 {relatedSpaces.length > 0 && (
                                     <div>
                                         <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-3">Related Spaces</h3>
@@ -4374,17 +4363,8 @@ function SpaceSceneModal({ scene, products, allProducts, isAdmin, onClose, onEdi
                     <div className="w-full md:w-1/3 bg-white flex flex-col border-l border-zinc-100 md:h-auto relative pb-24 md:pb-0">
                         <div className="p-6 md:p-8 border-b border-zinc-50 pt-8 flex-shrink-0">
                             <div className="mb-4">
-                                <div className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-1">
-                                    {SPACES.find(s => s.id === scene.spaceId)?.label || scene.spaceId}
-                                </div>
-                                {scene.tags?.length > 0 && (
-                                    <div className="flex flex-wrap gap-1 mb-2">
-                                        {scene.tags.map(t => <span key={t} className="text-[10px] font-bold bg-zinc-100 text-zinc-500 px-1.5 py-0.5 rounded">{t}</span>)}
-                                    </div>
-                                )}
-                                <h2 className="text-2xl md:text-3xl font-black text-zinc-900 mb-4">{scene.title}</h2>
-                                <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-1">Description</h3>
-                                <p className="text-zinc-500 text-sm leading-relaxed whitespace-pre-wrap">{scene.description}</p>
+                                <h2 className="text-2xl md:text-3xl font-black text-zinc-900 mb-2">{scene.title}</h2>
+                                <p className="text-zinc-500 text-sm leading-relaxed">{scene.description}</p>
                             </div>
                         </div>
                         <div className="flex-1 p-6 md:p-8 custom-scrollbar bg-zinc-50/50">
