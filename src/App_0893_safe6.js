@@ -1525,7 +1525,21 @@ export default function App() {
             {/* Modals are now stacked using conditional rendering with z-index management */}
 
 
-
+            {isFormOpen && (
+                <ProductFormModal
+                    categories={CATEGORIES.filter(c => !c.isSpecial)}
+                    swatches={swatches}
+                    allProducts={products}
+                    awards={awards}
+                    initialCategory={activeCategory}
+                    existingData={editingProduct}
+                    onClose={() => { setIsFormOpen(false); setEditingProduct(null); }}
+                    onSave={handleSaveProduct}
+                    onDelete={handleDeleteProduct}
+                    isFirebaseAvailable={isFirebaseAvailable}
+                    spaceTags={SPACES.find(s => s.id === activeCategory)?.defaultTags || []}
+                />
+            )}
 
             {selectedSwatch && (
                 <SwatchDetailModal
@@ -1540,7 +1554,18 @@ export default function App() {
                 />
             )}
 
-
+            {editingSwatchFromModal && (
+                <SwatchFormModal
+                    category={SWATCH_CATEGORIES.find(c => c.id === editingSwatchFromModal.category) || SWATCH_CATEGORIES[0]}
+                    existingData={editingSwatchFromModal}
+                    onClose={() => setEditingSwatchFromModal(null)}
+                    onSave={(data) => {
+                        handleSaveSwatch(data);
+                        setEditingSwatchFromModal(null);
+                        setSelectedSwatch(prev => (prev && prev.id === data.id ? { ...prev, ...data } : prev));
+                    }}
+                />
+            )}
 
             {/* V 0.8.93 v4: Award Detail Modal - Full Page Scroll Architecture */}
             {selectedAward && (
@@ -1555,7 +1580,14 @@ export default function App() {
                 />
             )}
 
-
+            {editingAwardFromModal && (
+                <AwardFormModal
+                    existingData={editingAwardFromModal}
+                    allProducts={products}
+                    onClose={() => setEditingAwardFromModal(null)}
+                    onSave={(data, winners) => { handleSaveAward(data, winners); }}
+                />
+            )}
 
             {editingSpaceInfoId && (
                 <SpaceInfoEditModal
@@ -1656,44 +1688,6 @@ export default function App() {
                     onNavigateSwatch={(swatch) => handleOpenModal('swatch', swatch)}
                     onNavigateAward={(award) => handleOpenModal('award', award)}
                     onSaveProduct={handleSaveProduct}
-                />
-            )}
-
-            {isFormOpen && (
-                <ProductFormModal
-                    categories={CATEGORIES.filter(c => !c.isSpecial)}
-                    swatches={swatches}
-                    allProducts={products}
-                    awards={awards}
-                    initialCategory={activeCategory}
-                    existingData={editingProduct}
-                    onClose={() => { setIsFormOpen(false); setEditingProduct(null); }}
-                    onSave={handleSaveProduct}
-                    onDelete={handleDeleteProduct}
-                    isFirebaseAvailable={isFirebaseAvailable}
-                    spaceTags={SPACES.find(s => s.id === activeCategory)?.defaultTags || []}
-                />
-            )}
-
-            {editingSwatchFromModal && (
-                <SwatchFormModal
-                    category={SWATCH_CATEGORIES.find(c => c.id === editingSwatchFromModal.category) || SWATCH_CATEGORIES[0]}
-                    existingData={editingSwatchFromModal}
-                    onClose={() => setEditingSwatchFromModal(null)}
-                    onSave={(data) => {
-                        handleSaveSwatch(data);
-                        setEditingSwatchFromModal(null);
-                        setSelectedSwatch(prev => (prev && prev.id === data.id ? { ...prev, ...data } : prev));
-                    }}
-                />
-            )}
-
-            {editingAwardFromModal && (
-                <AwardFormModal
-                    existingData={editingAwardFromModal}
-                    allProducts={products}
-                    onClose={() => setEditingAwardFromModal(null)}
-                    onSave={(data, winners) => { handleSaveAward(data, winners); }}
                 />
             )}
         </div>
