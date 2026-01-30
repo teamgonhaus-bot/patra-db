@@ -2618,19 +2618,17 @@ function PieChartComponent({ data, total, selectedIndex, onSelect }) {
                     const x1 = Math.cos(angleRad) * rSlice;
                     const y1 = Math.sin(angleRad) * rSlice;
 
-                    // V 0.8.93 Refined: Responsive Spacing
-                    const isMobile = window.innerWidth < 768; // Simple check
-                    const rLabel = isMobile ? 0.85 : 0.95; // Closer on mobile
+                    // V 0.8.93: Mobile Spacing Adjustment
+                    const rLabel = 0.9;
                     const x2 = Math.cos(angleRad) * rLabel;
                     const y2 = Math.sin(angleRad) * rLabel;
 
-                    // Text Offset
-                    // Mobile: 0.95 (Very close), Desktop: 1.08 (Standard)
-                    const offsetMult = isMobile ? 0.95 : 1.08;
-                    const tx = Math.cos(angleRad) * offsetMult;
-                    const ty = Math.sin(angleRad) * offsetMult;
+                    // V 0.8.88: Responsive text offset - 90px mobile, 120px desktop
+                    // Smaller offset = closer to donut
+                    const tx = Math.cos(angleRad) * 1.05;
+                    const ty = Math.sin(angleRad) * 1.05;
 
-                    // Dynamic font size
+                    // V 0.8.88: Dynamic font size based on percentage
                     const fontSize = percent < 0.05 ? 'text-[9px] md:text-[10px]' : 'text-[10px] md:text-xs';
 
                     return (
@@ -3978,7 +3976,7 @@ function SwatchSelector({ label, selected, swatches, onChange }) {
             </div>
 
             {isOpen && (
-                <div className="absolute top-full left-0 z-[60] mt-2 w-full md:w-[320px] bg-white rounded-xl shadow-2xl border border-zinc-200 p-4 animate-in fade-in slide-in-from-top-2">
+                <div className="absolute top-full left-0 z-50 mt-2 w-full md:w-[400px] bg-white rounded-xl shadow-xl border border-zinc-200 p-4">
                     <div className="flex justify-between items-center mb-3">
                         <h4 className="font-bold text-sm">Select Material</h4>
                         <button onClick={() => setIsOpen(false)}><X className="w-4 h-4 text-zinc-400 hover:text-black" /></button>
@@ -4400,7 +4398,7 @@ function AwardDetailModal({ award, products, onClose, onNavigateProduct, onSaveP
                             {award.image ? <img src={award.image} className="w-full h-full object-contain" /> : <Trophy className="w-24 h-24 text-zinc-300" />}
                         </div>
                     </div>
-                    <div className="w-full md:w-8/12 bg-white p-8 md:p-12 flex flex-col pb-safe md:overflow-y-auto custom-scrollbar md:h-full">
+                    <div className="w-full md:w-8/12 bg-white p-8 md:p-12 flex flex-col pb-safe md:overflow-y-auto custom-scrollbar">
                         <div className="mb-8">
                             <div className="flex gap-2 mb-3">
                                 {award.tags?.map(t => <span key={t} className="inline-block px-2 py-0.5 bg-zinc-100 text-zinc-600 text-[10px] font-bold rounded uppercase tracking-widest">{t}</span>)}
