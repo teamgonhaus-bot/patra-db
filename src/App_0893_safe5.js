@@ -1547,10 +1547,10 @@ export default function App() {
                     allProducts={products}
                     swatches={swatches}
                     isAdmin={isAdmin}
-                    onClose={() => handleCloseModal('swatch')}
-                    onNavigateProduct={(product) => handleOpenModal('product', product)}
-                    onNavigateSwatch={(swatch) => handleOpenModal('swatch', swatch)}
-                    onEdit={() => { setEditingSwatchFromModal(selectedSwatch); }}
+                    onClose={() => setSelectedSwatch(null)}
+                    onNavigateProduct={(product) => { setSelectedProduct(product); /* V 0.8.88: Keep swatch modal open for smooth stacking */ }}
+                    onNavigateSwatch={(swatch) => setSelectedSwatch(swatch)}
+                    onEdit={() => { setEditingSwatchFromModal(selectedSwatch); /* V 0.8.92: Keep modal open */ }}
                 />
             )}
 
@@ -2558,7 +2558,7 @@ function SwatchFormModal({ category, existingData, onClose, onSave }) {
     };
 
     return (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[500] flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[250] flex items-center justify-center p-4">
             <div className="bg-white rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
                 <div className="px-5 py-4 border-b border-zinc-100 font-bold text-lg flex-shrink-0">
                     {existingData ? 'Edit Material' : 'Add Material'}
@@ -3729,7 +3729,7 @@ function SpaceInfoEditModal({ spaceId, currentData = {}, defaultTags, onClose, o
     };
 
     return (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[500] flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[80] flex items-center justify-center p-4">
             <div className="bg-white w-full max-w-lg rounded-2xl overflow-hidden shadow-2xl">
                 <div className="px-6 py-4 border-b border-zinc-100 flex justify-between items-center"><h3 className="text-lg font-bold text-zinc-900">Edit Space Info</h3><button onClick={onClose}><X className="w-5 h-5 text-zinc-400" /></button></div>
                 <div className="p-6 space-y-4">
