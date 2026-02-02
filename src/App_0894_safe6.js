@@ -1385,6 +1385,8 @@ export default function App() {
                             onToggleFavorite={toggleFavorite}
                             onCompareToggle={toggleCompare}
                             compareList={compareList}
+                            sortOption={sortOption}
+                            sortDirection={sortDirection}
                         />
                     ) : activeCategory === 'AWARDS_ROOT' ? (
                         <AwardsManager
@@ -1423,6 +1425,8 @@ export default function App() {
                             favorites={favorites}
                             onToggleFavorite={toggleFavorite}
                             onOpenModal={handleOpenModal}
+                            sortOption={sortOption}
+                            sortDirection={sortDirection}
                         />
                     ) : (
                         <>
@@ -1786,7 +1790,7 @@ const checkSearchMatch = (item, type, searchTerm, searchTags, filters = {}, allP
     return matchesSearch && matchesTags && matchesFilter;
 };
 
-function TotalView({ products, categories, spaces, scenes, spaceContents, materials, materialCategories, onProductClick, onSceneClick, onSwatchClick, searchTerm, searchTags, filters, favorites, onToggleFavorite, onCompareToggle, compareList }) {
+function TotalView({ products, categories, spaces, scenes, spaceContents, materials, materialCategories, onProductClick, onSceneClick, onSwatchClick, searchTerm, searchTags, filters, favorites, onToggleFavorite, onCompareToggle, compareList, sortOption = 'manual', sortDirection = 'desc' }) {
     // Filter Logic - V 0.8.83: Uses unified checkSearchMatch
     // V 0.8.91: Pass products array for scene tagged products search
     const filterItem = (item, type) => checkSearchMatch(item, type, searchTerm, searchTags, filters, type === 'scene' ? products : []);
@@ -1807,6 +1811,9 @@ function TotalView({ products, categories, spaces, scenes, spaceContents, materi
                     {spaces.map(space => {
                         // V 0.8.9: Use scenes array for accurate aggregation
                         const spaceScenes = scenes.filter(s => s.spaceId === space.id).filter(s => filterItem(s, 'scene'));
+                        // V 0.8.97: Strict Manual Sort for Total View Spaces
+                        spaceScenes.sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0));
+
                         if (spaceScenes.length === 0) return null;
 
                         return (
@@ -1836,6 +1843,17 @@ function TotalView({ products, categories, spaces, scenes, spaceContents, materi
                 <div className="space-y-4">
                     {categories.map(cat => {
                         const catProducts = products.filter(p => p.category === cat.id && filterItem(p, 'product'));
+
+                        // V 0.8.97: Dynamic Sorting for Total View Collections
+                        catProducts.sort((a, b) => {
+                            let comparison = 0;
+                            if (sortOption === 'name') comparison = a.name.localeCompare(b.name);
+                            else if (sortOption === 'launchDate') comparison = parseInt(a.launchDate || 0) - parseInt(b.launchDate || 0);
+                            else if (sortOption === 'manual') comparison = (a.orderIndex || 0) - (b.orderIndex || 0);
+                            else comparison = (a.createdAt || 0) - (b.createdAt || 0);
+                            return sortDirection === 'asc' ? comparison : -comparison;
+                        });
+
                         if (catProducts.length === 0) return null;
 
                         return (
@@ -1866,6 +1884,10 @@ function TotalView({ products, categories, spaces, scenes, spaceContents, materi
                 <div className="space-y-4">
                     {materialCategories.map(cat => {
                         const catSwatches = materials.filter(s => s.category === cat.id && filterItem(s, 'material'));
+
+                        // V 0.8.97: Strict Manual Sort for Total View Materials
+                        catSwatches.sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0));
+
                         if (catSwatches.length === 0) return null;
 
                         return (
@@ -1893,7 +1915,7 @@ function TotalView({ products, categories, spaces, scenes, spaceContents, materi
     );
 }
 
-function CategoryRootView({ type, spaces, spaceContents, scenes, collections, materials, products, swatches, onNavigate, onProductClick, onSwatchClick, onSceneClick, searchTerm, searchTags, filters, onCompareToggle, compareList, favorites, onToggleFavorite }) {
+function CategoryRootView({ type, spaces, spaceContents, scenes, collections, materials, products, swatches, onNavigate, onProductClick, onSwatchClick, onSceneClick, searchTerm, searchTags, filters, onCompareToggle, compareList, favorites, onToggleFavorite, sortOption = 'manual', sortDirection = 'desc' }) {
     let title = "";
     let items = [];
     let icon = null;
@@ -1946,8 +1968,19 @@ function CategoryRootView({ type, spaces, spaceContents, scenes, collections, ma
 
                     subItems = subItems.filter(i => filterItem(i, itemType));
 
-                    // V 0.8.94: Sort materials by orderIndex in Hub view
-                    if (type === 'MATERIALS_ROOT') {
+                    // V 0.8.94: Sort items by orderIndex in Hub view
+                    // V 0.8.95: Unified sorting for Hub Views
+                    // V 0.8.96: Spaces and Materials must use Manual Sort (orderIndex)
+                    if (type === 'COLLECTIONS_ROOT') {
+                        subItems.sort((a, b) => {
+                            let comparison = 0;
+                            if (sortOption === 'name') comparison = a.name.localeCompare(b.name);
+                            else if (sortOption === 'launchDate') comparison = parseInt(a.launchDate || 0) - parseInt(b.launchDate || 0);
+                            else if (sortOption === 'manual') comparison = (a.orderIndex || 0) - (b.orderIndex || 0);
+                            else comparison = (a.createdAt || 0) - (b.createdAt || 0);
+                            return sortDirection === 'asc' ? comparison : -comparison;
+                        });
+                    } else if (type === 'MATERIALS_ROOT' || type === 'SPACES_ROOT') {
                         subItems.sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0));
                     }
 
@@ -1967,7 +2000,7 @@ function CategoryRootView({ type, spaces, spaceContents, scenes, collections, ma
                                                     onToggleFavorite={(e) => onToggleFavorite(e, sub.id)}
                                                     onCompareToggle={(e) => onCompareToggle(e, sub)}
                                                     isCompared={!!compareList.find(p => p.id === sub.id)}
-                                                    showMoveControls={true}
+                                                    showMoveControls={false}
                                                     onMove={(direction) => onNavigate('move', sub, direction, subItems)}
                                                 />
                                             </div>
@@ -2408,6 +2441,8 @@ function SwatchManager({ category, swatches, isAdmin, onSave, onDelete, onSelect
 }
 
 function SwatchDetailModal({ swatch, allProducts, swatches, onClose, onNavigateProduct, onNavigateSwatch, isAdmin, onEdit }) {
+    useScrollLock(); // V 0.8.96: Prevent background scroll
+
     const relatedProducts = allProducts.filter(p => {
         const inBody = p.bodyColors?.some(c => typeof c === 'object' && c.id === swatch.id);
         const inUph = p.upholsteryColors?.some(c => typeof c === 'object' && c.id === swatch.id);
@@ -2444,14 +2479,16 @@ function SwatchDetailModal({ swatch, allProducts, swatches, onClose, onNavigateP
                     <button onClick={onClose} className="p-2 bg-white/50 hover:bg-zinc-100 rounded-full backdrop-blur shadow-sm"><X className="w-6 h-6 text-zinc-900" /></button>
                 </div>
 
-                <div className="flex-1 overflow-y-auto custom-scrollbar flex flex-col md:flex-row h-full pb-safe print:overflow-visible print:h-auto">
-                    <div className="w-full md:w-5/12 bg-zinc-50 flex items-center justify-center p-8 border-b md:border-b-0 md:border-r border-zinc-100 md:sticky md:top-0 print:static print:bg-white print:border-none min-h-[40vh]">
+                {/* V 0.8.96: Desktop Split Scroll - Main Container Hidden on Desktop */}
+                <div className="flex-1 overflow-y-auto md:overflow-hidden custom-scrollbar flex flex-col md:flex-row h-full pb-safe print:overflow-visible print:h-auto">
+                    <div className="w-full md:w-5/12 bg-zinc-50 flex items-center justify-center p-8 border-b md:border-b-0 md:border-r border-zinc-100 print:static print:bg-white print:border-none min-h-[40vh]">
                         <div className="w-48 h-48 md:w-64 md:h-64 rounded-full shadow-2xl overflow-hidden border-4 border-white ring-1 ring-black/5 flex items-center justify-center bg-white">
                             <SwatchDisplay color={swatch} size="large" className="w-full h-full scale-100 rounded-full" />
                         </div>
                     </div>
 
-                    <div className="w-full md:w-7/12 bg-white p-6 md:p-10 flex flex-col pb-24 md:pb-10">
+                    {/* V 0.8.96: Right Pane Independent Scroll on Desktop */}
+                    <div className="w-full md:w-7/12 bg-white p-6 md:p-10 flex flex-col pb-24 md:pb-10 md:overflow-y-auto md:h-full custom-scrollbar">
                         <div className="mb-6">
                             <div className="flex gap-2 mb-2">
                                 <span className="inline-block px-2.5 py-0.5 bg-zinc-900 text-white text-[10px] font-bold rounded uppercase tracking-widest">{swatch.category}</span>
@@ -2487,7 +2524,7 @@ function SwatchDetailModal({ swatch, allProducts, swatches, onClose, onNavigateP
                                     Applied Products
                                     <span className="bg-zinc-100 text-zinc-600 px-2 py-0.5 rounded-full text-[10px]">{relatedProducts.length}</span>
                                 </h3>
-                                <div className="grid grid-cols-2 gap-3 max-h-60 overflow-y-auto custom-scrollbar p-1">
+                                <div className="grid grid-cols-2 gap-3 p-1">
                                     {relatedProducts.length > 0 ? relatedProducts.map(p => (
                                         <button key={p.id} onClick={() => onNavigateProduct(p)} className="flex items-center p-2 rounded-lg border border-zinc-100 hover:border-zinc-300 hover:bg-zinc-50 transition-all text-left group">
                                             <div className="w-10 h-10 rounded-md bg-zinc-100 overflow-hidden mr-3 flex-shrink-0">

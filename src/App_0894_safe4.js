@@ -38,8 +38,8 @@ const YOUR_FIREBASE_CONFIG = {
 // ----------------------------------------------------------------------
 // 상수 및 설정
 // ----------------------------------------------------------------------
-const APP_VERSION = "v0.8.95";
-const BUILD_DATE = "2026.02.02";
+const APP_VERSION = "v0.8.94";
+const BUILD_DATE = "2026.01.30";
 const ADMIN_PASSWORD = "adminlcg1";
 
 // Firebase 초기화
@@ -1423,6 +1423,8 @@ export default function App() {
                             favorites={favorites}
                             onToggleFavorite={toggleFavorite}
                             onOpenModal={handleOpenModal}
+                            sortOption={sortOption}
+                            sortDirection={sortDirection}
                         />
                     ) : (
                         <>
@@ -1450,8 +1452,6 @@ export default function App() {
                                     onCompareToggle={toggleCompare}
                                     compareList={compareList}
                                     onReorder={handleMoveItem} // V 0.8.73: Use Button Move
-                                    onSceneEdit={(scene) => setEditingScene(scene)}
-                                    onSceneDelete={(sceneId) => handleSceneDelete(activeCategory, sceneId)}
                                 />
                             )}
                             {SWATCH_CATEGORIES.find(s => s.id === activeCategory) && (
@@ -1809,9 +1809,6 @@ function TotalView({ products, categories, spaces, scenes, spaceContents, materi
                     {spaces.map(space => {
                         // V 0.8.9: Use scenes array for accurate aggregation
                         const spaceScenes = scenes.filter(s => s.spaceId === space.id).filter(s => filterItem(s, 'scene'));
-                        // V 0.8.97: Strict Manual Sort for Total View Spaces
-                        spaceScenes.sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0));
-
                         if (spaceScenes.length === 0) return null;
 
                         return (
@@ -1841,17 +1838,6 @@ function TotalView({ products, categories, spaces, scenes, spaceContents, materi
                 <div className="space-y-4">
                     {categories.map(cat => {
                         const catProducts = products.filter(p => p.category === cat.id && filterItem(p, 'product'));
-
-                        // V 0.8.97: Dynamic Sorting for Total View Collections
-                        catProducts.sort((a, b) => {
-                            let comparison = 0;
-                            if (sortOption === 'name') comparison = a.name.localeCompare(b.name);
-                            else if (sortOption === 'launchDate') comparison = parseInt(a.launchDate || 0) - parseInt(b.launchDate || 0);
-                            else if (sortOption === 'manual') comparison = (a.orderIndex || 0) - (b.orderIndex || 0);
-                            else comparison = (a.createdAt || 0) - (b.createdAt || 0);
-                            return sortDirection === 'asc' ? comparison : -comparison;
-                        });
-
                         if (catProducts.length === 0) return null;
 
                         return (
@@ -1866,9 +1852,6 @@ function TotalView({ products, categories, spaces, scenes, spaceContents, materi
                                                 onToggleFavorite={(e) => onToggleFavorite(e, product.id)}
                                                 onCompareToggle={(e) => onCompareToggle(e, product)}
                                                 isCompared={!!compareList.find(p => p.id === product.id)}
-                                                isAdmin={isAdmin}
-                                                onEdit={(e) => { e.stopPropagation(); onEdit(product); }}
-                                                onDelete={(e) => { e.stopPropagation(); onDelete(product); }}
                                             />
                                         </div>
                                     ))}
@@ -1885,10 +1868,6 @@ function TotalView({ products, categories, spaces, scenes, spaceContents, materi
                 <div className="space-y-4">
                     {materialCategories.map(cat => {
                         const catSwatches = materials.filter(s => s.category === cat.id && filterItem(s, 'material'));
-
-                        // V 0.8.97: Strict Manual Sort for Total View Materials
-                        catSwatches.sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0));
-
                         if (catSwatches.length === 0) return null;
 
                         return (
@@ -1916,7 +1895,7 @@ function TotalView({ products, categories, spaces, scenes, spaceContents, materi
     );
 }
 
-function CategoryRootView({ type, spaces, spaceContents, scenes, collections, materials, products, swatches, onNavigate, onProductClick, onSwatchClick, onSceneClick, searchTerm, searchTags, filters, onCompareToggle, compareList, favorites, onToggleFavorite }) {
+function CategoryRootView({ type, spaces, spaceContents, scenes, collections, materials, products, swatches, onNavigate, onProductClick, onSwatchClick, onSceneClick, searchTerm, searchTags, filters, onCompareToggle, compareList, favorites, onToggleFavorite, sortOption = 'manual', sortDirection = 'desc' }) {
     let title = "";
     let items = [];
     let icon = null;
@@ -1971,8 +1950,7 @@ function CategoryRootView({ type, spaces, spaceContents, scenes, collections, ma
 
                     // V 0.8.94: Sort items by orderIndex in Hub view
                     // V 0.8.95: Unified sorting for Hub Views
-                    // V 0.8.96: Spaces and Materials must use Manual Sort (orderIndex)
-                    if (type === 'COLLECTIONS_ROOT') {
+                    if (type === 'MATERIALS_ROOT' || type === 'COLLECTIONS_ROOT' || type === 'SPACES_ROOT') {
                         subItems.sort((a, b) => {
                             let comparison = 0;
                             if (sortOption === 'name') comparison = a.name.localeCompare(b.name);
@@ -1981,8 +1959,6 @@ function CategoryRootView({ type, spaces, spaceContents, scenes, collections, ma
                             else comparison = (a.createdAt || 0) - (b.createdAt || 0);
                             return sortDirection === 'asc' ? comparison : -comparison;
                         });
-                    } else if (type === 'MATERIALS_ROOT' || type === 'SPACES_ROOT') {
-                        subItems.sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0));
                     }
 
                     if (subItems.length === 0) return null;
@@ -2003,9 +1979,6 @@ function CategoryRootView({ type, spaces, spaceContents, scenes, collections, ma
                                                     isCompared={!!compareList.find(p => p.id === sub.id)}
                                                     showMoveControls={false}
                                                     onMove={(direction) => onNavigate('move', sub, direction, subItems)}
-                                                    isAdmin={isAdmin}
-                                                    onEdit={(e) => { e.stopPropagation(); onEdit(sub); }}
-                                                    onDelete={(e) => { e.stopPropagation(); onDelete(sub); }}
                                                 />
                                             </div>
                                         );
@@ -2445,8 +2418,6 @@ function SwatchManager({ category, swatches, isAdmin, onSave, onDelete, onSelect
 }
 
 function SwatchDetailModal({ swatch, allProducts, swatches, onClose, onNavigateProduct, onNavigateSwatch, isAdmin, onEdit }) {
-    useScrollLock(); // V 0.8.96: Prevent background scroll
-
     const relatedProducts = allProducts.filter(p => {
         const inBody = p.bodyColors?.some(c => typeof c === 'object' && c.id === swatch.id);
         const inUph = p.upholsteryColors?.some(c => typeof c === 'object' && c.id === swatch.id);
@@ -2477,22 +2448,20 @@ function SwatchDetailModal({ swatch, allProducts, swatches, onClose, onNavigateP
 
     return (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[250] flex items-center justify-center p-0 md:p-4 animate-in zoom-in-95 duration-300">
-            <div className="bg-white w-full h-full md:h-[90vh] md:max-w-4xl rounded-none md:rounded-3xl overflow-hidden shadow-2xl flex flex-col md:flex-row relative">
+            <div className="bg-white w-full h-full md:h-auto md:max-w-4xl rounded-none md:rounded-3xl overflow-hidden shadow-2xl flex flex-col md:flex-row md:max-h-[90vh] relative">
                 <div className="absolute top-4 right-4 z-[100] flex gap-2">
                     {isAdmin && <button onClick={onEdit} className="p-2 bg-white/50 hover:bg-zinc-100 rounded-full backdrop-blur shadow-sm"><Edit3 className="w-6 h-6 text-zinc-900" /></button>}
                     <button onClick={onClose} className="p-2 bg-white/50 hover:bg-zinc-100 rounded-full backdrop-blur shadow-sm"><X className="w-6 h-6 text-zinc-900" /></button>
                 </div>
 
-                {/* V 0.8.96: Desktop Split Scroll - Main Container Hidden on Desktop */}
-                <div className="flex-1 flex flex-col md:flex-row h-full pb-safe items-start md:overflow-hidden overflow-y-auto custom-scrollbar">
-                    <div className="w-full md:w-5/12 bg-zinc-50 flex items-center justify-center border-b md:border-b-0 md:border-r border-zinc-100 min-h-[40vh] md:h-full shrink-0">
+                <div className="flex-1 overflow-y-auto custom-scrollbar flex flex-col md:flex-row h-full pb-safe print:overflow-visible print:h-auto">
+                    <div className="w-full md:w-5/12 bg-zinc-50 flex items-center justify-center p-8 border-b md:border-b-0 md:border-r border-zinc-100 md:sticky md:top-0 print:static print:bg-white print:border-none min-h-[40vh]">
                         <div className="w-48 h-48 md:w-64 md:h-64 rounded-full shadow-2xl overflow-hidden border-4 border-white ring-1 ring-black/5 flex items-center justify-center bg-white">
                             <SwatchDisplay color={swatch} size="large" className="w-full h-full scale-100 rounded-full" />
                         </div>
                     </div>
 
-                    {/* V 0.8.96: Right Pane Independent Scroll on Desktop */}
-                    <div className="w-full md:w-7/12 bg-white p-6 md:p-10 flex flex-col pb-24 md:pb-10 md:overflow-y-auto md:h-full custom-scrollbar">
+                    <div className="w-full md:w-7/12 bg-white p-6 md:p-10 flex flex-col pb-24 md:pb-10">
                         <div className="mb-6">
                             <div className="flex gap-2 mb-2">
                                 <span className="inline-block px-2.5 py-0.5 bg-zinc-900 text-white text-[10px] font-bold rounded uppercase tracking-widest">{swatch.category}</span>
@@ -3216,7 +3185,7 @@ function DashboardView({ products, favorites, awards, swatches, spaceContents, s
     );
 }
 
-function SpaceDetailView({ space, spaceContent, additionalScenes = [], activeTag, setActiveTag, isAdmin, onBannerUpload, onEditInfo, onManageProducts, onAddScene, onViewScene, productCount, searchTerm, searchTags, products, onProductClick, favorites, onToggleFavorite, onCompareToggle, compareList, onReorder, onSceneEdit, onSceneDelete }) {
+function SpaceDetailView({ space, spaceContent, additionalScenes = [], activeTag, setActiveTag, isAdmin, onBannerUpload, onEditInfo, onManageProducts, onAddScene, onViewScene, productCount, searchTerm, searchTags, products, onProductClick, favorites, onToggleFavorite, onCompareToggle, compareList, onReorder }) {
     const banner = spaceContent.banner;
     const description = spaceContent.description || "No description provided.";
     const trend = spaceContent.trend || "";
@@ -3291,9 +3260,6 @@ function SpaceDetailView({ space, spaceContent, additionalScenes = [], activeTag
                                     onMove={(direction) => onReorder('scenes', filteredScenes, idx, direction, space.id)}
                                     isFavorite={favorites.includes(scene.id)}
                                     onToggleFavorite={(e) => onToggleFavorite(e, scene.id)}
-                                    isAdmin={isAdmin}
-                                    onEdit={onSceneEdit ? (e) => { e.stopPropagation(); onSceneEdit(scene); } : null}
-                                    onDelete={onSceneDelete ? (e) => { e.stopPropagation(); onSceneDelete(scene.id); } : null}
                                 />
                             </div>
                         ))}
@@ -3307,7 +3273,7 @@ function SpaceDetailView({ space, spaceContent, additionalScenes = [], activeTag
     );
 }
 
-function ProductCard({ product, onClick, showMoveControls, onMove, isFavorite, onToggleFavorite, onCompareToggle, isCompared, isAdmin, onDuplicate, onEdit, onDelete }) {
+function ProductCard({ product, onClick, showMoveControls, onMove, isFavorite, onToggleFavorite, onCompareToggle, isCompared, isAdmin, onDuplicate }) {
     const mainImageEntry = product.images && product.images.length > 0 ? product.images[0] : null;
     const mainImageUrl = mainImageEntry ? (typeof mainImageEntry === 'object' ? mainImageEntry.url : mainImageEntry) : null;
 
@@ -3321,6 +3287,11 @@ function ProductCard({ product, onClick, showMoveControls, onMove, isFavorite, o
                 </div>
 
                 <div className="absolute top-2 right-2 flex gap-1 z-20">
+                    {isAdmin && (
+                        <button onClick={onDuplicate} className="p-1.5 bg-white/80 rounded-full text-zinc-400 hover:text-green-600 hover:scale-110 transition-all" title="Duplicate">
+                            <Layers className="w-3.5 h-3.5" />
+                        </button>
+                    )}
                     <button onClick={(e) => onCompareToggle(e)} className={`p-1.5 rounded-full transition-all ${isCompared ? 'bg-zinc-900 text-white' : 'bg-white/80 text-zinc-400 hover:text-zinc-900'}`} title="Compare">
                         <ArrowLeftRight className="w-3.5 h-3.5" />
                     </button>
@@ -3331,36 +3302,13 @@ function ProductCard({ product, onClick, showMoveControls, onMove, isFavorite, o
                     {mainImageUrl ? <img src={mainImageUrl} alt={product.name} loading="lazy" className="w-full h-full object-cover" /> : <div className="text-center opacity-30"><ImageIcon className="w-8 h-8 text-zinc-400" /></div>}
                 </div>
 
-                {/* V 0.8.95: Admin Controls Redesign - Bottom Aligned */}
-                {isAdmin && (
-                    <>
-                        {/* Bottom Left: Move Controls */}
-                        {showMoveControls && (
-                            <div className="absolute bottom-2 left-2 flex gap-1 z-20 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                                <button onClick={(e) => { e.stopPropagation(); e.preventDefault(); onMove('left') }} className="p-1.5 bg-white rounded-full shadow hover:bg-black hover:text-white text-zinc-700 transition-colors"><ArrowLeft className="w-3.5 h-3.5" /></button>
-                                <button onClick={(e) => { e.stopPropagation(); e.preventDefault(); onMove('right') }} className="p-1.5 bg-white rounded-full shadow hover:bg-black hover:text-white text-zinc-700 transition-colors"><ArrowRight className="w-3.5 h-3.5" /></button>
-                            </div>
-                        )}
-
-                        {/* Bottom Right: Manage Actions (Duplicate, Edit, Delete) */}
-                        <div className="absolute bottom-2 right-2 flex gap-1 z-20 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                            {onDuplicate && (
-                                <button onClick={(e) => { e.stopPropagation(); onDuplicate(e); }} className="p-1.5 bg-white rounded-full shadow text-zinc-400 hover:text-green-600 hover:scale-110 transition-all" title="Duplicate">
-                                    <Layers className="w-3.5 h-3.5" />
-                                </button>
-                            )}
-                            {onEdit && (
-                                <button onClick={(e) => { e.stopPropagation(); onEdit(e); }} className="p-1.5 bg-white rounded-full shadow text-zinc-400 hover:text-blue-600 hover:scale-110 transition-all" title="Edit">
-                                    <Edit2 className="w-3.5 h-3.5" />
-                                </button>
-                            )}
-                            {onDelete && (
-                                <button onClick={(e) => { e.stopPropagation(); onDelete(e); }} className="p-1.5 bg-white rounded-full shadow text-zinc-400 hover:text-red-600 hover:scale-110 transition-all" title="Delete">
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                </button>
-                            )}
-                        </div>
-                    </>
+                {/* V 0.8.73: Admin Move Controls (Button based) */}
+                {/* V 0.8.73: Admin Move Controls (Button based) - V 0.8.84: Fixed Event Propagation */}
+                {showMoveControls && (
+                    <div className="absolute bottom-1 md:bottom-2 left-0 right-0 flex justify-center gap-2 z-20 print:hidden">
+                        <button onClick={(e) => { e.stopPropagation(); e.preventDefault(); onMove('left') }} className="p-1 md:p-1.5 bg-white/90 rounded-full shadow hover:bg-black hover:text-white text-zinc-700 transition-colors"><ArrowLeft className="w-3 h-3 md:w-4 md:h-4" /></button>
+                        <button onClick={(e) => { e.stopPropagation(); e.preventDefault(); onMove('right') }} className="p-1 md:p-1.5 bg-white/90 rounded-full shadow hover:bg-black hover:text-white text-zinc-700 transition-colors"><ArrowRight className="w-3 h-3 md:w-4 md:h-4" /></button>
+                    </div>
                 )}
             </div>
 
