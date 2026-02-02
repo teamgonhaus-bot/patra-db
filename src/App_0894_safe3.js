@@ -38,8 +38,8 @@ const YOUR_FIREBASE_CONFIG = {
 // ----------------------------------------------------------------------
 // 상수 및 설정
 // ----------------------------------------------------------------------
-const APP_VERSION = "v0.8.95";
-const BUILD_DATE = "2026.02.02";
+const APP_VERSION = "v0.8.94";
+const BUILD_DATE = "2026.01.30";
 const ADMIN_PASSWORD = "adminlcg1";
 
 // Firebase 초기화
@@ -1385,11 +1385,6 @@ export default function App() {
                             onToggleFavorite={toggleFavorite}
                             onCompareToggle={toggleCompare}
                             compareList={compareList}
-                            isAdmin={isAdmin}
-                            onEdit={(product) => { setEditingProduct(product); setIsFormOpen(true); }}
-                            onDelete={(product) => handleDeleteProduct(product.id, product.name)}
-                            onSceneEdit={(scene) => setEditingScene(scene)}
-                            onSceneDelete={(sceneId) => { const s = allScenes.find(sc => sc.id === sceneId); if (s) handleSceneDelete(s.spaceId || 'OFFICE', sceneId); }}
                         />
                     ) : activeCategory === 'AWARDS_ROOT' ? (
                         <AwardsManager
@@ -1428,11 +1423,6 @@ export default function App() {
                             favorites={favorites}
                             onToggleFavorite={toggleFavorite}
                             onOpenModal={handleOpenModal}
-                            isAdmin={isAdmin}
-                            onEdit={(product) => { setEditingProduct(product); setIsFormOpen(true); }}
-                            onDelete={(product) => handleDeleteProduct(product.id, product.name)}
-                            onSceneEdit={(scene) => setEditingScene(scene)}
-                            onSceneDelete={(sceneId) => { const s = allScenes.find(sc => sc.id === sceneId); if (s) handleSceneDelete(s.spaceId || 'OFFICE', sceneId); }}
                         />
                     ) : (
                         <>
@@ -1460,8 +1450,6 @@ export default function App() {
                                     onCompareToggle={toggleCompare}
                                     compareList={compareList}
                                     onReorder={handleMoveItem} // V 0.8.73: Use Button Move
-                                    onSceneEdit={(scene) => setEditingScene(scene)}
-                                    onSceneDelete={(sceneId) => handleSceneDelete(activeCategory, sceneId)}
                                 />
                             )}
                             {SWATCH_CATEGORIES.find(s => s.id === activeCategory) && (
@@ -1798,7 +1786,7 @@ const checkSearchMatch = (item, type, searchTerm, searchTags, filters = {}, allP
     return matchesSearch && matchesTags && matchesFilter;
 };
 
-function TotalView({ products, categories, spaces, scenes, spaceContents, materials, materialCategories, onProductClick, onSceneClick, onSwatchClick, searchTerm, searchTags, filters, favorites, onToggleFavorite, onCompareToggle, compareList, isAdmin, onEdit, onDelete, onSceneEdit, onSceneDelete }) {
+function TotalView({ products, categories, spaces, scenes, spaceContents, materials, materialCategories, onProductClick, onSceneClick, onSwatchClick, searchTerm, searchTags, filters, favorites, onToggleFavorite, onCompareToggle, compareList }) {
     // Filter Logic - V 0.8.83: Uses unified checkSearchMatch
     // V 0.8.91: Pass products array for scene tagged products search
     const filterItem = (item, type) => checkSearchMatch(item, type, searchTerm, searchTags, filters, type === 'scene' ? products : []);
@@ -1862,9 +1850,6 @@ function TotalView({ products, categories, spaces, scenes, spaceContents, materi
                                                 onToggleFavorite={(e) => onToggleFavorite(e, product.id)}
                                                 onCompareToggle={(e) => onCompareToggle(e, product)}
                                                 isCompared={!!compareList.find(p => p.id === product.id)}
-                                                isAdmin={isAdmin}
-                                                onEdit={(e) => { e.stopPropagation(); onEdit(product); }}
-                                                onDelete={(e) => { e.stopPropagation(); onDelete(product); }}
                                             />
                                         </div>
                                     ))}
@@ -1908,7 +1893,7 @@ function TotalView({ products, categories, spaces, scenes, spaceContents, materi
     );
 }
 
-function CategoryRootView({ type, spaces, spaceContents, scenes, collections, materials, products, swatches, onNavigate, onProductClick, onSwatchClick, onSceneClick, searchTerm, searchTags, filters, onCompareToggle, compareList, favorites, onToggleFavorite, isAdmin, onEdit, onDelete, onSceneEdit, onSceneDelete }) {
+function CategoryRootView({ type, spaces, spaceContents, scenes, collections, materials, products, swatches, onNavigate, onProductClick, onSwatchClick, onSceneClick, searchTerm, searchTags, filters, onCompareToggle, compareList, favorites, onToggleFavorite }) {
     let title = "";
     let items = [];
     let icon = null;
@@ -1984,9 +1969,6 @@ function CategoryRootView({ type, spaces, spaceContents, scenes, collections, ma
                                                     isCompared={!!compareList.find(p => p.id === sub.id)}
                                                     showMoveControls={true}
                                                     onMove={(direction) => onNavigate('move', sub, direction, subItems)}
-                                                    isAdmin={isAdmin}
-                                                    onEdit={(e) => { e.stopPropagation(); onEdit(sub); }}
-                                                    onDelete={(e) => { e.stopPropagation(); onDelete(sub); }}
                                                 />
                                             </div>
                                         );
@@ -3193,7 +3175,7 @@ function DashboardView({ products, favorites, awards, swatches, spaceContents, s
     );
 }
 
-function SpaceDetailView({ space, spaceContent, additionalScenes = [], activeTag, setActiveTag, isAdmin, onBannerUpload, onEditInfo, onManageProducts, onAddScene, onViewScene, productCount, searchTerm, searchTags, products, onProductClick, favorites, onToggleFavorite, onCompareToggle, compareList, onReorder, onSceneEdit, onSceneDelete }) {
+function SpaceDetailView({ space, spaceContent, additionalScenes = [], activeTag, setActiveTag, isAdmin, onBannerUpload, onEditInfo, onManageProducts, onAddScene, onViewScene, productCount, searchTerm, searchTags, products, onProductClick, favorites, onToggleFavorite, onCompareToggle, compareList, onReorder }) {
     const banner = spaceContent.banner;
     const description = spaceContent.description || "No description provided.";
     const trend = spaceContent.trend || "";
@@ -3268,9 +3250,6 @@ function SpaceDetailView({ space, spaceContent, additionalScenes = [], activeTag
                                     onMove={(direction) => onReorder('scenes', filteredScenes, idx, direction, space.id)}
                                     isFavorite={favorites.includes(scene.id)}
                                     onToggleFavorite={(e) => onToggleFavorite(e, scene.id)}
-                                    isAdmin={isAdmin}
-                                    onEdit={onSceneEdit ? (e) => { e.stopPropagation(); onSceneEdit(scene); } : null}
-                                    onDelete={onSceneDelete ? (e) => { e.stopPropagation(); onSceneDelete(scene.id); } : null}
                                 />
                             </div>
                         ))}
@@ -3284,7 +3263,7 @@ function SpaceDetailView({ space, spaceContent, additionalScenes = [], activeTag
     );
 }
 
-function ProductCard({ product, onClick, showMoveControls, onMove, isFavorite, onToggleFavorite, onCompareToggle, isCompared, isAdmin, onDuplicate, onEdit, onDelete }) {
+function ProductCard({ product, onClick, showMoveControls, onMove, isFavorite, onToggleFavorite, onCompareToggle, isCompared, isAdmin, onDuplicate }) {
     const mainImageEntry = product.images && product.images.length > 0 ? product.images[0] : null;
     const mainImageUrl = mainImageEntry ? (typeof mainImageEntry === 'object' ? mainImageEntry.url : mainImageEntry) : null;
 
@@ -3298,6 +3277,11 @@ function ProductCard({ product, onClick, showMoveControls, onMove, isFavorite, o
                 </div>
 
                 <div className="absolute top-2 right-2 flex gap-1 z-20">
+                    {isAdmin && (
+                        <button onClick={onDuplicate} className="p-1.5 bg-white/80 rounded-full text-zinc-400 hover:text-green-600 hover:scale-110 transition-all" title="Duplicate">
+                            <Layers className="w-3.5 h-3.5" />
+                        </button>
+                    )}
                     <button onClick={(e) => onCompareToggle(e)} className={`p-1.5 rounded-full transition-all ${isCompared ? 'bg-zinc-900 text-white' : 'bg-white/80 text-zinc-400 hover:text-zinc-900'}`} title="Compare">
                         <ArrowLeftRight className="w-3.5 h-3.5" />
                     </button>
@@ -3308,36 +3292,13 @@ function ProductCard({ product, onClick, showMoveControls, onMove, isFavorite, o
                     {mainImageUrl ? <img src={mainImageUrl} alt={product.name} loading="lazy" className="w-full h-full object-cover" /> : <div className="text-center opacity-30"><ImageIcon className="w-8 h-8 text-zinc-400" /></div>}
                 </div>
 
-                {/* V 0.8.95: Admin Controls Redesign - Bottom Aligned */}
-                {isAdmin && (
-                    <>
-                        {/* Bottom Left: Move Controls */}
-                        {showMoveControls && (
-                            <div className="absolute bottom-2 left-2 flex gap-1 z-20 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                                <button onClick={(e) => { e.stopPropagation(); e.preventDefault(); onMove('left') }} className="p-1.5 bg-white rounded-full shadow hover:bg-black hover:text-white text-zinc-700 transition-colors"><ArrowLeft className="w-3.5 h-3.5" /></button>
-                                <button onClick={(e) => { e.stopPropagation(); e.preventDefault(); onMove('right') }} className="p-1.5 bg-white rounded-full shadow hover:bg-black hover:text-white text-zinc-700 transition-colors"><ArrowRight className="w-3.5 h-3.5" /></button>
-                            </div>
-                        )}
-
-                        {/* Bottom Right: Manage Actions (Duplicate, Edit, Delete) */}
-                        <div className="absolute bottom-2 right-2 flex gap-1 z-20 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                            {onDuplicate && (
-                                <button onClick={(e) => { e.stopPropagation(); onDuplicate(e); }} className="p-1.5 bg-white rounded-full shadow text-zinc-400 hover:text-green-600 hover:scale-110 transition-all" title="Duplicate">
-                                    <Layers className="w-3.5 h-3.5" />
-                                </button>
-                            )}
-                            {onEdit && (
-                                <button onClick={(e) => { e.stopPropagation(); onEdit(e); }} className="p-1.5 bg-white rounded-full shadow text-zinc-400 hover:text-blue-600 hover:scale-110 transition-all" title="Edit">
-                                    <Edit2 className="w-3.5 h-3.5" />
-                                </button>
-                            )}
-                            {onDelete && (
-                                <button onClick={(e) => { e.stopPropagation(); onDelete(e); }} className="p-1.5 bg-white rounded-full shadow text-zinc-400 hover:text-red-600 hover:scale-110 transition-all" title="Delete">
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                </button>
-                            )}
-                        </div>
-                    </>
+                {/* V 0.8.73: Admin Move Controls (Button based) */}
+                {/* V 0.8.73: Admin Move Controls (Button based) - V 0.8.84: Fixed Event Propagation */}
+                {showMoveControls && (
+                    <div className="absolute bottom-1 md:bottom-2 left-0 right-0 flex justify-center gap-2 z-20 print:hidden">
+                        <button onClick={(e) => { e.stopPropagation(); e.preventDefault(); onMove('left') }} className="p-1 md:p-1.5 bg-white/90 rounded-full shadow hover:bg-black hover:text-white text-zinc-700 transition-colors"><ArrowLeft className="w-3 h-3 md:w-4 md:h-4" /></button>
+                        <button onClick={(e) => { e.stopPropagation(); e.preventDefault(); onMove('right') }} className="p-1 md:p-1.5 bg-white/90 rounded-full shadow hover:bg-black hover:text-white text-zinc-700 transition-colors"><ArrowRight className="w-3 h-3 md:w-4 md:h-4" /></button>
+                    </div>
                 )}
             </div>
 
