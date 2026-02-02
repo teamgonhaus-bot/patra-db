@@ -38,8 +38,8 @@ const YOUR_FIREBASE_CONFIG = {
 // ----------------------------------------------------------------------
 // 상수 및 설정
 // ----------------------------------------------------------------------
-const APP_VERSION = "v0.8.94";
-const BUILD_DATE = "2026.01.30";
+const APP_VERSION = "v0.8.95";
+const BUILD_DATE = "2026.02.02";
 const ADMIN_PASSWORD = "adminlcg1";
 
 // Firebase 초기화
@@ -1415,6 +1415,10 @@ export default function App() {
                             swatches={swatches}
                             onNavigate={handleRootNavigate}
                             onProductClick={(p) => handleOpenModal('product', p)}
+                            onEditProduct={(p) => { setEditingProduct(p); setIsFormOpen(true); }}
+                            onDeleteProduct={handleDeleteProduct}
+                            onDuplicateProduct={handleDuplicateProduct}
+                            isAdmin={isAdmin}
                             onSwatchClick={(s) => handleOpenModal('swatch', s)}
                             onSceneClick={(s) => handleOpenModal('scene', s)}
                             searchTerm={searchTerm}
@@ -1454,6 +1458,8 @@ export default function App() {
                                     onCompareToggle={toggleCompare}
                                     compareList={compareList}
                                     onReorder={handleMoveItem} // V 0.8.73: Use Button Move
+                                    onEditScene={(scene) => setEditingScene({ ...scene, isNew: false })}
+                                    onDeleteScene={(id) => handleSceneDelete(activeCategory, id)}
                                 />
                             )}
                             {SWATCH_CATEGORIES.find(s => s.id === activeCategory) && (
@@ -1507,6 +1513,8 @@ export default function App() {
                                                                 isCompared={!!compareList.find(p => p.id === product.id)}
                                                                 showMoveControls={isAdmin && sortOption === 'manual'}
                                                                 onMove={(direction) => handleMoveItem('products', processedProducts, idx, direction)}
+                                                                onEdit={() => { setEditingProduct(product); setIsFormOpen(true); }}
+                                                                onDelete={() => handleDeleteProduct(product.id, product.name)}
                                                             />
                                                         </div>
                                                     ))}
@@ -1915,7 +1923,7 @@ function TotalView({ products, categories, spaces, scenes, spaceContents, materi
     );
 }
 
-function CategoryRootView({ type, spaces, spaceContents, scenes, collections, materials, products, swatches, onNavigate, onProductClick, onSwatchClick, onSceneClick, searchTerm, searchTags, filters, onCompareToggle, compareList, favorites, onToggleFavorite, sortOption = 'manual', sortDirection = 'desc' }) {
+function CategoryRootView({ type, spaces, spaceContents, scenes, collections, materials, products, swatches, onNavigate, onProductClick, onSwatchClick, onSceneClick, searchTerm, searchTags, filters, onCompareToggle, compareList, favorites, onToggleFavorite, sortOption = 'manual', sortDirection = 'desc', isAdmin, onEditProduct, onDeleteProduct, onDuplicateProduct }) {
     let title = "";
     let items = [];
     let icon = null;
@@ -2000,7 +2008,10 @@ function CategoryRootView({ type, spaces, spaceContents, scenes, collections, ma
                                                     onToggleFavorite={(e) => onToggleFavorite(e, sub.id)}
                                                     onCompareToggle={(e) => onCompareToggle(e, sub)}
                                                     isCompared={!!compareList.find(p => p.id === sub.id)}
-                                                    showMoveControls={false}
+                                                    onDelete={() => onDeleteProduct(sub.id, sub.name)}
+                                                    onEdit={() => onEditProduct(sub)}
+                                                    onDuplicate={(e) => { e.stopPropagation(); onDuplicateProduct(sub); }}
+                                                    showMoveControls={isAdmin && sortOption === 'manual'}
                                                     onMove={(direction) => onNavigate('move', sub, direction, subItems)}
                                                 />
                                             </div>
@@ -3212,7 +3223,7 @@ function DashboardView({ products, favorites, awards, swatches, spaceContents, s
     );
 }
 
-function SpaceDetailView({ space, spaceContent, additionalScenes = [], activeTag, setActiveTag, isAdmin, onBannerUpload, onEditInfo, onManageProducts, onAddScene, onViewScene, productCount, searchTerm, searchTags, products, onProductClick, favorites, onToggleFavorite, onCompareToggle, compareList, onReorder }) {
+function SpaceDetailView({ space, spaceContent, additionalScenes = [], activeTag, setActiveTag, isAdmin, onBannerUpload, onEditInfo, onManageProducts, onAddScene, onViewScene, productCount, searchTerm, searchTags, products, onProductClick, favorites, onToggleFavorite, onCompareToggle, compareList, onReorder, onEditScene, onDeleteScene }) {
     const banner = spaceContent.banner;
     const description = spaceContent.description || "No description provided.";
     const trend = spaceContent.trend || "";
@@ -3285,6 +3296,9 @@ function SpaceDetailView({ space, spaceContent, additionalScenes = [], activeTag
                                     onClick={() => onViewScene(scene)}
                                     showMoveControls={isAdmin && activeTag === 'ALL' && !searchTerm}
                                     onMove={(direction) => onReorder('scenes', filteredScenes, idx, direction, space.id)}
+                                    isAdmin={isAdmin}
+                                    onEdit={() => onEditScene(scene)}
+                                    onDelete={() => onDeleteScene(scene.id)}
                                     isFavorite={favorites.includes(scene.id)}
                                     onToggleFavorite={(e) => onToggleFavorite(e, scene.id)}
                                 />
@@ -3300,7 +3314,7 @@ function SpaceDetailView({ space, spaceContent, additionalScenes = [], activeTag
     );
 }
 
-function ProductCard({ product, onClick, showMoveControls, onMove, isFavorite, onToggleFavorite, onCompareToggle, isCompared, isAdmin, onDuplicate }) {
+function ProductCard({ product, onClick, showMoveControls, onMove, isFavorite, onToggleFavorite, onCompareToggle, isCompared, isAdmin, onDuplicate, onEdit, onDelete }) {
     const mainImageEntry = product.images && product.images.length > 0 ? product.images[0] : null;
     const mainImageUrl = mainImageEntry ? (typeof mainImageEntry === 'object' ? mainImageEntry.url : mainImageEntry) : null;
 
@@ -3314,11 +3328,6 @@ function ProductCard({ product, onClick, showMoveControls, onMove, isFavorite, o
                 </div>
 
                 <div className="absolute top-2 right-2 flex gap-1 z-20">
-                    {isAdmin && (
-                        <button onClick={onDuplicate} className="p-1.5 bg-white/80 rounded-full text-zinc-400 hover:text-green-600 hover:scale-110 transition-all" title="Duplicate">
-                            <Layers className="w-3.5 h-3.5" />
-                        </button>
-                    )}
                     <button onClick={(e) => onCompareToggle(e)} className={`p-1.5 rounded-full transition-all ${isCompared ? 'bg-zinc-900 text-white' : 'bg-white/80 text-zinc-400 hover:text-zinc-900'}`} title="Compare">
                         <ArrowLeftRight className="w-3.5 h-3.5" />
                     </button>
@@ -3329,12 +3338,22 @@ function ProductCard({ product, onClick, showMoveControls, onMove, isFavorite, o
                     {mainImageUrl ? <img src={mainImageUrl} alt={product.name} loading="lazy" className="w-full h-full object-cover" /> : <div className="text-center opacity-30"><ImageIcon className="w-8 h-8 text-zinc-400" /></div>}
                 </div>
 
-                {/* V 0.8.73: Admin Move Controls (Button based) */}
-                {/* V 0.8.73: Admin Move Controls (Button based) - V 0.8.84: Fixed Event Propagation */}
-                {showMoveControls && (
-                    <div className="absolute bottom-1 md:bottom-2 left-0 right-0 flex justify-center gap-2 z-20 print:hidden">
-                        <button onClick={(e) => { e.stopPropagation(); e.preventDefault(); onMove('left') }} className="p-1 md:p-1.5 bg-white/90 rounded-full shadow hover:bg-black hover:text-white text-zinc-700 transition-colors"><ArrowLeft className="w-3 h-3 md:w-4 md:h-4" /></button>
-                        <button onClick={(e) => { e.stopPropagation(); e.preventDefault(); onMove('right') }} className="p-1 md:p-1.5 bg-white/90 rounded-full shadow hover:bg-black hover:text-white text-zinc-700 transition-colors"><ArrowRight className="w-3 h-3 md:w-4 md:h-4" /></button>
+                {/* V 0.8.95: Unified Admin Controls (Bottom Bar) */}
+                {isAdmin && (
+                    <div className="absolute bottom-2 left-2 right-2 flex justify-between items-center z-20 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <div className="flex gap-1">
+                            {showMoveControls && (
+                                <>
+                                    <button onClick={(e) => { e.stopPropagation(); e.preventDefault(); onMove('left') }} className="p-1.5 bg-white rounded-full shadow hover:bg-black hover:text-white text-zinc-700 transition-colors"><ArrowLeft className="w-3.5 h-3.5" /></button>
+                                    <button onClick={(e) => { e.stopPropagation(); e.preventDefault(); onMove('right') }} className="p-1.5 bg-white rounded-full shadow hover:bg-black hover:text-white text-zinc-700 transition-colors"><ArrowRight className="w-3.5 h-3.5" /></button>
+                                </>
+                            )}
+                        </div>
+                        <div className="flex gap-1">
+                            {onDuplicate && <button onClick={onDuplicate} className="p-1.5 bg-white rounded-full shadow hover:text-green-600 transition-colors"><Layers className="w-3.5 h-3.5" /></button>}
+                            {onEdit && <button onClick={(e) => { e.stopPropagation(); onEdit(); }} className="p-1.5 bg-white rounded-full shadow hover:text-blue-600 transition-colors"><Edit2 className="w-3.5 h-3.5" /></button>}
+                            {onDelete && <button onClick={(e) => { e.stopPropagation(); onDelete(); }} className="p-1.5 bg-white rounded-full shadow hover:text-red-600 transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>}
+                        </div>
                     </div>
                 )}
             </div>
