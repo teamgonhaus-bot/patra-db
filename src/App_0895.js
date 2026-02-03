@@ -38,8 +38,8 @@ const YOUR_FIREBASE_CONFIG = {
 // ----------------------------------------------------------------------
 // 상수 및 설정
 // ----------------------------------------------------------------------
-const APP_VERSION = "v0.8.96";
-const BUILD_DATE = "2026.02.03";
+const APP_VERSION = "v0.8.95";
+const BUILD_DATE = "2026.02.02";
 const ADMIN_PASSWORD = "adminlcg1";
 
 // Firebase 초기화
@@ -914,20 +914,6 @@ export default function App() {
         showToast("스와치가 복제되었습니다.");
     };
 
-    const handleDuplicateScene = async (scene, spaceId) => {
-        if (!isAdmin) return;
-        const targetSpaceId = scene.spaceId || spaceId;
-        const newScene = {
-            ...scene,
-            id: Date.now().toString(),
-            title: `${scene.title || scene.label || 'Scene'} (Copy)`,
-            createdAt: Date.now(),
-            orderIndex: Date.now()
-        };
-        await handleSceneSave(targetSpaceId, newScene);
-        showToast("장면이 복제되었습니다.");
-    };
-
     // --- V 0.8.72: Universal Batch Reorder Logic ---
     const handleBatchReorder = async (collectionName, reorderedItems, parentId = null) => {
         if (!isFirebaseAvailable || !db) {
@@ -1474,7 +1460,6 @@ export default function App() {
                                     onReorder={handleMoveItem} // V 0.8.73: Use Button Move
                                     onEditScene={(scene) => setEditingScene({ ...scene, isNew: false })}
                                     onDeleteScene={(id) => handleSceneDelete(activeCategory, id)}
-                                    onDuplicateScene={(scene) => handleDuplicateScene(scene, activeCategory)}
                                 />
                             )}
                             {SWATCH_CATEGORIES.find(s => s.id === activeCategory) && (
@@ -2582,15 +2567,6 @@ function SwatchDetailModal({ swatch, allProducts, swatches, onClose, onNavigateP
 
 function SwatchFormModal({ category, existingData, onClose, onSave }) {
     useScrollLock(); // V 0.8.74: Added scroll lock
-
-    useEffect(() => {
-        const handleKeyDown = (e) => {
-            if (e.key === 'Escape') onClose();
-        };
-        window.addEventListener('keydown', handleKeyDown);
-        return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [onClose]);
-
     const [data, setData] = useState({
         id: null, name: '', category: category.id, hex: '#000000', image: null,
         description: '', materialCode: '', tags: '', textureType: 'SOLID',
@@ -3247,7 +3223,7 @@ function DashboardView({ products, favorites, awards, swatches, spaceContents, s
     );
 }
 
-function SpaceDetailView({ space, spaceContent, additionalScenes = [], activeTag, setActiveTag, isAdmin, onBannerUpload, onEditInfo, onManageProducts, onAddScene, onViewScene, productCount, searchTerm, searchTags, products, onProductClick, favorites, onToggleFavorite, onCompareToggle, compareList, onReorder, onEditScene, onDeleteScene, onDuplicateScene }) {
+function SpaceDetailView({ space, spaceContent, additionalScenes = [], activeTag, setActiveTag, isAdmin, onBannerUpload, onEditInfo, onManageProducts, onAddScene, onViewScene, productCount, searchTerm, searchTags, products, onProductClick, favorites, onToggleFavorite, onCompareToggle, compareList, onReorder, onEditScene, onDeleteScene }) {
     const banner = spaceContent.banner;
     const description = spaceContent.description || "No description provided.";
     const trend = spaceContent.trend || "";
@@ -3323,7 +3299,6 @@ function SpaceDetailView({ space, spaceContent, additionalScenes = [], activeTag
                                     isAdmin={isAdmin}
                                     onEdit={() => onEditScene(scene)}
                                     onDelete={() => onDeleteScene(scene.id)}
-                                    onDuplicate={(e) => { if (e) e.stopPropagation(); onDuplicateScene(scene); }}
                                     isFavorite={favorites.includes(scene.id)}
                                     onToggleFavorite={(e) => onToggleFavorite(e, scene.id)}
                                 />
@@ -3353,11 +3328,9 @@ function ProductCard({ product, onClick, showMoveControls, onMove, isFavorite, o
                 </div>
 
                 <div className="absolute top-2 right-2 flex gap-1 z-20">
-                    {onCompareToggle && (
-                        <button onClick={(e) => onCompareToggle(e)} className={`p-1.5 rounded-full transition-all ${isCompared ? 'bg-zinc-900 text-white' : 'bg-white/80 text-zinc-400 hover:text-zinc-900'}`} title="Compare">
-                            <ArrowLeftRight className="w-3.5 h-3.5" />
-                        </button>
-                    )}
+                    <button onClick={(e) => onCompareToggle(e)} className={`p-1.5 rounded-full transition-all ${isCompared ? 'bg-zinc-900 text-white' : 'bg-white/80 text-zinc-400 hover:text-zinc-900'}`} title="Compare">
+                        <ArrowLeftRight className="w-3.5 h-3.5" />
+                    </button>
                     <button onClick={onToggleFavorite} className="p-1.5 bg-white/80 rounded-full text-zinc-300 hover:text-yellow-400 hover:scale-110 transition-all"><Star className={`w-3.5 h-3.5 ${isFavorite ? 'fill-yellow-400 text-yellow-400' : ''}`} /></button>
                 </div>
 
@@ -4765,15 +4738,6 @@ function AwardDetailModal({ award, products, onClose, onNavigateProduct, onSaveP
 
 function AwardFormModal({ existingData, allProducts = [], onClose, onSave }) {
     useScrollLock(); // V 0.8.74: Added scroll lock
-
-    useEffect(() => {
-        const handleKeyDown = (e) => {
-            if (e.key === 'Escape') onClose();
-        };
-        window.addEventListener('keydown', handleKeyDown);
-        return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [onClose]);
-
     const [data, setData] = useState({
         id: null, title: '', organization: '', description: '', image: null, link: '', tags: []
     });
