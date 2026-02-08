@@ -26,13 +26,13 @@ import {
 // [중요] 배포 시 사용할 실제 Firebase 설정
 // ----------------------------------------------------------------------
 const YOUR_FIREBASE_CONFIG = {
-    apiKey: process.env.REACT_APP_FIREBASE_API_KEY,
-    authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN,
-    projectId: process.env.REACT_APP_FIREBASE_PROJECT_ID,
-    storageBucket: process.env.REACT_APP_FIREBASE_STORAGE_BUCKET,
-    messagingSenderId: process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID,
-    appId: process.env.REACT_APP_FIREBASE_APP_ID,
-    measurementId: process.env.REACT_APP_FIREBASE_MEASUREMENT_ID
+    apiKey: "AIzaSyA79MW_m_bNDq3c9LXdL_wVefa6ZGCEXmQ",
+    authDomain: "patra-db.firebaseapp.com",
+    projectId: "patra-db",
+    storageBucket: "patra-db.firebasestorage.app",
+    messagingSenderId: "602422986176",
+    appId: "1:602422986176:web:0170f7b5f9cd99e4c1f425",
+    measurementId: "G-33FMQD1WVS"
 };
 
 // ----------------------------------------------------------------------
@@ -40,7 +40,7 @@ const YOUR_FIREBASE_CONFIG = {
 // ----------------------------------------------------------------------
 const APP_VERSION = "v0.8.96";
 const BUILD_DATE = "2026.02.03";
-const ADMIN_PASSWORD = process.env.REACT_APP_ADMIN_PASSWORD;
+const ADMIN_PASSWORD = "adminlcg1";
 
 // Firebase 초기화
 let db = null;
