@@ -34,6 +34,7 @@ const YOUR_FIREBASE_CONFIG = {
     appId: process.env.REACT_APP_FIREBASE_APP_ID,
     measurementId: process.env.REACT_APP_FIREBASE_MEASUREMENT_ID
 };
+console.log('Firebase Config Debug:', YOUR_FIREBASE_CONFIG);
 
 // ----------------------------------------------------------------------
 // 상수 및 설정
