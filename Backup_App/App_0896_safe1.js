@@ -26,22 +26,21 @@ import {
 // [중요] 배포 시 사용할 실제 Firebase 설정
 // ----------------------------------------------------------------------
 const YOUR_FIREBASE_CONFIG = {
-    apiKey: process.env.REACT_APP_FIREBASE_API_KEY,
-    authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN,
-    projectId: process.env.REACT_APP_FIREBASE_PROJECT_ID,
-    storageBucket: process.env.REACT_APP_FIREBASE_STORAGE_BUCKET,
-    messagingSenderId: process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID,
-    appId: process.env.REACT_APP_FIREBASE_APP_ID,
-    measurementId: process.env.REACT_APP_FIREBASE_MEASUREMENT_ID
+    apiKey: "AIzaSyA79MW_m_bNDq3c9LXdL_wVefa6ZGCEXmQ",
+    authDomain: "patra-db.firebaseapp.com",
+    projectId: "patra-db",
+    storageBucket: "patra-db.firebasestorage.app",
+    messagingSenderId: "602422986176",
+    appId: "1:602422986176:web:0170f7b5f9cd99e4c1f425",
+    measurementId: "G-33FMQD1WVS"
 };
-console.log('Firebase Config Debug:', YOUR_FIREBASE_CONFIG);
 
 // ----------------------------------------------------------------------
 // 상수 및 설정
 // ----------------------------------------------------------------------
-const APP_VERSION = "v0.8.97";
-const BUILD_DATE = "2026.02.14";
-const ADMIN_PASSWORD = process.env.REACT_APP_ADMIN_PASSWORD;
+const APP_VERSION = "v0.8.96";
+const BUILD_DATE = "2026.02.03";
+const ADMIN_PASSWORD = "adminlcg1";
 
 // Firebase 초기화
 let db = null;
@@ -693,29 +692,7 @@ export default function App() {
     const handleSpaceProductToggle = async (spaceId, productId, isAdded) => { const product = products.find(p => p.id === productId); if (!product) return; let newSpaces = product.spaces || []; if (isAdded) { if (!newSpaces.includes(spaceId)) newSpaces.push(spaceId); } else { newSpaces = newSpaces.filter(s => s !== spaceId); } if (isFirebaseAvailable && db) { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'products', product.id), { spaces: newSpaces }, { merge: true }); } else { const idx = products.findIndex(p => p.id === productId); const newProds = [...products]; newProds[idx] = { ...product, spaces: newSpaces }; saveToLocalStorage(newProds); } };
     const logActivity = async (action, productName, details = "") => { if (!isFirebaseAvailable || !db) return; try { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'logs'), { action, productName, details, timestamp: Date.now(), adminId: 'admin' }); } catch (e) { console.error(e); } };
     const fetchLogs = async () => { if (!isFirebaseAvailable || !db) return; const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'logs'), orderBy('timestamp', 'desc'), limit(100)); onSnapshot(q, (snapshot) => { setActivityLogs(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))); }); };
-    const handleSaveSwatch = async (swatchData) => {
-        const docId = swatchData.id ? String(swatchData.id) : String(Date.now());
-
-        // V 0.8.97: Calculate orderIndex for new items
-        let finalOrderIndex = swatchData.orderIndex;
-        if (!finalOrderIndex && !swatches.some(s => s.id === docId)) {
-            const maxOrder = swatches.reduce((max, s) => Math.max(max, s.orderIndex || 0), 0);
-            finalOrderIndex = maxOrder + 100;
-        }
-
-        const payload = { ...swatchData, id: docId, updatedAt: Date.now(), orderIndex: finalOrderIndex || Date.now() };
-
-        if (isFirebaseAvailable && db) {
-            await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'swatches', docId), payload, { merge: true });
-        } else {
-            const idx = swatches.findIndex(s => s.id === docId);
-            let newSwatches = [...swatches];
-            if (idx >= 0) newSwatches[idx] = payload;
-            else newSwatches = [...newSwatches, payload]; // V 0.8.97: Append to end
-            saveSwatchesToLocal(newSwatches);
-        }
-        showToast("마감재가 저장되었습니다.");
-    };
+    const handleSaveSwatch = async (swatchData) => { const docId = swatchData.id ? String(swatchData.id) : String(Date.now()); const payload = { ...swatchData, id: docId, updatedAt: Date.now() }; if (isFirebaseAvailable && db) { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'swatches', docId), payload, { merge: true }); } else { const idx = swatches.findIndex(s => s.id === docId); let newSwatches = [...swatches]; if (idx >= 0) newSwatches[idx] = payload; else newSwatches = [payload, ...newSwatches]; saveSwatchesToLocal(newSwatches); } showToast("마감재가 저장되었습니다."); };
     const handleDeleteSwatch = async (swatchId) => { if (!window.confirm("정말 삭제하시겠습니까?")) return; if (isFirebaseAvailable && db) { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'swatches', String(swatchId))); } else { saveSwatchesToLocal(swatches.filter(s => s.id !== swatchId)); } showToast("마감재가 삭제되었습니다."); };
 
     const handleSaveAward = async (awardData, winners = []) => {
@@ -1988,18 +1965,11 @@ function CategoryRootView({ type, spaces, spaceContents, scenes, collections, ma
 
     return (
         <div className="animate-in fade-in slide-in-from-bottom-4 pb-32">
-            <div className="mb-8 flex items-center justify-between">
-                <div className="flex items-center">
-                    <div className="p-3 bg-zinc-900 text-white rounded-xl mr-4">
-                        {icon && React.createElement(icon, { className: "w-6 h-6" })}
-                    </div>
-                    <h2 className="text-4xl font-black text-zinc-900 tracking-tight">{title}</h2>
+            <div className="mb-8 flex items-center">
+                <div className="p-3 bg-zinc-900 text-white rounded-xl mr-4">
+                    {icon && React.createElement(icon, { className: "w-6 h-6" })}
                 </div>
-                {isAdmin && type === 'COLLECTIONS_ROOT' && (
-                    <button onClick={() => onEditProduct(null)} className="px-4 py-2 bg-zinc-900 text-white text-sm font-bold rounded-xl hover:bg-black transition-all flex items-center shadow-lg whitespace-nowrap">
-                        <Plus className="w-4 h-4 mr-2" /> Add Product
-                    </button>
-                )}
+                <h2 className="text-4xl font-black text-zinc-900 tracking-tight">{title}</h2>
             </div>
 
             <div className="space-y-8">
@@ -4226,7 +4196,7 @@ function SwatchSelector({ label, selected, swatches, onChange, allowedCategories
         const matchesName = s.name?.toLowerCase().includes(searchLower);
         const matchesMaterialCode = s.materialCode?.toLowerCase().includes(searchLower);
         return matchesName || matchesMaterialCode || !filter;
-    }).sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0));
+    });
 
     return (
         <div className="relative">
