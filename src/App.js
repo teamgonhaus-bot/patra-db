@@ -1528,7 +1528,14 @@ export default function App() {
                                                         <h2 className="text-xl md:text-3xl font-extrabold text-zinc-900 tracking-tight">{activeCategory === 'MY_PICK' ? 'MY PICK' : CATEGORIES.find(c => c.id === activeCategory)?.label || activeCategory}</h2>
                                                         <p className="text-zinc-500 text-xs md:text-sm mt-1 font-medium">{processedProducts.length} items found {!isFirebaseAvailable && <span className="ml-2 text-red-400 bg-red-50 px-2 py-0.5 rounded-full text-xs">Offline Mode</span>}</p>
                                                     </div>
-                                                    {activeCategory === 'MY_PICK' && processedProducts.length > 0 && (<div className="flex space-x-2"><div className="flex bg-zinc-100 p-1 rounded-lg"><button onClick={() => setMyPickViewMode('grid')} className={`p-2 rounded-md ${myPickViewMode === 'grid' ? 'bg-white shadow-sm text-zinc-900' : 'text-zinc-400'}`} title="Grid View"><Grid className="w-4 h-4" /></button><button onClick={() => setMyPickViewMode('list')} className={`p-2 rounded-md ${myPickViewMode === 'list' ? 'bg-white shadow-sm text-zinc-900' : 'text-zinc-400'}`} title="List View"><List className="w-4 h-4" /></button></div><button onClick={() => window.print()} className="flex items-center px-4 py-2 bg-zinc-900 text-white rounded-lg text-sm font-bold hover:bg-black transition-colors"><Printer className="w-4 h-4 mr-2" /> Export</button></div>)}
+                                                    <div className="flex items-center gap-2">
+                                                        {isAdmin && activeCategory !== 'MY_PICK' && (
+                                                            <button onClick={() => { setEditingProduct(null); setIsFormOpen(true); }} className="px-4 py-2 bg-zinc-900 text-white text-sm font-bold rounded-xl hover:bg-black transition-all flex items-center shadow-lg whitespace-nowrap">
+                                                                <Plus className="w-4 h-4 mr-2" /> Add Product
+                                                            </button>
+                                                        )}
+                                                        {activeCategory === 'MY_PICK' && processedProducts.length > 0 && (<div className="flex space-x-2"><div className="flex bg-zinc-100 p-1 rounded-lg"><button onClick={() => setMyPickViewMode('grid')} className={`p-2 rounded-md ${myPickViewMode === 'grid' ? 'bg-white shadow-sm text-zinc-900' : 'text-zinc-400'}`} title="Grid View"><Grid className="w-4 h-4" /></button><button onClick={() => setMyPickViewMode('list')} className={`p-2 rounded-md ${myPickViewMode === 'list' ? 'bg-white shadow-sm text-zinc-900' : 'text-zinc-400'}`} title="List View"><List className="w-4 h-4" /></button></div><button onClick={() => window.print()} className="flex items-center px-4 py-2 bg-zinc-900 text-white rounded-lg text-sm font-bold hover:bg-black transition-colors"><Printer className="w-4 h-4 mr-2" /> Export</button></div>)}
+                                                    </div>
                                                 </div>
                                             )}
                                             {activeCategory === 'MY_PICK' && myPickViewMode === 'list' ? (
@@ -1988,18 +1995,11 @@ function CategoryRootView({ type, spaces, spaceContents, scenes, collections, ma
 
     return (
         <div className="animate-in fade-in slide-in-from-bottom-4 pb-32">
-            <div className="mb-8 flex items-center justify-between">
-                <div className="flex items-center">
-                    <div className="p-3 bg-zinc-900 text-white rounded-xl mr-4">
-                        {icon && React.createElement(icon, { className: "w-6 h-6" })}
-                    </div>
-                    <h2 className="text-4xl font-black text-zinc-900 tracking-tight">{title}</h2>
+            <div className="mb-8 flex items-center">
+                <div className="p-3 bg-zinc-900 text-white rounded-xl mr-4">
+                    {icon && React.createElement(icon, { className: "w-6 h-6" })}
                 </div>
-                {isAdmin && type === 'COLLECTIONS_ROOT' && (
-                    <button onClick={() => onEditProduct(null)} className="px-4 py-2 bg-zinc-900 text-white text-sm font-bold rounded-xl hover:bg-black transition-all flex items-center shadow-lg whitespace-nowrap">
-                        <Plus className="w-4 h-4 mr-2" /> Add Product
-                    </button>
-                )}
+                <h2 className="text-4xl font-black text-zinc-900 tracking-tight">{title}</h2>
             </div>
 
             <div className="space-y-8">
